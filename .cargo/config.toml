@@ -1,0 +1,4 @@
+# Local dev database (docker-compose.yml). Used by sqlx at runtime and by
+# #[sqlx::test] to create disposable test databases.
+[env]
+DATABASE_URL = "postgres://service_break:service_break_dev@127.0.0.1:5433/service_break"
