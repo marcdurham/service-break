@@ -3,6 +3,8 @@ use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 use crate::api;
+use crate::app::FALLBACK_CENTER;
+use crate::components::location_picker::LocationPicker;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Door {
@@ -84,6 +86,7 @@ pub struct AddFormProps {
 pub fn add_form(props: &AddFormProps) -> Html {
     let form = use_state(Form::default);
     let submitting = use_state(|| false);
+    let picking = use_state(|| false);
 
     let set = |f: &UseStateHandle<Form>, update: fn(&mut Form, String)| {
         let f = f.clone();
@@ -104,11 +107,32 @@ pub fn add_form(props: &AddFormProps) -> Html {
         Callback::from(move |_| match origin {
             Some((lat, lng)) => {
                 let mut next = (*form).clone();
-                next.address = format!("{lat:.6}, {lng:.6}");
+                next.address = shared::fmt_latlng(lat, lng);
                 form.set(next);
                 toast.emit("Using your current location".to_owned());
             }
             None => toast.emit("Location not available yet".to_owned()),
+        })
+    };
+
+    let open_picker = {
+        let picking = picking.clone();
+        Callback::from(move |_| picking.set(true))
+    };
+    let cancel_picker = {
+        let picking = picking.clone();
+        Callback::from(move |()| picking.set(false))
+    };
+    let confirm_picker = {
+        let form = form.clone();
+        let picking = picking.clone();
+        let toast = props.on_toast.clone();
+        Callback::from(move |(lat, lng): (f64, f64)| {
+            let mut next = (*form).clone();
+            next.address = shared::fmt_latlng(lat, lng);
+            form.set(next);
+            picking.set(false);
+            toast.emit("Location picked from the map".to_owned());
         })
     };
 
@@ -174,6 +198,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
     ];
 
     html! {
+        <>
         <div class="screen sb-scroll">
             <div class="screen-title">{"Add a stop"}</div>
             <div class="screen-sub">{"Help the next traveler find a clean break."}</div>
@@ -203,9 +228,14 @@ pub fn add_form(props: &AddFormProps) -> Html {
                     })}
                 />
             </div>
-            <button class="use-loc" onclick={use_my_location}>
-                <span class="mi">{"my_location"}</span>{"Use my current location"}
-            </button>
+            <div class="loc-btns">
+                <button class="use-loc" onclick={use_my_location}>
+                    <span class="mi">{"my_location"}</span>{"Use my current location"}
+                </button>
+                <button class="use-loc" onclick={open_picker}>
+                    <span class="mi">{"pin_drop"}</span>{"Pick on the map"}
+                </button>
+            </div>
 
             <div class="field-label">{"Type of place"}</div>
             <div class="type-grid">
@@ -309,6 +339,16 @@ pub fn add_form(props: &AddFormProps) -> Html {
                 {if *submitting { "Adding…" } else { "Add this stop" }}
             </button>
         </div>
+
+        if *picking {
+            <LocationPicker
+                center={props.origin.unwrap_or(FALLBACK_CENTER)}
+                initial={shared::parse_latlng(&form.address)}
+                on_confirm={confirm_picker}
+                on_cancel={cancel_picker}
+            />
+        }
+        </>
     }
 }
 

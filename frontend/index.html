@@ -33,7 +33,10 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[c]));
 
-      window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+      window.addEventListener('resize', () => {
+        if (map) map.invalidateSize();
+        if (pickMap) pickMap.invalidateSize();
+      });
 
       window.sbInitMap = function (elId, lat, lng, zoom, cb) {
         onSelect = cb;
@@ -83,6 +86,41 @@
 
       window.sbFlyTo = function (lat, lng, zoom) {
         if (map) map.flyTo([lat, lng], zoom, { duration: 0.6 });
+      };
+
+      // Separate map instance for picking a location when adding a place.
+      let pickMap = null, pickMarker = null;
+
+      function setPickMarker(lat, lng) {
+        if (!pickMap) return;
+        if (pickMarker) { pickMarker.setLatLng([lat, lng]); return; }
+        const icon = L.divIcon({
+          className: 'sb-pin-wrap',
+          html: '<div class="sb-pin sel" style="--pin:#c05f38">'
+            + '<div class="sb-pin-dot"><span class="mi">place</span></div>'
+            + '<div class="sb-pin-tail"></div></div>',
+          iconSize: [0, 0]
+        });
+        pickMarker = L.marker([lat, lng], { icon, interactive: false }).addTo(pickMap);
+      }
+
+      window.sbInitPickMap = function (elId, lat, lng, zoom, hasMarker, onPick) {
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; }
+        pickMap = L.map(document.getElementById(elId), { zoomControl: false });
+        pickMap.setView([lat, lng], zoom);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(pickMap);
+        pickMap.on('click', (e) => {
+          setPickMarker(e.latlng.lat, e.latlng.lng);
+          onPick(e.latlng.lat, e.latlng.lng);
+        });
+        if (hasMarker) setPickMarker(lat, lng);
+      };
+
+      window.sbDestroyPickMap = function () {
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; }
       };
 
       window.sbLocate = function (ok, err) {
