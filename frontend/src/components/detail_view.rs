@@ -1,4 +1,4 @@
-use shared::{NewReview, PlaceDetail};
+use shared::{NewReview, PlaceDetail, PlaceSummary};
 use uuid::Uuid;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
@@ -14,6 +14,7 @@ pub struct DetailViewProps {
     pub device_id: String,
     pub saved: bool,
     pub on_close: Callback<()>,
+    pub on_show_on_map: Callback<PlaceSummary>,
     pub on_toggle_save: Callback<Uuid>,
     pub on_updated: Callback<PlaceDetail>,
     pub on_toast: Callback<String>,
@@ -40,6 +41,11 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let directions = {
         let place = p.clone();
         Callback::from(move |_| ui::open_directions(&place))
+    };
+    let show_on_map = {
+        let cb = props.on_show_on_map.clone();
+        let place = p.clone();
+        Callback::from(move |_| cb.emit(place.clone()))
     };
     let open_composer = {
         let composing = composing.clone();
@@ -126,6 +132,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     <div class="action-row">
                         <button class="directions-btn" onclick={directions}>
                             <span class="mi">{"directions"}</span>{"Directions"}
+                        </button>
+                        <button class="rate-btn" onclick={show_on_map}>
+                            <span class="mi">{"map"}</span>{"Map"}
                         </button>
                         <button class="rate-btn" onclick={open_composer.clone()}>
                             <span class="mi">{"rate_review"}</span>{"Rate"}

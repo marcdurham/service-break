@@ -23,6 +23,22 @@ extern "C" {
     #[wasm_bindgen(js_name = sbFlyTo)]
     pub fn sb_fly_to(lat: f64, lng: f64, zoom: f64);
 
+    /// Creates the location-picker map inside `#el_id`. Tapping the map drops
+    /// (or moves) a pin and calls `on_pick(lat, lng)`. When `has_marker` is
+    /// true the pin starts at the given center.
+    #[wasm_bindgen(js_name = sbInitPickMap)]
+    pub fn sb_init_pick_map(
+        el_id: &str,
+        lat: f64,
+        lng: f64,
+        zoom: f64,
+        has_marker: bool,
+        on_pick: &JsValue,
+    );
+
+    #[wasm_bindgen(js_name = sbDestroyPickMap)]
+    pub fn sb_destroy_pick_map();
+
     /// Browser geolocation: `ok(lat, lng)` or `err(message)`.
     #[wasm_bindgen(js_name = sbLocate)]
     pub fn sb_locate(ok: &JsValue, err: &JsValue);

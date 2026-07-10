@@ -26,6 +26,8 @@ pub struct MapViewProps {
     pub places: Vec<PlaceSummary>,
     pub selected: Option<Uuid>,
     pub origin: Option<(f64, f64)>,
+    /// A place to center on instead of the user ("Show on map").
+    pub focus: Option<(f64, f64)>,
     pub filters_active: bool,
     pub active_types: Vec<PlaceType>,
     pub on_select: Callback<Uuid>,
@@ -112,14 +114,17 @@ pub fn map_view(props: &MapViewProps) -> Html {
 
     {
         let closure_slot = closure_slot.clone();
-        let center = props.origin.unwrap_or(FALLBACK_CENTER);
+        let (center, zoom) = match props.focus {
+            Some(f) => (f, 16.0),
+            None => (props.origin.unwrap_or(FALLBACK_CENTER), 14.0),
+        };
         use_effect_with((), move |()| {
             let closure = Closure::<dyn Fn(String)>::new(move |id: String| {
                 if let Ok(id) = Uuid::parse_str(&id) {
                     select_ref.borrow().emit(id);
                 }
             });
-            glue::sb_init_map("sb-map", center.0, center.1, 14.0, closure.as_ref().unchecked_ref());
+            glue::sb_init_map("sb-map", center.0, center.1, zoom, closure.as_ref().unchecked_ref());
             *closure_slot.borrow_mut() = Some(closure);
             || glue::sb_destroy_map()
         });
@@ -146,10 +151,22 @@ pub fn map_view(props: &MapViewProps) -> Html {
         },
     );
 
-    use_effect_with(props.origin, |origin| {
+    // Follow the user's position unless a place is being focused; the map
+    // was already initialized at the right center, so neither branch needs
+    // to fly on first render.
+    let first_render = use_mut_ref(|| true);
+    use_effect_with((props.origin, props.focus), move |(origin, focus)| {
+        let first = std::mem::replace(&mut *first_render.borrow_mut(), false);
         if let Some((lat, lng)) = origin {
             glue::sb_set_user(*lat, *lng);
-            glue::sb_fly_to(*lat, *lng, 14.0);
+            if focus.is_none() && !first {
+                glue::sb_fly_to(*lat, *lng, 14.0);
+            }
+        }
+        if let Some((lat, lng)) = focus {
+            if !first {
+                glue::sb_fly_to(*lat, *lng, 16.0);
+            }
         }
     });
 

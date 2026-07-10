@@ -89,6 +89,8 @@ pub fn app() -> Html {
     let places = use_state(Vec::<PlaceSummary>::new);
     let selected = use_state(|| None::<Uuid>);
     let detail = use_state(|| None::<PlaceDetail>);
+    // A place the map should center on, set by "Show on map" in the viewer.
+    let map_focus = use_state(|| None::<(f64, f64)>);
     let show_filters = use_state(|| false);
     let filters = use_state(Filters::default);
     let saved_ids = use_state(HashSet::<Uuid>::new);
@@ -177,9 +179,11 @@ pub fn app() -> Html {
         let tab = tab.clone();
         let detail = detail.clone();
         let show_filters = show_filters.clone();
+        let map_focus = map_focus.clone();
         Callback::from(move |t: Tab| {
             detail.set(None);
             show_filters.set(false);
+            map_focus.set(None);
             tab.set(t);
         })
     };
@@ -208,6 +212,19 @@ pub fn app() -> Html {
     let close_detail = {
         let detail = detail.clone();
         Callback::from(move |()| detail.set(None))
+    };
+
+    let on_show_on_map = {
+        let tab = tab.clone();
+        let detail = detail.clone();
+        let selected = selected.clone();
+        let map_focus = map_focus.clone();
+        Callback::from(move |p: PlaceSummary| {
+            detail.set(None);
+            selected.set(Some(p.id));
+            map_focus.set(Some((p.lat, p.lng)));
+            tab.set(Tab::Map);
+        })
     };
 
     let on_toggle_save = {
@@ -299,10 +316,12 @@ pub fn app() -> Html {
     let on_recenter = {
         let origin = origin.clone();
         let selected = selected.clone();
+        let map_focus = map_focus.clone();
         Callback::from(move |()| {
             let (lat, lng) = origin.unwrap_or(FALLBACK_CENTER);
             glue::sb_fly_to(lat, lng, 14.0);
             selected.set(None);
+            map_focus.set(None);
         })
     };
 
@@ -321,6 +340,7 @@ pub fn app() -> Html {
                             places={(*places).clone()}
                             selected={*selected}
                             origin={*origin}
+                            focus={*map_focus}
                             filters_active={filters.is_active()}
                             active_types={active_types(&filters)}
                             on_select={on_select}
@@ -365,6 +385,7 @@ pub fn app() -> Html {
                     device_id={(*device).clone()}
                     saved={detail.as_ref().is_some_and(|d| saved_ids.contains(&d.summary.id))}
                     on_close={close_detail}
+                    on_show_on_map={on_show_on_map}
                     on_toggle_save={on_toggle_save}
                     on_updated={on_detail_updated}
                     on_toast={show_toast.clone()}

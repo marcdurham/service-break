@@ -334,6 +334,12 @@ impl PlacesQuery {
     }
 }
 
+/// Formats a coordinate pair as `"lat, lng"` text that [`parse_latlng`]
+/// accepts back, e.g. for prefilling an address field.
+pub fn fmt_latlng(lat: f64, lng: f64) -> String {
+    format!("{lat:.6}, {lng:.6}")
+}
+
 /// Formats a distance in miles for display, e.g. `"0.2"`.
 pub fn fmt_distance_mi(mi: f64) -> String {
     format!("{mi:.1}")
@@ -392,6 +398,13 @@ mod tests {
         assert_eq!(parse_latlng("91.0, 10.0"), None);
         assert_eq!(parse_latlng("45.0, 181.0"), None);
         assert_eq!(parse_latlng(""), None);
+    }
+
+    #[test]
+    fn fmt_latlng_round_trips_through_parse() {
+        let text = fmt_latlng(47.6097, -122.3422);
+        assert_eq!(text, "47.609700, -122.342200");
+        assert_eq!(parse_latlng(&text), Some((47.6097, -122.3422)));
     }
 
     #[test]
