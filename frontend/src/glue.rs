@@ -42,6 +42,15 @@ extern "C" {
     /// Browser geolocation: `ok(lat, lng)` or `err(message)`.
     #[wasm_bindgen(js_name = sbLocate)]
     pub fn sb_locate(ok: &JsValue, err: &JsValue);
+
+    /// Writes text to the clipboard, best-effort.
+    #[wasm_bindgen(js_name = sbCopyText)]
+    pub fn sb_copy_text(text: &str);
+
+    /// Opens the native share sheet with `text` and the app's URL; returns
+    /// `true` if it did, `false` if it fell back to copying the clipboard.
+    #[wasm_bindgen(js_name = sbShareInvite)]
+    pub fn sb_share_invite(text: &str) -> bool;
 }
 
 /// Opens a URL in a new tab (directions handoff to Google Maps / OSM).

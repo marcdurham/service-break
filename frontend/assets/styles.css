@@ -452,6 +452,57 @@ button { cursor: pointer; }
 .submit-btn:disabled { opacity: .55; }
 .submit-btn .mi { font-size: 20px; }
 
+/* ---------- invite ---------- */
+
+.invite-card {
+  position: relative; overflow: hidden;
+  background: var(--dark); border-radius: 22px; padding: 22px 20px;
+}
+.invite-card::before {
+  content: ''; position: absolute; top: -60px; right: -40px;
+  width: 180px; height: 180px; border-radius: 50%; background: var(--dark2);
+}
+.invite-badge {
+  position: relative;
+  width: 56px; height: 56px; border-radius: 17px; background: var(--gold);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+}
+.invite-badge .mi { font-size: 30px; color: var(--dark); }
+.invite-h1 {
+  position: relative;
+  font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--cream); line-height: 1.05;
+}
+.invite-p {
+  position: relative;
+  font-size: 14px; color: var(--cream2); margin: 8px 0 18px; line-height: 1.5;
+}
+.invite-code-row {
+  position: relative;
+  background: var(--dark2); border: 1.5px dashed #7a5d40; border-radius: 15px;
+  padding: 16px; display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.invite-code-label {
+  font-size: 11px; color: #a98d70; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.invite-code {
+  font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--gold-light);
+  letter-spacing: 3px; margin-top: 2px;
+}
+.invite-copy-btn {
+  border: none; background: var(--gold-light); color: var(--dark);
+  font-weight: 700; border-radius: 11px; padding: 11px 16px; font-size: 13.5px;
+}
+.invite-share-btn {
+  position: relative; width: 100%;
+  border: none; border-radius: 14px; padding: 15px;
+  background: var(--gold-light); color: var(--dark);
+  font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.invite-share-btn .mi { font-size: 20px; }
+
 /* ---------- detail overlay ---------- */
 
 .detail-overlay {

@@ -1,6 +1,7 @@
 pub mod add_form;
 pub mod detail_view;
 pub mod filters_sheet;
+pub mod invite_view;
 pub mod list_view;
 pub mod location_picker;
 pub mod map_view;

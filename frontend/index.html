@@ -132,6 +132,23 @@
         );
       };
 
+      window.sbCopyText = function (text) {
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      };
+
+      // Opens the native share sheet with the invite text and this app's
+      // URL; returns true if it did. Falls back to the clipboard otherwise.
+      window.sbShareInvite = function (text) {
+        if (navigator.share) {
+          navigator.share({ title: 'Service Break', text, url: location.origin + '/' }).catch(() => {});
+          return true;
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text + ' ' + location.origin + '/').catch(() => {});
+        }
+        return false;
+      };
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
