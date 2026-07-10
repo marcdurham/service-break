@@ -118,7 +118,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     <div class="stars-row">
                         { ui::stars(rating) }
                         <span class="rating-num">{ui::clean_label(p.clean_avg)}</span>
-                        <span class="rating-count">{format!("({} reviews)", p.review_count)}</span>
+                        <span class="rating-count">
+                            {format!("({} review{})", p.review_count, if p.review_count == 1 { "" } else { "s" })}
+                        </span>
                     </div>
 
                     <div class="action-row">
