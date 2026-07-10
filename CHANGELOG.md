@@ -6,6 +6,11 @@ short description.
 
 ## 2026-07-10
 
+- 16:17 — Added user accounts to the backend: register/login/logout/me
+  endpoints with Argon2 password hashing and 30-day bearer-token sessions;
+  adding places, posting reviews, and saving/unsaving now require login,
+  and new reviews are attributed to the account's username (older rows
+  keep their anonymous scout names).
 - 15:46 — Merged branch `geo-ux` into `main`; removed all completed items
   from TODO.md (the list is now empty).
 - 15:37 — Merged branch `nav-invite` into `main`.

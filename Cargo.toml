@@ -21,3 +21,10 @@ perf = { level = "warn", priority = -1 }
 [profile.release]
 opt-level = 3
 lto = true
+
+# Argon2 hashing is deliberately CPU-heavy; unoptimized it makes dev runs
+# and the auth integration tests crawl.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
