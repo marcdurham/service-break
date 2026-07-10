@@ -670,6 +670,9 @@ button { cursor: pointer; }
 
   /* map chrome: floating column on the left, like desktop map apps */
   .map-top { top: 16px; left: 16px; right: auto; width: 400px; padding: 0; }
+
+  /* no horizontal scrolling on desktop: let the type chips wrap */
+  .chips { flex-wrap: wrap; overflow-x: visible; row-gap: 7px; }
   .search-results { max-height: 55vh; }
   .sel-wrap { left: 16px; right: auto; bottom: 20px; width: 400px; margin: 0; }
   .recenter { right: 16px; bottom: 16px; }
