@@ -14,7 +14,7 @@ design reference when adding UI.
 |-------------|-----------------------------------------------------------------------|
 | `shared/`   | DTOs + pure logic (haversine, lat/lng parsing) used by both sides     |
 | `backend/`  | Actix Web API, sqlx/Postgres, Nominatim geocoding, `migrations/`, `seed.sql` |
-| `frontend/` | Yew app served by Trunk; Leaflet/OSM map via JS glue in `index.html`; styles in `assets/styles.css` |
+| `frontend/` | Yew app served by Trunk; yew-router URL per page; Leaflet/OSM map via JS glue in `index.html`; styles in `assets/styles.css` |
 
 Ports: frontend (Trunk) **8020**, backend API **8081**, Postgres (docker)
 **127.0.0.1:5433**. `DATABASE_URL` is set in `.cargo/config.toml`.
@@ -42,6 +42,9 @@ cargo clippy -p frontend --target wasm32-unknown-unknown
   add an entry under today's date (`## YYYY-MM-DD`, newest date at top) as
   a bullet `- HH:MM — short description`, using the current local
   date/time. Create a new date heading if today's isn't there yet.
+- **TODO.md holds only outstanding work.** When a TODO item is completed,
+  delete it from `TODO.md` (don't leave it checked off) and describe the
+  completed work in `CHANGELOG.md`.
 - **Add tests where needed.** New pure logic in `shared` gets unit tests
   next to it. New or changed API behavior gets a `#[sqlx::test]`
   integration test in `backend/tests/api.rs` (these create disposable

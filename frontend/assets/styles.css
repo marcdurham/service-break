@@ -222,11 +222,15 @@ button { cursor: pointer; }
 .chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }
 
 .recenter {
-  position: absolute; right: 16px; bottom: 250px; z-index: 500;
+  position: absolute; right: 16px; z-index: 500;
+  bottom: calc(88px + env(safe-area-inset-bottom));
   width: 46px; height: 46px; border: none; border-radius: 14px; background: #fff;
   box-shadow: 0 6px 18px -8px rgba(74, 53, 39, .5);
   display: flex; align-items: center; justify-content: center;
 }
+/* the featured-place card spans the full width above the tab bar on
+   mobile, so the button floats above it instead of overlapping */
+.recenter.above-card { bottom: 250px; }
 .recenter .mi { font-size: 23px; color: #3f7fd6; }
 
 .sel-wrap {
@@ -763,7 +767,9 @@ button { cursor: pointer; }
   .chips { flex-wrap: wrap; overflow-x: visible; row-gap: 7px; }
   .search-results { max-height: 55vh; }
   .sel-wrap { left: 16px; right: auto; bottom: 20px; width: 400px; margin: 0; }
-  .recenter { right: 16px; bottom: 16px; }
+  /* the card is anchored to the left on desktop, so the corner is always
+     clear regardless of whether a place is featured */
+  .recenter, .recenter.above-card { right: 16px; bottom: 16px; }
 
   .hero { height: 240px; }
 

@@ -10,6 +10,9 @@ pub struct LocationPickerProps {
     pub center: (f64, f64),
     /// A previously picked/typed coordinate to start the pin at.
     pub initial: Option<(f64, f64)>,
+    /// The user's live location, if they're sharing it — shown as a marker
+    /// distinct from the dropped pin.
+    pub user_location: Option<(f64, f64)>,
     pub on_confirm: Callback<(f64, f64)>,
     pub on_cancel: Callback<()>,
 }
@@ -47,6 +50,12 @@ pub fn location_picker(props: &LocationPickerProps) -> Html {
             }
         });
     }
+
+    use_effect_with(props.user_location, |user_location| {
+        if let Some((lat, lng)) = *user_location {
+            glue::sb_set_pick_user(lat, lng);
+        }
+    });
 
     let cancel = {
         let cb = props.on_cancel.clone();
