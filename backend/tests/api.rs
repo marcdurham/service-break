@@ -214,6 +214,38 @@ async fn saved_places_round_trip(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn list_searches_name_and_address(pool: PgPool) {
+    let app = app(pool).await;
+    let mut park = new_place_json("Elm Street Park");
+    park["address"] = json!("Elm St & 5th");
+    for body in [new_place_json("Camber Coffee"), park] {
+        let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
+
+    // Case-insensitive name match.
+    let req = TestRequest::get().uri("/api/places?q=camber").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(places.len(), 1);
+    assert_eq!(places[0].name, "Camber Coffee");
+
+    // Address match, URL-encoded.
+    let req = TestRequest::get().uri("/api/places?q=elm%20st").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(places.len(), 1);
+    assert_eq!(places[0].name, "Elm Street Park");
+
+    // LIKE wildcards in the query are literal, not wildcards.
+    let req = TestRequest::get().uri("/api/places?q=%25").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert!(places.is_empty());
+
+    let req = TestRequest::get().uri("/api/places?q=nomatch").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert!(places.is_empty());
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn get_unknown_place_is_404(pool: PgPool) {
     let app = app(pool).await;
     let req = TestRequest::get()

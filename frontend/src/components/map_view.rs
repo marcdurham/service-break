@@ -1,13 +1,14 @@
 use serde::Serialize;
-use shared::{PlaceSummary, PlaceType};
+use shared::{PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
+use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
 use crate::app::FALLBACK_CENTER;
 use crate::components::ui::{self, TypeChips};
-use crate::glue;
+use crate::{api, glue};
 
 #[derive(Serialize)]
 struct Pin {
@@ -36,6 +37,72 @@ pub struct MapViewProps {
 
 #[function_component(MapView)]
 pub fn map_view(props: &MapViewProps) -> Html {
+    let query = use_state(String::new);
+    // None while idle or a fetch is pending; Some(list) once results arrived.
+    let results = use_state(|| None::<Vec<PlaceSummary>>);
+    // Bumped on every keystroke so stale debounced fetches drop themselves.
+    let search_gen = use_mut_ref(|| 0u32);
+
+    {
+        let results = results.clone();
+        let search_gen = search_gen.clone();
+        let origin = props.origin;
+        use_effect_with((*query).clone(), move |query| {
+            *search_gen.borrow_mut() += 1;
+            let generation = *search_gen.borrow();
+            let query = query.trim().to_owned();
+            if query.is_empty() {
+                results.set(None);
+                return;
+            }
+            wasm_bindgen_futures::spawn_local(async move {
+                gloo_timers::future::TimeoutFuture::new(250).await;
+                if *search_gen.borrow() != generation {
+                    return;
+                }
+                let q = PlacesQuery {
+                    q: Some(query),
+                    lat: origin.map(|(lat, _)| lat),
+                    lng: origin.map(|(_, lng)| lng),
+                    ..PlacesQuery::default()
+                };
+                if let Ok(list) = api::fetch_places(&q).await {
+                    if *search_gen.borrow() == generation {
+                        results.set(Some(list));
+                    }
+                }
+            });
+        });
+    }
+
+    let on_search_input = {
+        let query = query.clone();
+        Callback::from(move |e: InputEvent| {
+            if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                query.set(el.value());
+            }
+        })
+    };
+    let clear_search = {
+        let query = query.clone();
+        let results = results.clone();
+        Callback::from(move |_| {
+            query.set(String::new());
+            results.set(None);
+        })
+    };
+    let pick_result = {
+        let query = query.clone();
+        let results = results.clone();
+        let on_open = props.on_open.clone();
+        Callback::from(move |p: PlaceSummary| {
+            glue::sb_fly_to(p.lat, p.lng, 16.0);
+            query.set(String::new());
+            results.set(None);
+            on_open.emit(p.id);
+        })
+    };
+    let searching = !query.trim().is_empty();
     // The pin-tap callback must survive re-renders; the JS side holds one
     // function for the map's lifetime, reading the latest Yew callback
     // through this ref.
@@ -108,7 +175,17 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 <div class="map-top-row">
                     <div class="searchbar">
                         <span class="mi">{"search"}</span>
-                        {"Search coffee, parks, restrooms…"}
+                        <input
+                            class="search-input"
+                            placeholder="Search coffee, parks, restrooms…"
+                            value={(*query).clone()}
+                            oninput={on_search_input}
+                        />
+                        if searching {
+                            <button class="search-clear" onclick={clear_search}>
+                                <span class="mi">{"close"}</span>
+                            </button>
+                        }
                     </div>
                     <button class="icon-btn" onclick={open_filters}>
                         <span class="mi">{"tune"}</span>
@@ -117,7 +194,13 @@ pub fn map_view(props: &MapViewProps) -> Html {
                         }
                     </button>
                 </div>
-                <TypeChips active={props.active_types.clone()} on_toggle={props.on_toggle_type.clone()} />
+                if searching {
+                    if let Some(list) = (*results).clone() {
+                        { search_results(&list, &pick_result) }
+                    }
+                } else {
+                    <TypeChips active={props.active_types.clone()} on_toggle={props.on_toggle_type.clone()} />
+                }
             </div>
 
             <button class="recenter" onclick={recenter}>
@@ -127,6 +210,49 @@ pub fn map_view(props: &MapViewProps) -> Html {
             if let Some(p) = featured {
                 { featured_card(p, props) }
             }
+        </div>
+    }
+}
+
+fn search_results(list: &[PlaceSummary], pick: &Callback<PlaceSummary>) -> Html {
+    if list.is_empty() {
+        return html! {
+            <div class="search-results">
+                <div class="sresult-empty">{"No stops found"}</div>
+            </div>
+        };
+    }
+    html! {
+        <div class="search-results sb-scroll">
+            { for list.iter().map(|p| {
+                let onclick = {
+                    let pick = pick.clone();
+                    let place = p.clone();
+                    Callback::from(move |_| pick.emit(place.clone()))
+                };
+                html! {
+                    <button class="sresult" key={p.id.to_string()} {onclick}>
+                        <span
+                            class="sresult-icon mi"
+                            style={format!("background:{}", p.place_type.color())}
+                        >
+                            {p.place_type.icon()}
+                        </span>
+                        <span class="sresult-main">
+                            <span class="sresult-name">{&p.name}</span>
+                            <span class="sresult-sub">
+                                {p.place_type.label()}
+                                if !p.address.is_empty() {
+                                    {format!(" · {}", p.address)}
+                                }
+                            </span>
+                        </span>
+                        if let Some(d) = p.distance_mi {
+                            <span class="sresult-dist">{format!("{} mi", shared::fmt_distance_mi(d))}</span>
+                        }
+                    </button>
+                }
+            }) }
         </div>
     }
 }

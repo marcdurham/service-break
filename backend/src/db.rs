@@ -68,7 +68,27 @@ fn push_summary_select(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
     qb.push(" AS distance_mi FROM places p LEFT JOIN reviews r ON r.place_id = p.id");
 }
 
+/// Builds a `%…%` ILIKE pattern, escaping the wildcard characters in `needle`.
+fn like_pattern(needle: &str) -> String {
+    let escaped: String = needle
+        .chars()
+        .flat_map(|c| match c {
+            '\\' | '%' | '_' => vec!['\\', c],
+            _ => vec![c],
+        })
+        .collect();
+    format!("%{escaped}%")
+}
+
 fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
+    if let Some(search) = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let pattern = like_pattern(search);
+        qb.push(" AND (p.name ILIKE ")
+            .push_bind(pattern.clone())
+            .push(" OR p.address ILIKE ")
+            .push_bind(pattern)
+            .push(")");
+    }
     let types = q.parsed_types();
     if !types.is_empty() {
         qb.push(" AND p.place_type IN (");
@@ -279,4 +299,16 @@ pub async fn list_saved(
     qb.push(" GROUP BY p.id, s.created_at ORDER BY s.created_at DESC");
     let rows = qb.build().fetch_all(pool).await?;
     rows.iter().map(summary_from_row).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn like_pattern_escapes_wildcards() {
+        assert_eq!(like_pattern("camber"), "%camber%");
+        assert_eq!(like_pattern("50% off_deal"), "%50\\% off\\_deal%");
+        assert_eq!(like_pattern("back\\slash"), "%back\\\\slash%");
+    }
 }

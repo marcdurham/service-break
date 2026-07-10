@@ -248,9 +248,29 @@ pub struct GeocodeResult {
     pub display_name: String,
 }
 
+/// Percent-encodes a string for use as a URL query value.
+pub fn encode_query_component(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push('%');
+                out.push_str(&format!("{b:02X}"));
+            }
+        }
+    }
+    out
+}
+
 /// Query parameters for `GET /api/places`.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PlacesQuery {
+    /// Free-text search over place names and addresses.
+    #[serde(default)]
+    pub q: Option<String>,
     #[serde(default)]
     pub lat: Option<f64>,
     #[serde(default)]
@@ -283,6 +303,9 @@ impl PlacesQuery {
     /// Serializes to a URL query string (no leading `?`).
     pub fn to_query_string(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
+        if let Some(q) = self.q.as_deref().filter(|q| !q.trim().is_empty()) {
+            parts.push(format!("q={}", encode_query_component(q.trim())));
+        }
         if let Some(v) = self.lat {
             parts.push(format!("lat={v}"));
         }
@@ -393,6 +416,7 @@ mod tests {
     #[test]
     fn places_query_round_trips_through_query_string() {
         let q = PlacesQuery {
+            q: None,
             lat: Some(47.6),
             lng: Some(-122.3),
             radius_mi: Some(5.0),
@@ -407,6 +431,28 @@ mod tests {
         assert!(qs.contains("sort=cleanliness"));
         assert!(!qs.contains("has_parking"));
         assert_eq!(q.parsed_types(), vec![PlaceType::Coffee, PlaceType::Park]);
+    }
+
+    #[test]
+    fn encode_query_component_escapes_reserved_chars() {
+        assert_eq!(encode_query_component("camber coffee"), "camber%20coffee");
+        assert_eq!(encode_query_component("a&b=c?"), "a%26b%3Dc%3F");
+        assert_eq!(encode_query_component("plain-text_1.0~"), "plain-text_1.0~");
+    }
+
+    #[test]
+    fn query_string_includes_encoded_search_and_skips_blank() {
+        let q = PlacesQuery {
+            q: Some("elm st park".to_owned()),
+            ..PlacesQuery::default()
+        };
+        assert_eq!(q.to_query_string(), "q=elm%20st%20park");
+
+        let blank = PlacesQuery {
+            q: Some("   ".to_owned()),
+            ..PlacesQuery::default()
+        };
+        assert_eq!(blank.to_query_string(), "");
     }
 
     #[test]

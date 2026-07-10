@@ -48,7 +48,8 @@ database per test on the docker Postgres — it must be running.
 
 ## API
 
-- `GET  /api/places?lat&lng&radius_mi&types&clean_min&no_purchase&has_parking&sort`
+- `GET  /api/places?q&lat&lng&radius_mi&types&clean_min&no_purchase&has_parking&sort`
+  — `q` searches place names and addresses (case-insensitive)
 - `POST /api/places` — body includes address **or** `lat`/`lng`; free-text
   addresses are geocoded via Nominatim (OpenStreetMap)
 - `GET  /api/places/{id}?lat&lng`

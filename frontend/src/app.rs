@@ -58,6 +58,7 @@ impl Filters {
         let mut types: Vec<&str> = self.types.iter().map(|t| t.as_str()).collect();
         types.sort_unstable();
         PlacesQuery {
+            q: None,
             lat: origin.map(|(lat, _)| lat),
             lng: origin.map(|(_, lng)| lng),
             radius_mi: Some(f64::from(self.radius_mi)),
