@@ -494,7 +494,8 @@ button { cursor: pointer; }
 .rating-count { font-size: 13px; color: var(--muted2); }
 
 .action-row { display: flex; gap: 9px; margin-top: 16px; }
-.action-row .directions-btn { margin-top: 0; flex: 1; padding: 15px; }
+.action-row .directions-btn { margin-top: 0; flex: 1; padding: 15px 12px; }
+.action-row .rate-btn { padding: 15px 13px; }
 .rate-btn {
   border: 1.5px solid #e0d3bf; border-radius: 15px; padding: 15px 17px;
   background: #fff; color: #8a5a3c; font-size: 15px; font-weight: 700;
