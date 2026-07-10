@@ -18,6 +18,17 @@ A mobile-first PWA built in Rust: [Yew](https://yew.rs) frontend with
 
 ## Running it
 
+Prerequisites: [Docker](https://docs.docker.com/get-docker/) (for Postgres)
+and a stable [Rust toolchain](https://rustup.rs), plus the wasm target and
+[Trunk](https://trunkrs.dev) for the frontend:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install trunk
+```
+
+Then, in three terminals from the repo root:
+
 ```sh
 # 1. Database (Postgres 16 on 127.0.0.1:5433)
 docker compose up -d
