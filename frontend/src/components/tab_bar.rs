@@ -18,6 +18,8 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
     ];
     html! {
         <div class="tabbar">
+            // Only visible when the bar renders as a nav rail on wide screens.
+            <div class="rail-logo"><span class="mi">{"wc"}</span></div>
             { for tabs.into_iter().map(|(t, label, icon)| {
                 let on = props.tab == t;
                 let onclick = {

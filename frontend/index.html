@@ -33,6 +33,8 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[c]));
 
+      window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+
       window.sbInitMap = function (elId, lat, lng, zoom, cb) {
         onSelect = cb;
         if (map) { map.remove(); map = null; }
