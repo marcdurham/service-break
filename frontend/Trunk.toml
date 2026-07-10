@@ -1,0 +1,9 @@
+[build]
+target = "index.html"
+
+[serve]
+port = 8080
+
+# Forward API calls to the Actix backend (cargo run -p backend, port 8081).
+[[proxy]]
+backend = "http://127.0.0.1:8081/api"

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Service Break</title>
+  <meta name="theme-color" content="#3a2418">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link data-trunk rel="css" href="assets/styles.css">
+  <link data-trunk rel="copy-file" href="assets/manifest.webmanifest">
+  <link data-trunk rel="copy-file" href="assets/sw.js">
+  <link data-trunk rel="copy-file" href="assets/icon.svg">
+  <link data-trunk rel="copy-file" href="assets/icon-192.png">
+  <link data-trunk rel="copy-file" href="assets/icon-512.png">
+
+  <script>
+    // ---- Leaflet + geolocation glue used by the wasm app (see src/glue.rs) ----
+    (function () {
+      let map = null, pinLayer = null, userMarker = null, onSelect = null;
+
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+
+      window.sbInitMap = function (elId, lat, lng, zoom, cb) {
+        onSelect = cb;
+        if (map) { map.remove(); map = null; }
+        map = L.map(document.getElementById(elId), { zoomControl: false });
+        map.setView([lat, lng], zoom);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        pinLayer = L.layerGroup().addTo(map);
+        userMarker = null;
+      };
+
+      window.sbDestroyMap = function () {
+        if (map) { map.remove(); map = null; pinLayer = null; userMarker = null; }
+      };
+
+      window.sbSetPins = function (json) {
+        if (!map || !pinLayer) return;
+        pinLayer.clearLayers();
+        for (const p of JSON.parse(json)) {
+          const icon = L.divIcon({
+            className: 'sb-pin-wrap',
+            html: '<div class="sb-pin' + (p.selected ? ' sel' : '') + '" style="--pin:' + esc(p.color) + '">'
+              + (p.selected ? '<div class="sb-pin-label">' + esc(p.name) + '</div>' : '')
+              + '<div class="sb-pin-dot"><span class="mi">' + esc(p.icon) + '</span></div>'
+              + '<div class="sb-pin-tail"></div></div>',
+            iconSize: [0, 0]
+          });
+          L.marker([p.lat, p.lng], { icon, zIndexOffset: p.selected ? 1000 : 0 })
+            .on('click', () => onSelect && onSelect(p.id))
+            .addTo(pinLayer);
+        }
+      };
+
+      window.sbSetUser = function (lat, lng) {
+        if (!map) return;
+        if (userMarker) { userMarker.setLatLng([lat, lng]); return; }
+        const icon = L.divIcon({
+          className: 'sb-user-wrap',
+          html: '<div class="sb-user-pulse"></div><div class="sb-user-dot"></div>',
+          iconSize: [0, 0]
+        });
+        userMarker = L.marker([lat, lng], { icon, interactive: false }).addTo(map);
+      };
+
+      window.sbFlyTo = function (lat, lng, zoom) {
+        if (map) map.flyTo([lat, lng], zoom, { duration: 0.6 });
+      };
+
+      window.sbLocate = function (ok, err) {
+        if (!navigator.geolocation) { err('geolocation unsupported'); return; }
+        navigator.geolocation.getCurrentPosition(
+          (p) => ok(p.coords.latitude, p.coords.longitude),
+          (e) => err(String(e.message || 'location unavailable')),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      };
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    })();
+  </script>
+</head>
+<body></body>
+</html>

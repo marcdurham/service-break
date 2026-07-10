@@ -1,0 +1,15 @@
+{
+  "name": "Service Break",
+  "short_name": "Service Break",
+  "description": "Find a clean pit stop: real bathroom ratings at coffee shops, groceries, parks, gas stations & more.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6efe4",
+  "theme_color": "#3a2418",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
