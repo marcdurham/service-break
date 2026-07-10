@@ -6,27 +6,22 @@ use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
 use yew::prelude::*;
+use yew_router::prelude::*;
 
 use crate::components::add_form::AddForm;
 use crate::components::detail_view::DetailView;
 use crate::components::filters_sheet::FiltersSheet;
+use crate::components::invite_view::InviteView;
 use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
 use crate::components::onboarding::Onboarding;
 use crate::components::saved_view::SavedView;
 use crate::components::tab_bar::TabBar;
+use crate::route::Route;
 use crate::{api, glue};
 
 /// Fallback map center (downtown Seattle, where the demo seed data lives).
 pub const FALLBACK_CENTER: (f64, f64) = (47.6097, -122.3422);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tab {
-    Map,
-    List,
-    Add,
-    Saved,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Filters {
@@ -84,11 +79,25 @@ fn device_id() -> String {
 pub fn app() -> Html {
     let device = use_memo((), |()| device_id());
     let started = use_state(|| LocalStorage::get::<bool>("sb_started").unwrap_or(false));
-    let tab = use_state(|| Tab::Map);
+    let route = use_route::<Route>().unwrap_or(Route::Map);
+    let navigator = use_navigator().expect("BrowserRouter provides a navigator");
+    // The nav page rendered behind the place-detail overlay (and the page
+    // the tab bar highlights); tracks `route` whenever it's a nav route.
+    let background = use_state(|| if route.is_nav() { route } else { Route::Map });
+    // Whether the current place overlay (if any) was the very first page
+    // loaded, e.g. from a shared link — closing it then has no in-app page
+    // to go "back" to, so it should navigate to the background route instead.
+    let entered_directly = use_state(|| !route.is_nav());
     let origin = use_state(|| None::<(f64, f64)>);
+    // Set only when the browser's geolocation actually succeeds, as
+    // opposed to `origin`, which falls back to a fixed map center on
+    // failure — used to show the user's real location on the map picker.
+    let user_location = use_state(|| None::<(f64, f64)>);
     let places = use_state(Vec::<PlaceSummary>::new);
     let selected = use_state(|| None::<Uuid>);
     let detail = use_state(|| None::<PlaceDetail>);
+    // A place the map should center on, set by "Show on map" in the viewer.
+    let map_focus = use_state(|| None::<(f64, f64)>);
     let show_filters = use_state(|| false);
     let filters = use_state(Filters::default);
     let saved_ids = use_state(HashSet::<Uuid>::new);
@@ -108,14 +117,57 @@ pub fn app() -> Html {
         })
     };
 
+    // Keep `background` in sync with the URL: any nav route becomes the new
+    // background; the place-detail route leaves it untouched.
+    {
+        let background = background.clone();
+        use_effect_with(route, move |route| {
+            if route.is_nav() {
+                background.set(*route);
+            }
+        });
+    }
+
+    // Unknown URLs fall back to the map.
+    {
+        let navigator = navigator.clone();
+        use_effect_with(route, move |route| {
+            if matches!(route, Route::NotFound) {
+                navigator.replace(&Route::Map);
+            }
+        });
+    }
+
+    // Fetch the place behind `/place/:id` whenever the route points at one.
+    {
+        let detail = detail.clone();
+        let origin = origin.clone();
+        use_effect_with(route, move |route| {
+            if let Route::Place { id } = *route {
+                let origin = *origin;
+                let detail = detail.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Ok(d) = api::fetch_place(id, origin).await {
+                        detail.set(Some(d));
+                    }
+                });
+            } else {
+                detail.set(None);
+            }
+        });
+    }
+
     // Ask for the user's location once the app has started.
     {
         let origin = origin.clone();
+        let user_location = user_location.clone();
         use_effect_with(*started, move |started| {
             if *started && origin.is_none() {
                 let ok_origin = origin.clone();
+                let ok_user_location = user_location.clone();
                 let ok = Closure::<dyn FnMut(f64, f64)>::new(move |lat: f64, lng: f64| {
                     ok_origin.set(Some((lat, lng)));
+                    ok_user_location.set(Some((lat, lng)));
                 });
                 let err = Closure::<dyn FnMut(String)>::new(move |_: String| {
                     origin.set(Some(FALLBACK_CENTER));
@@ -173,14 +225,14 @@ pub fn app() -> Html {
         })
     };
 
-    let on_tab = {
-        let tab = tab.clone();
-        let detail = detail.clone();
+    let on_nav = {
+        let navigator = navigator.clone();
         let show_filters = show_filters.clone();
-        Callback::from(move |t: Tab| {
-            detail.set(None);
+        let map_focus = map_focus.clone();
+        Callback::from(move |r: Route| {
             show_filters.set(false);
-            tab.set(t);
+            map_focus.set(None);
+            navigator.push(&r);
         })
     };
 
@@ -190,24 +242,39 @@ pub fn app() -> Html {
     };
 
     let open_detail = {
-        let detail = detail.clone();
+        let navigator = navigator.clone();
         let selected = selected.clone();
-        let origin = origin.clone();
         Callback::from(move |id: Uuid| {
             selected.set(Some(id));
-            let detail = detail.clone();
-            let origin = *origin;
-            wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(d) = api::fetch_place(id, origin).await {
-                    detail.set(Some(d));
-                }
-            });
+            navigator.push(&Route::Place { id });
         })
     };
 
     let close_detail = {
-        let detail = detail.clone();
-        Callback::from(move |()| detail.set(None))
+        let navigator = navigator.clone();
+        let background = background.clone();
+        let entered_directly = entered_directly.clone();
+        Callback::from(move |()| {
+            if *entered_directly {
+                entered_directly.set(false);
+                navigator.push(&*background);
+            } else {
+                navigator.back();
+            }
+        })
+    };
+
+    let on_show_on_map = {
+        let navigator = navigator.clone();
+        let background = background.clone();
+        let selected = selected.clone();
+        let map_focus = map_focus.clone();
+        Callback::from(move |p: PlaceSummary| {
+            selected.set(Some(p.id));
+            map_focus.set(Some((p.lat, p.lng)));
+            background.set(Route::Map);
+            navigator.push(&Route::Map);
+        })
     };
 
     let on_toggle_save = {
@@ -273,17 +340,20 @@ pub fn app() -> Html {
     };
 
     let on_created = {
-        let tab = tab.clone();
+        let navigator = navigator.clone();
+        let background = background.clone();
         let selected = selected.clone();
         let detail = detail.clone();
         let refresh = refresh.clone();
         let show_toast = show_toast.clone();
         Callback::from(move |d: PlaceDetail| {
-            selected.set(Some(d.summary.id));
+            let id = d.summary.id;
+            selected.set(Some(id));
             detail.set(Some(d));
-            tab.set(Tab::Map);
+            background.set(Route::Map);
             refresh.set(refresh.wrapping_add(1));
-            show_toast.emit("Stop added — thanks, scout!".to_owned());
+            show_toast.emit("Place added — thanks, scout!".to_owned());
+            navigator.push(&Route::Place { id });
         })
     };
 
@@ -299,10 +369,12 @@ pub fn app() -> Html {
     let on_recenter = {
         let origin = origin.clone();
         let selected = selected.clone();
+        let map_focus = map_focus.clone();
         Callback::from(move |()| {
             let (lat, lng) = origin.unwrap_or(FALLBACK_CENTER);
             glue::sb_fly_to(lat, lng, 14.0);
             selected.set(None);
+            map_focus.set(None);
         })
     };
 
@@ -315,22 +387,8 @@ pub fn app() -> Html {
     html! {
         <div class="app-shell">
             {
-                match *tab {
-                    Tab::Map => html! {
-                        <MapView
-                            places={(*places).clone()}
-                            selected={*selected}
-                            origin={*origin}
-                            filters_active={filters.is_active()}
-                            active_types={active_types(&filters)}
-                            on_select={on_select}
-                            on_open={open_detail.clone()}
-                            on_open_filters={open_filters.clone()}
-                            on_toggle_type={on_toggle_type.clone()}
-                            on_recenter={on_recenter}
-                        />
-                    },
-                    Tab::List => html! {
+                match *background {
+                    Route::List => html! {
                         <ListView
                             places={(*places).clone()}
                             active_types={active_types(&filters)}
@@ -340,24 +398,43 @@ pub fn app() -> Html {
                             on_reset_filters={on_reset_filters.clone()}
                         />
                     },
-                    Tab::Add => html! {
+                    Route::Add => html! {
                         <AddForm
                             device_id={(*device).clone()}
                             origin={*origin}
+                            user_location={*user_location}
                             on_created={on_created}
                             on_toast={show_toast.clone()}
                         />
                     },
-                    Tab::Saved => html! {
+                    Route::Saved => html! {
                         <SavedView
                             places={(*saved_places).clone()}
                             on_open={open_detail.clone()}
                         />
                     },
+                    Route::Invite => html! {
+                        <InviteView device_id={(*device).clone()} on_toast={show_toast.clone()} />
+                    },
+                    _ => html! {
+                        <MapView
+                            places={(*places).clone()}
+                            selected={*selected}
+                            origin={*origin}
+                            focus={*map_focus}
+                            filters_active={filters.is_active()}
+                            active_types={active_types(&filters)}
+                            on_select={on_select}
+                            on_open={open_detail.clone()}
+                            on_open_filters={open_filters.clone()}
+                            on_toggle_type={on_toggle_type.clone()}
+                            on_recenter={on_recenter}
+                        />
+                    },
                 }
             }
 
-            <TabBar tab={*tab} on_change={on_tab} />
+            <TabBar route={*background} on_change={on_nav} />
 
             if let Some(d) = (*detail).clone() {
                 <DetailView
@@ -365,6 +442,7 @@ pub fn app() -> Html {
                     device_id={(*device).clone()}
                     saved={detail.as_ref().is_some_and(|d| saved_ids.contains(&d.summary.id))}
                     on_close={close_detail}
+                    on_show_on_map={on_show_on_map}
                     on_toggle_save={on_toggle_save}
                     on_updated={on_detail_updated}
                     on_toast={show_toast.clone()}

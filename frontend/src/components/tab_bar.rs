@@ -1,30 +1,33 @@
 use yew::prelude::*;
 
-use crate::app::Tab;
+use crate::route::Route;
 
 #[derive(Properties, PartialEq)]
 pub struct TabBarProps {
-    pub tab: Tab,
-    pub on_change: Callback<Tab>,
+    pub route: Route,
+    pub on_change: Callback<Route>,
 }
 
 #[function_component(TabBar)]
 pub fn tab_bar(props: &TabBarProps) -> Html {
     let tabs = [
-        (Tab::Map, "Map", "map"),
-        (Tab::List, "List", "format_list_bulleted"),
-        (Tab::Add, "Add", "add"),
-        (Tab::Saved, "Saved", "bookmark"),
+        (Route::Map, "Map", "map"),
+        (Route::List, "List", "format_list_bulleted"),
+        (Route::Add, "Add", "add"),
+        (Route::Saved, "Saved", "bookmark"),
+        (Route::Invite, "Invite", "group_add"),
     ];
     html! {
         <div class="tabbar">
-            { for tabs.into_iter().map(|(t, label, icon)| {
-                let on = props.tab == t;
+            // Only visible when the bar renders as a nav rail on wide screens.
+            <div class="rail-logo"><span class="mi">{"wc"}</span></div>
+            { for tabs.into_iter().map(|(r, label, icon)| {
+                let on = props.route == r;
                 let onclick = {
                     let cb = props.on_change.clone();
-                    Callback::from(move |_| cb.emit(t))
+                    Callback::from(move |_| cb.emit(r))
                 };
-                if t == Tab::Add {
+                if r == Route::Add {
                     html! {
                         <button class="tab" {onclick}>
                             <div class="tab-add-btn"><span class="mi">{"add"}</span></div>

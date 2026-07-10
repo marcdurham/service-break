@@ -1,4 +1,4 @@
-use shared::{NewReview, PlaceDetail};
+use shared::{NewReview, PlaceDetail, PlaceSummary};
 use uuid::Uuid;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
@@ -14,6 +14,7 @@ pub struct DetailViewProps {
     pub device_id: String,
     pub saved: bool,
     pub on_close: Callback<()>,
+    pub on_show_on_map: Callback<PlaceSummary>,
     pub on_toggle_save: Callback<Uuid>,
     pub on_updated: Callback<PlaceDetail>,
     pub on_toast: Callback<String>,
@@ -40,6 +41,11 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let directions = {
         let place = p.clone();
         Callback::from(move |_| ui::open_directions(&place))
+    };
+    let show_on_map = {
+        let cb = props.on_show_on_map.clone();
+        let place = p.clone();
+        Callback::from(move |_| cb.emit(place.clone()))
     };
     let open_composer = {
         let composing = composing.clone();
@@ -84,11 +90,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let rating = p.clean_avg.unwrap_or(0.0);
     let clean_pct = (rating / 5.0 * 100.0).clamp(0.0, 100.0);
     let access = ui::access_label(p.purchase_required, p.code_required);
-    let access_class = if p.purchase_required || p.code_required {
-        "tag tag-code"
-    } else {
-        "tag tag-free"
-    };
+    let access_class = ui::access_class(p.purchase_required, p.code_required);
 
     html! {
         <div class="detail-overlay">
@@ -126,6 +128,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     <div class="action-row">
                         <button class="directions-btn" onclick={directions}>
                             <span class="mi">{"directions"}</span>{"Directions"}
+                        </button>
+                        <button class="rate-btn" onclick={show_on_map}>
+                            <span class="mi">{"map"}</span>{"Map"}
                         </button>
                         <button class="rate-btn" onclick={open_composer.clone()}>
                             <span class="mi">{"rate_review"}</span>{"Rate"}
@@ -168,6 +173,17 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                             <span class={access_class}>{access}</span>
                         </div>
                     </div>
+
+                    if !p.amenities.is_empty() {
+                        <div class="field-label">{"This place has"}</div>
+                        <div class="tag-row">
+                            { for p.amenities.iter().map(|a| html! {
+                                <span class="tag tag-amenity" key={a.as_str()}>
+                                    <span class="mi">{a.icon()}</span>{a.label()}
+                                </span>
+                            }) }
+                        </div>
+                    }
 
                     if !p.address.is_empty() {
                         <div class="addr-card">

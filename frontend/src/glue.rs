@@ -23,9 +23,39 @@ extern "C" {
     #[wasm_bindgen(js_name = sbFlyTo)]
     pub fn sb_fly_to(lat: f64, lng: f64, zoom: f64);
 
+    /// Creates the location-picker map inside `#el_id`. Tapping the map drops
+    /// (or moves) a pin and calls `on_pick(lat, lng)`. When `has_marker` is
+    /// true the pin starts at the given center.
+    #[wasm_bindgen(js_name = sbInitPickMap)]
+    pub fn sb_init_pick_map(
+        el_id: &str,
+        lat: f64,
+        lng: f64,
+        zoom: f64,
+        has_marker: bool,
+        on_pick: &JsValue,
+    );
+
+    #[wasm_bindgen(js_name = sbDestroyPickMap)]
+    pub fn sb_destroy_pick_map();
+
+    /// Shows (or moves) a marker for the user's own location on the
+    /// location-picker map, distinct from the dropped pin.
+    #[wasm_bindgen(js_name = sbSetPickUser)]
+    pub fn sb_set_pick_user(lat: f64, lng: f64);
+
     /// Browser geolocation: `ok(lat, lng)` or `err(message)`.
     #[wasm_bindgen(js_name = sbLocate)]
     pub fn sb_locate(ok: &JsValue, err: &JsValue);
+
+    /// Writes text to the clipboard, best-effort.
+    #[wasm_bindgen(js_name = sbCopyText)]
+    pub fn sb_copy_text(text: &str);
+
+    /// Opens the native share sheet with `text` and the app's URL; returns
+    /// `true` if it did, `false` if it fell back to copying the clipboard.
+    #[wasm_bindgen(js_name = sbShareInvite)]
+    pub fn sb_share_invite(text: &str) -> bool;
 }
 
 /// Opens a URL in a new tab (directions handoff to Google Maps / OSM).

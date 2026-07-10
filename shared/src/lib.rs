@@ -32,46 +32,46 @@ pub fn parse_latlng(text: &str) -> Option<(f64, f64)> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlaceType {
-    Coffee,
-    Grocery,
-    Bookstore,
-    Gas,
+    Shop,
+    Store,
+    Mall,
     Park,
-    Restroom,
+    Public,
+    Hall,
     Other,
 }
 
 impl PlaceType {
     pub const ALL: [PlaceType; 7] = [
-        PlaceType::Coffee,
-        PlaceType::Grocery,
-        PlaceType::Bookstore,
-        PlaceType::Gas,
+        PlaceType::Shop,
+        PlaceType::Store,
+        PlaceType::Mall,
         PlaceType::Park,
-        PlaceType::Restroom,
+        PlaceType::Public,
+        PlaceType::Hall,
         PlaceType::Other,
     ];
 
     pub fn as_str(self) -> &'static str {
         match self {
-            PlaceType::Coffee => "coffee",
-            PlaceType::Grocery => "grocery",
-            PlaceType::Bookstore => "bookstore",
-            PlaceType::Gas => "gas",
+            PlaceType::Shop => "shop",
+            PlaceType::Store => "store",
+            PlaceType::Mall => "mall",
             PlaceType::Park => "park",
-            PlaceType::Restroom => "restroom",
+            PlaceType::Public => "public",
+            PlaceType::Hall => "hall",
             PlaceType::Other => "other",
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
-            PlaceType::Coffee => "Coffee shop",
-            PlaceType::Grocery => "Grocery",
-            PlaceType::Bookstore => "Bookstore",
-            PlaceType::Gas => "Gas station",
+            PlaceType::Shop => "Shop",
+            PlaceType::Store => "Store",
+            PlaceType::Mall => "Mall",
             PlaceType::Park => "Park",
-            PlaceType::Restroom => "Public restroom",
+            PlaceType::Public => "Public",
+            PlaceType::Hall => "Hall",
             PlaceType::Other => "Other",
         }
     }
@@ -79,12 +79,12 @@ impl PlaceType {
     /// Material Symbols icon name used in the UI.
     pub fn icon(self) -> &'static str {
         match self {
-            PlaceType::Coffee => "local_cafe",
-            PlaceType::Grocery => "local_grocery_store",
-            PlaceType::Bookstore => "menu_book",
-            PlaceType::Gas => "local_gas_station",
+            PlaceType::Shop => "storefront",
+            PlaceType::Store => "store",
+            PlaceType::Mall => "local_mall",
             PlaceType::Park => "park",
-            PlaceType::Restroom => "wc",
+            PlaceType::Public => "account_balance",
+            PlaceType::Hall => "meeting_room",
             PlaceType::Other => "place",
         }
     }
@@ -92,12 +92,12 @@ impl PlaceType {
     /// Brand color for pins and badges, from the design mockup.
     pub fn color(self) -> &'static str {
         match self {
-            PlaceType::Coffee => "#6f4e37",
-            PlaceType::Grocery => "#6f8256",
-            PlaceType::Bookstore => "#9b6a7d",
-            PlaceType::Gas => "#b5533f",
+            PlaceType::Shop => "#6f4e37",
+            PlaceType::Store => "#6f8256",
+            PlaceType::Mall => "#9b6a7d",
             PlaceType::Park => "#5c7a4a",
-            PlaceType::Restroom => "#4f7a86",
+            PlaceType::Public => "#4f7a86",
+            PlaceType::Hall => "#b5533f",
             PlaceType::Other => "#8a7565",
         }
     }
@@ -165,6 +165,127 @@ impl FromStr for Parking {
     }
 }
 
+/// Something a place has on offer, shown as a multi-select on the add form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Amenity {
+    Restrooms,
+    Coffee,
+    Food,
+    Groceries,
+    Seating,
+    Parking,
+}
+
+impl Amenity {
+    pub const ALL: [Amenity; 6] = [
+        Amenity::Restrooms,
+        Amenity::Coffee,
+        Amenity::Food,
+        Amenity::Groceries,
+        Amenity::Seating,
+        Amenity::Parking,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Amenity::Restrooms => "restrooms",
+            Amenity::Coffee => "coffee",
+            Amenity::Food => "food",
+            Amenity::Groceries => "groceries",
+            Amenity::Seating => "seating",
+            Amenity::Parking => "parking",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Amenity::Restrooms => "Restrooms",
+            Amenity::Coffee => "Coffee",
+            Amenity::Food => "Food",
+            Amenity::Groceries => "Groceries",
+            Amenity::Seating => "Seating",
+            Amenity::Parking => "Parking",
+        }
+    }
+
+    /// Material Symbols icon name used in the UI.
+    pub fn icon(self) -> &'static str {
+        match self {
+            Amenity::Restrooms => "wc",
+            Amenity::Coffee => "local_cafe",
+            Amenity::Food => "restaurant",
+            Amenity::Groceries => "local_grocery_store",
+            Amenity::Seating => "chair",
+            Amenity::Parking => "local_parking",
+        }
+    }
+}
+
+impl fmt::Display for Amenity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Amenity {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Amenity::ALL.into_iter().find(|a| a.as_str() == s).ok_or(())
+    }
+}
+
+/// A tri-state answer for questions like "purchase required?" where the
+/// scout adding a place may simply not know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Requirement {
+    Yes,
+    No,
+    #[default]
+    Unknown,
+}
+
+impl Requirement {
+    pub const ALL: [Requirement; 3] = [Requirement::Yes, Requirement::No, Requirement::Unknown];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Requirement::Yes => "yes",
+            Requirement::No => "no",
+            Requirement::Unknown => "unknown",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Requirement::Yes => "Yes",
+            Requirement::No => "No",
+            Requirement::Unknown => "Don't know",
+        }
+    }
+}
+
+impl fmt::Display for Requirement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Requirement {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "yes" => Ok(Requirement::Yes),
+            "no" => Ok(Requirement::No),
+            "unknown" => Ok(Requirement::Unknown),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
@@ -183,8 +304,10 @@ pub struct PlaceSummary {
     pub address: String,
     pub door_ft: i32,
     pub parking: Parking,
-    pub purchase_required: bool,
-    pub code_required: bool,
+    pub purchase_required: Requirement,
+    pub code_required: Requirement,
+    #[serde(default)]
+    pub amenities: Vec<Amenity>,
     pub clean_avg: Option<f64>,
     pub review_count: i64,
     pub distance_mi: Option<f64>,
@@ -226,9 +349,11 @@ pub struct NewPlace {
     pub door_note: String,
     pub parking: Parking,
     #[serde(default)]
-    pub purchase_required: bool,
+    pub purchase_required: Requirement,
     #[serde(default)]
-    pub code_required: bool,
+    pub code_required: Requirement,
+    #[serde(default)]
+    pub amenities: Vec<Amenity>,
     #[serde(default)]
     pub comment: String,
 }
@@ -334,6 +459,12 @@ impl PlacesQuery {
     }
 }
 
+/// Formats a coordinate pair as `"lat, lng"` text that [`parse_latlng`]
+/// accepts back, e.g. for prefilling an address field.
+pub fn fmt_latlng(lat: f64, lng: f64) -> String {
+    format!("{lat:.6}, {lng:.6}")
+}
+
 /// Formats a distance in miles for display, e.g. `"0.2"`.
 pub fn fmt_distance_mi(mi: f64) -> String {
     format!("{mi:.1}")
@@ -346,6 +477,32 @@ pub fn door_short(door_ft: i32) -> String {
     } else {
         format!("{door_ft} ft")
     }
+}
+
+/// Miles at the low and high ends of the distance filter's logarithmic scale.
+pub const RADIUS_MIN_MI: f64 = 1.0;
+pub const RADIUS_MAX_MI: f64 = 100.0;
+/// Resolution of the underlying `<input type="range">` — kept far finer than
+/// the whole-mile output so the slider thumb still moves smoothly even
+/// though small distances round to the same displayed mile for many steps.
+pub const RADIUS_SLIDER_STEPS: u32 = 1000;
+
+/// Maps a raw slider position (`0..=RADIUS_SLIDER_STEPS`) to a whole-mile
+/// radius on a logarithmic scale, so drag distance near the low end (1 mi)
+/// changes the radius by much less than the same drag near the high end
+/// (100 mi).
+pub fn radius_from_slider(pos: u32) -> u8 {
+    let t = f64::from(pos.min(RADIUS_SLIDER_STEPS)) / f64::from(RADIUS_SLIDER_STEPS);
+    let mi = RADIUS_MIN_MI * (RADIUS_MAX_MI / RADIUS_MIN_MI).powf(t);
+    mi.round().clamp(RADIUS_MIN_MI, RADIUS_MAX_MI) as u8
+}
+
+/// Inverse of [`radius_from_slider`] — used to place the slider thumb for a
+/// given radius (e.g. when the filter sheet opens or is reset).
+pub fn radius_to_slider(mi: u8) -> u32 {
+    let mi = f64::from(mi).clamp(RADIUS_MIN_MI, RADIUS_MAX_MI);
+    let t = (mi / RADIUS_MIN_MI).ln() / (RADIUS_MAX_MI / RADIUS_MIN_MI).ln();
+    (t * f64::from(RADIUS_SLIDER_STEPS)).round() as u32
 }
 
 /// Display name derived from an anonymous device id, e.g. `"Scout 3f9a"`.
@@ -395,6 +552,13 @@ mod tests {
     }
 
     #[test]
+    fn fmt_latlng_round_trips_through_parse() {
+        let text = fmt_latlng(47.6097, -122.3422);
+        assert_eq!(text, "47.609700, -122.342200");
+        assert_eq!(parse_latlng(&text), Some((47.6097, -122.3422)));
+    }
+
+    #[test]
     fn place_type_serde_round_trip() {
         for t in PlaceType::ALL {
             let json = serde_json::to_string(&t).expect("serialize");
@@ -414,23 +578,43 @@ mod tests {
     }
 
     #[test]
+    fn amenity_serde_round_trip() {
+        for a in Amenity::ALL {
+            let json = serde_json::to_string(&a).expect("serialize");
+            assert_eq!(json, format!("\"{}\"", a.as_str()));
+            let back: Amenity = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, a);
+            assert_eq!(a.as_str().parse::<Amenity>(), Ok(a));
+        }
+    }
+
+    #[test]
+    fn requirement_round_trip_and_defaults_to_unknown() {
+        for r in Requirement::ALL {
+            assert_eq!(r.as_str().parse::<Requirement>(), Ok(r));
+        }
+        assert!("maybe".parse::<Requirement>().is_err());
+        assert_eq!(Requirement::default(), Requirement::Unknown);
+    }
+
+    #[test]
     fn places_query_round_trips_through_query_string() {
         let q = PlacesQuery {
             q: None,
             lat: Some(47.6),
             lng: Some(-122.3),
             radius_mi: Some(5.0),
-            types: Some("coffee,park".to_owned()),
+            types: Some("shop,park".to_owned()),
             clean_min: Some(4.0),
             no_purchase: Some(true),
             has_parking: None,
             sort: Some(SortBy::Cleanliness),
         };
         let qs = q.to_query_string();
-        assert!(qs.contains("types=coffee,park"));
+        assert!(qs.contains("types=shop,park"));
         assert!(qs.contains("sort=cleanliness"));
         assert!(!qs.contains("has_parking"));
-        assert_eq!(q.parsed_types(), vec![PlaceType::Coffee, PlaceType::Park]);
+        assert_eq!(q.parsed_types(), vec![PlaceType::Shop, PlaceType::Park]);
     }
 
     #[test]
@@ -458,10 +642,10 @@ mod tests {
     #[test]
     fn parsed_types_skips_unknown_entries() {
         let q = PlacesQuery {
-            types: Some("coffee,unknown,gas".to_owned()),
+            types: Some("shop,unknown,store".to_owned()),
             ..PlacesQuery::default()
         };
-        assert_eq!(q.parsed_types(), vec![PlaceType::Coffee, PlaceType::Gas]);
+        assert_eq!(q.parsed_types(), vec![PlaceType::Shop, PlaceType::Store]);
     }
 
     #[test]
@@ -477,19 +661,64 @@ mod tests {
     }
 
     #[test]
+    fn radius_slider_covers_full_range_at_the_ends() {
+        assert_eq!(radius_from_slider(0), 1);
+        assert_eq!(radius_from_slider(RADIUS_SLIDER_STEPS), 100);
+        assert_eq!(radius_from_slider(RADIUS_SLIDER_STEPS * 10), 100);
+    }
+
+    #[test]
+    fn radius_slider_is_monotonically_non_decreasing() {
+        let mut prev = radius_from_slider(0);
+        for pos in 1..=RADIUS_SLIDER_STEPS {
+            let mi = radius_from_slider(pos);
+            assert!(mi >= prev, "radius dropped at pos {pos}: {prev} -> {mi}");
+            prev = mi;
+        }
+    }
+
+    #[test]
+    fn radius_slider_is_finer_near_the_low_end_than_the_high_end() {
+        // More raw slider ticks are spent representing 1 mi than are spent
+        // representing 100 mi — a given drag distance changes the radius by
+        // less near the low end (fine control) than near the high end
+        // (coarse control), which is the point of the log scale.
+        let low_end_ticks = (0..=RADIUS_SLIDER_STEPS)
+            .take_while(|&pos| radius_from_slider(pos) <= 1)
+            .count();
+        let high_end_ticks = (0..=RADIUS_SLIDER_STEPS)
+            .rev()
+            .take_while(|&pos| radius_from_slider(pos) >= 100)
+            .count();
+        assert!(
+            low_end_ticks > high_end_ticks,
+            "low_end_ticks={low_end_ticks} high_end_ticks={high_end_ticks}"
+        );
+    }
+
+    #[test]
+    fn radius_to_slider_round_trips_through_radius_from_slider() {
+        for mi in [1, 2, 5, 10, 25, 50, 75, 100] {
+            let pos = radius_to_slider(mi);
+            assert_eq!(radius_from_slider(pos), mi, "mi={mi} pos={pos}");
+        }
+    }
+
+    #[test]
     fn place_detail_flattens_summary_fields() {
         let detail = PlaceDetail {
             summary: PlaceSummary {
                 id: Uuid::nil(),
                 name: "Camber Coffee".to_owned(),
-                place_type: PlaceType::Coffee,
+                place_type: PlaceType::Shop,
                 lat: 47.6,
                 lng: -122.3,
                 address: "214 Maple Ave".to_owned(),
                 door_ft: 15,
                 parking: Parking::Street,
-                purchase_required: true,
-                code_required: true,
+                purchase_required: Requirement::Yes,
+                code_required: Requirement::Yes,
+                amenities: vec![Amenity::Coffee, Amenity::Seating],
                 clean_avg: Some(4.8),
                 review_count: 2,
                 distance_mi: Some(0.2),

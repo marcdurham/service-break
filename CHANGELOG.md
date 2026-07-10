@@ -1,0 +1,34 @@
+# Changelog
+
+All notable changes to this project are logged here as they happen.
+Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
+short description.
+
+## 2026-07-10
+
+- 15:46 — Merged branch `geo-ux` into `main`; removed all completed items
+  from TODO.md (the list is now empty).
+- 15:37 — Merged branch `nav-invite` into `main`.
+- 15:36 — Merged branch `place-model` into `main`.
+- 15:35 — Distance filter now spans 1-100 mi on a logarithmic scale; the
+  map's recenter button hugs the bottom-right corner (above the featured
+  card when one is showing); the map picker shows the user's live location
+  when they're sharing it.
+- 15:34 — Added client-side routing (yew-router) with a URL per page and
+  per-place deep links, plus a new Invite page reachable from the tab bar.
+- 15:32 — Renamed "stop"/"stops" to "place"/"places" throughout the UI,
+  API errors, and demo data; replaced business-category place types
+  (Coffee, Grocery, Bookstore, Gas, Restroom) with generic venue types
+  (Shop, Store, Mall, Public, Hall); added a multi-select amenities field
+  (Restrooms, Coffee, Food, Groceries, Seating, Parking); and changed
+  "Purchase required?"/"Code required?" from booleans to a three-state
+  Yes/No/Don't know `Requirement`. Added migration `0002` to convert
+  existing data and a new `amenities` column.
+- 13:57 — Added this changelog and updated AGENTS.md to require dated
+  entries alongside commits.
+
+## Earlier
+
+- Made the UI responsive with a mobile-first layout.
+- Added map point-picking so a new place can be created without an address.
+- Added "Show on map" to places.

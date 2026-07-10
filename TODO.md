@@ -1,11 +1,1 @@
 # TODO
-- Increase the distance scale to go up to 100 miles on the List view filter, make the scale logarithmic.
-- Change the term "stop" or "stops" to "place" or "places" everywhere
-- Change "Type of place" options to: Shop, Store, Mall, Park, Public, Hall, Other
-- Add options for things a place has: Restrooms, Coffee, Food, Groceries, Seating, Parking
-- For toggles like "Purchase required?" change it to three state: Yes, No, don't kow.
-- Add a "Show on map" to places, unless it's already there.
-- Show user's current location, if they're sharing it, when on the "point to the spot" page.
-- On the map page the current location button on the right side seems like it should be aligned to the bottom, please align it in the bottom right corner.
-- Add URL routes so I can navigate backwards and fowdards and save and maybe share links (if appropriate)
-- Add a "Invite" page to invite friends as new users.  There is a service-break.cd.html file that might help show what this would look like.

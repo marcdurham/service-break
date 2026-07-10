@@ -33,6 +33,11 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[c]));
 
+      window.addEventListener('resize', () => {
+        if (map) map.invalidateSize();
+        if (pickMap) pickMap.invalidateSize();
+      });
+
       window.sbInitMap = function (elId, lat, lng, zoom, cb) {
         onSelect = cb;
         if (map) { map.remove(); map = null; }
@@ -83,6 +88,54 @@
         if (map) map.flyTo([lat, lng], zoom, { duration: 0.6 });
       };
 
+      // Separate map instance for picking a location when adding a place.
+      let pickMap = null, pickMarker = null, pickUserMarker = null;
+
+      function setPickMarker(lat, lng) {
+        if (!pickMap) return;
+        if (pickMarker) { pickMarker.setLatLng([lat, lng]); return; }
+        const icon = L.divIcon({
+          className: 'sb-pin-wrap',
+          html: '<div class="sb-pin sel" style="--pin:#c05f38">'
+            + '<div class="sb-pin-dot"><span class="mi">place</span></div>'
+            + '<div class="sb-pin-tail"></div></div>',
+          iconSize: [0, 0]
+        });
+        pickMarker = L.marker([lat, lng], { icon, interactive: false }).addTo(pickMap);
+      }
+
+      window.sbInitPickMap = function (elId, lat, lng, zoom, hasMarker, onPick) {
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; pickUserMarker = null; }
+        pickMap = L.map(document.getElementById(elId), { zoomControl: false });
+        pickMap.setView([lat, lng], zoom);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(pickMap);
+        pickMap.on('click', (e) => {
+          setPickMarker(e.latlng.lat, e.latlng.lng);
+          onPick(e.latlng.lat, e.latlng.lng);
+        });
+        if (hasMarker) setPickMarker(lat, lng);
+      };
+
+      window.sbDestroyPickMap = function () {
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; pickUserMarker = null; }
+      };
+
+      // Shows where the user currently is on the picker map, so they can
+      // place a pin relative to themselves without guessing.
+      window.sbSetPickUser = function (lat, lng) {
+        if (!pickMap) return;
+        if (pickUserMarker) { pickUserMarker.setLatLng([lat, lng]); return; }
+        const icon = L.divIcon({
+          className: 'sb-user-wrap',
+          html: '<div class="sb-user-pulse"></div><div class="sb-user-dot"></div>',
+          iconSize: [0, 0]
+        });
+        pickUserMarker = L.marker([lat, lng], { icon, interactive: false }).addTo(pickMap);
+      };
+
       window.sbLocate = function (ok, err) {
         if (!navigator.geolocation) { err('geolocation unsupported'); return; }
         navigator.geolocation.getCurrentPosition(
@@ -90,6 +143,23 @@
           (e) => err(String(e.message || 'location unavailable')),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
+      };
+
+      window.sbCopyText = function (text) {
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      };
+
+      // Opens the native share sheet with the invite text and this app's
+      // URL; returns true if it did. Falls back to the clipboard otherwise.
+      window.sbShareInvite = function (text) {
+        if (navigator.share) {
+          navigator.share({ title: 'Service Break', text, url: location.origin + '/' }).catch(() => {});
+          return true;
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text + ' ' + location.origin + '/').catch(() => {});
+        }
+        return false;
       };
 
       if ('serviceWorker' in navigator) {

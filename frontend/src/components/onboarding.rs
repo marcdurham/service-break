@@ -20,13 +20,13 @@ pub fn onboarding(props: &OnboardingProps) -> Html {
                     <div class="onb-logo-badge"><span class="mi">{"wc"}</span></div>
                     <div>
                         <div class="onb-app-name">{"Service Break"}</div>
-                        <div class="onb-tagline">{"find a clean stop"}</div>
+                        <div class="onb-tagline">{"find a clean place"}</div>
                     </div>
                 </div>
-                <h1 class="onb-h1">{"Every good trip needs a clean pit stop."}</h1>
+                <h1 class="onb-h1">{"Every good trip needs a clean break."}</h1>
                 <p class="onb-p">
-                    {"Real ratings for bathrooms at coffee shops, groceries, parks, \
-                      gas stations & more — sorted by what's closest to you."}
+                    {"Real ratings for bathrooms at shops, stores, malls, parks \
+                      & more — sorted by what's closest to you."}
                 </p>
             </div>
             <div class="onb-foot">
@@ -43,7 +43,7 @@ pub fn onboarding(props: &OnboardingProps) -> Html {
                 <button class="onb-cta" {onclick}>
                     <span class="mi">{"my_location"}</span>{"Enable location & explore"}
                 </button>
-                <div class="onb-note">{"We only use your location to sort nearby stops."}</div>
+                <div class="onb-note">{"We only use your location to sort nearby places."}</div>
             </div>
         </div>
     }
