@@ -1,4 +1,6 @@
-use shared::{NewPlace, Parking, PlaceDetail, PlaceType};
+use std::collections::HashSet;
+
+use shared::{Amenity, NewPlace, Parking, PlaceDetail, PlaceType, Requirement};
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
@@ -53,8 +55,9 @@ struct Form {
     clean: i16,
     door: Door,
     parking: Parking,
-    purchase: bool,
-    code: bool,
+    purchase: Requirement,
+    code: Requirement,
+    amenities: HashSet<Amenity>,
     comment: String,
 }
 
@@ -63,12 +66,13 @@ impl Default for Form {
         Form {
             name: String::new(),
             address: String::new(),
-            place_type: PlaceType::Coffee,
+            place_type: PlaceType::Shop,
             clean: 5,
             door: Door::AtEntrance,
             parking: Parking::Easy,
-            purchase: false,
-            code: false,
+            purchase: Requirement::Unknown,
+            code: Requirement::Unknown,
+            amenities: HashSet::new(),
             comment: String::new(),
         }
     }
@@ -169,6 +173,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
                 parking: f.parking,
                 purchase_required: f.purchase,
                 code_required: f.code,
+                amenities: f.amenities.iter().copied().collect(),
                 comment: f.comment.trim().to_owned(),
             };
             let form = form.clone();
@@ -188,19 +193,10 @@ pub fn add_form(props: &AddFormProps) -> Html {
         })
     };
 
-    let type_tiles = [
-        (PlaceType::Coffee, "Coffee"),
-        (PlaceType::Grocery, "Grocery"),
-        (PlaceType::Gas, "Gas"),
-        (PlaceType::Park, "Park"),
-        (PlaceType::Restroom, "Restroom"),
-        (PlaceType::Other, "Other"),
-    ];
-
     html! {
         <>
         <div class="screen sb-scroll">
-            <div class="screen-title">{"Add a stop"}</div>
+            <div class="screen-title">{"Add a place"}</div>
             <div class="screen-sub">{"Help the next traveler find a clean break."}</div>
 
             <div class="field-label">{"Place name"}</div>
@@ -239,7 +235,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
 
             <div class="field-label">{"Type of place"}</div>
             <div class="type-grid">
-                { for type_tiles.into_iter().map(|(t, label)| {
+                { for PlaceType::ALL.into_iter().map(|t| {
                     let on = form.place_type == t;
                     let onclick = {
                         let form = form.clone();
@@ -252,7 +248,30 @@ pub fn add_form(props: &AddFormProps) -> Html {
                     html! {
                         <button class={if on { "tile on" } else { "tile" }} {onclick}>
                             <span class="mi">{t.icon()}</span>
-                            <span>{label}</span>
+                            <span>{t.label()}</span>
+                        </button>
+                    }
+                }) }
+            </div>
+
+            <div class="field-label">{"This place has"}</div>
+            <div class="type-grid">
+                { for Amenity::ALL.into_iter().map(|a| {
+                    let on = form.amenities.contains(&a);
+                    let onclick = {
+                        let form = form.clone();
+                        Callback::from(move |_| {
+                            let mut next = (*form).clone();
+                            if !next.amenities.remove(&a) {
+                                next.amenities.insert(a);
+                            }
+                            form.set(next);
+                        })
+                    };
+                    html! {
+                        <button class={if on { "tile on" } else { "tile" }} {onclick}>
+                            <span class="mi">{a.icon()}</span>
+                            <span>{a.label()}</span>
                         </button>
                     }
                 }) }
@@ -317,9 +336,9 @@ pub fn add_form(props: &AddFormProps) -> Html {
                 }) }
             </div>
 
-            { toggle_row(&form, "Purchase required?", "Do you need to buy something to use it?",
+            { requirement_row(&form, "Purchase required?", "Do you need to buy something to use it?",
                 |f| f.purchase, |f, v| f.purchase = v) }
-            { toggle_row(&form, "Code required?", "Do you need a door code or a key?",
+            { requirement_row(&form, "Code required?", "Do you need a door code or a key?",
                 |f| f.code, |f, v| f.code = v) }
 
             <div class="field-label">{"Comment"}</div>
@@ -336,7 +355,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
 
             <button class="submit-btn" onclick={submit} disabled={*submitting}>
                 <span class="mi">{"add_location_alt"}</span>
-                {if *submitting { "Adding…" } else { "Add this stop" }}
+                {if *submitting { "Adding…" } else { "Add this place" }}
             </button>
         </div>
 
@@ -352,31 +371,33 @@ pub fn add_form(props: &AddFormProps) -> Html {
     }
 }
 
-fn toggle_row(
+fn requirement_row(
     form: &UseStateHandle<Form>,
     title: &'static str,
     sub: &'static str,
-    get: fn(&Form) -> bool,
-    set: fn(&mut Form, bool),
+    get: fn(&Form) -> Requirement,
+    set: fn(&mut Form, Requirement),
 ) -> Html {
-    let on = get(form);
-    let onclick = {
-        let form = form.clone();
-        Callback::from(move |_| {
-            let mut next = (*form).clone();
-            let cur = get(&next);
-            set(&mut next, !cur);
-            form.set(next);
-        })
-    };
+    let current = get(form);
     html! {
-        <div class="toggle-row" {onclick} style="margin-top:18px">
-            <div>
-                <div class="toggle-title">{title}</div>
-                <div class="toggle-sub">{sub}</div>
-            </div>
-            <div class={if on { "switch on" } else { "switch" }}>
-                <div class="switch-knob"></div>
+        <div style="margin-top:18px">
+            <div class="toggle-title">{title}</div>
+            <div class="toggle-sub" style="margin-bottom:8px">{sub}</div>
+            <div class="pick-grid-3">
+                { for Requirement::ALL.into_iter().map(|r| {
+                    let on = current == r;
+                    let onclick = {
+                        let form = form.clone();
+                        Callback::from(move |_| {
+                            let mut next = (*form).clone();
+                            set(&mut next, r);
+                            form.set(next);
+                        })
+                    };
+                    html! {
+                        <button class={if on { "pill on" } else { "pill" }} {onclick}>{r.label()}</button>
+                    }
+                }) }
             </div>
         </div>
     }

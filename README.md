@@ -1,7 +1,7 @@
 # Service Break
 
-Find a clean pit stop: real bathroom ratings at coffee shops, groceries,
-parks, gas stations & more — sorted by what's closest to you.
+Find a clean place: real bathroom ratings at shops, stores, malls, parks
+& more — sorted by what's closest to you.
 
 A mobile-first PWA built in Rust: [Yew](https://yew.rs) frontend with
 [Leaflet](https://leafletjs.com) + OpenStreetMap tiles, an

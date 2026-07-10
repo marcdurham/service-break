@@ -90,11 +90,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let rating = p.clean_avg.unwrap_or(0.0);
     let clean_pct = (rating / 5.0 * 100.0).clamp(0.0, 100.0);
     let access = ui::access_label(p.purchase_required, p.code_required);
-    let access_class = if p.purchase_required || p.code_required {
-        "tag tag-code"
-    } else {
-        "tag tag-free"
-    };
+    let access_class = ui::access_class(p.purchase_required, p.code_required);
 
     html! {
         <div class="detail-overlay">
@@ -177,6 +173,17 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                             <span class={access_class}>{access}</span>
                         </div>
                     </div>
+
+                    if !p.amenities.is_empty() {
+                        <div class="field-label">{"This place has"}</div>
+                        <div class="tag-row">
+                            { for p.amenities.iter().map(|a| html! {
+                                <span class="tag tag-amenity" key={a.as_str()}>
+                                    <span class="mi">{a.icon()}</span>{a.label()}
+                                </span>
+                            }) }
+                        </div>
+                    }
 
                     if !p.address.is_empty() {
                         <div class="addr-card">

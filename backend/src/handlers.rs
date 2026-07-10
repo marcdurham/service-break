@@ -107,6 +107,7 @@ async fn create_place(
         parking: new.parking,
         purchase_required: new.purchase_required,
         code_required: new.code_required,
+        amenities: new.amenities.clone(),
         device_id: new.device_id.clone(),
     };
     let id = db::insert_place(&state.pool, &place).await?;

@@ -28,7 +28,7 @@ pub fn list_view(props: &ListViewProps) -> Html {
         <div class="screen sb-scroll">
             <div class="list-head">
                 <div>
-                    <div class="screen-title">{"Nearby stops"}</div>
+                    <div class="screen-title">{"Nearby places"}</div>
                     <div class="screen-sub">
                         {format!("{} places · sorted by distance", props.places.len())}
                     </div>
@@ -41,7 +41,7 @@ pub fn list_view(props: &ListViewProps) -> Html {
             if props.places.is_empty() {
                 <div class="empty">
                     <span class="mi">{"travel_explore"}</span>
-                    <div class="empty-title">{"No stops match your filters"}</div>
+                    <div class="empty-title">{"No places match your filters"}</div>
                     <button onclick={reset}>{"Clear filters"}</button>
                 </div>
             } else {

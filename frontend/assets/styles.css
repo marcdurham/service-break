@@ -349,6 +349,8 @@ button { cursor: pointer; }
 .tag-park-none { background: #f6e6e0; color: #b5533f; font-weight: 700; }
 .tag-free { background: #eaf1e6; color: var(--green-dark); font-weight: 700; }
 .tag-code { background: #f7efdc; color: #a8792f; font-weight: 700; }
+.tag-unknown { background: #ece6de; color: #7a6b58; font-weight: 700; }
+.tag-amenity { background: #f2ece2; color: #6b5c4c; }
 
 .card-dir-btn {
   width: 40px; height: 40px; border: none; border-radius: 12px; background: #f4ead9;
