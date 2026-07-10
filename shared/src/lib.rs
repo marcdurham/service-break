@@ -354,6 +354,32 @@ pub fn door_short(door_ft: i32) -> String {
     }
 }
 
+/// Miles at the low and high ends of the distance filter's logarithmic scale.
+pub const RADIUS_MIN_MI: f64 = 1.0;
+pub const RADIUS_MAX_MI: f64 = 100.0;
+/// Resolution of the underlying `<input type="range">` — kept far finer than
+/// the whole-mile output so the slider thumb still moves smoothly even
+/// though small distances round to the same displayed mile for many steps.
+pub const RADIUS_SLIDER_STEPS: u32 = 1000;
+
+/// Maps a raw slider position (`0..=RADIUS_SLIDER_STEPS`) to a whole-mile
+/// radius on a logarithmic scale, so drag distance near the low end (1 mi)
+/// changes the radius by much less than the same drag near the high end
+/// (100 mi).
+pub fn radius_from_slider(pos: u32) -> u8 {
+    let t = f64::from(pos.min(RADIUS_SLIDER_STEPS)) / f64::from(RADIUS_SLIDER_STEPS);
+    let mi = RADIUS_MIN_MI * (RADIUS_MAX_MI / RADIUS_MIN_MI).powf(t);
+    mi.round().clamp(RADIUS_MIN_MI, RADIUS_MAX_MI) as u8
+}
+
+/// Inverse of [`radius_from_slider`] — used to place the slider thumb for a
+/// given radius (e.g. when the filter sheet opens or is reset).
+pub fn radius_to_slider(mi: u8) -> u32 {
+    let mi = f64::from(mi).clamp(RADIUS_MIN_MI, RADIUS_MAX_MI);
+    let t = (mi / RADIUS_MIN_MI).ln() / (RADIUS_MAX_MI / RADIUS_MIN_MI).ln();
+    (t * f64::from(RADIUS_SLIDER_STEPS)).round() as u32
+}
+
 /// Display name derived from an anonymous device id, e.g. `"Scout 3f9a"`.
 pub fn scout_name(device_id: &str) -> String {
     let tag: String = device_id
@@ -487,6 +513,50 @@ mod tests {
     fn scout_name_from_device_id() {
         assert_eq!(scout_name("3f9a2b-xyz"), "Scout 3f9a");
         assert_eq!(scout_name(""), "Scout");
+    }
+
+    #[test]
+    fn radius_slider_covers_full_range_at_the_ends() {
+        assert_eq!(radius_from_slider(0), 1);
+        assert_eq!(radius_from_slider(RADIUS_SLIDER_STEPS), 100);
+        assert_eq!(radius_from_slider(RADIUS_SLIDER_STEPS * 10), 100);
+    }
+
+    #[test]
+    fn radius_slider_is_monotonically_non_decreasing() {
+        let mut prev = radius_from_slider(0);
+        for pos in 1..=RADIUS_SLIDER_STEPS {
+            let mi = radius_from_slider(pos);
+            assert!(mi >= prev, "radius dropped at pos {pos}: {prev} -> {mi}");
+            prev = mi;
+        }
+    }
+
+    #[test]
+    fn radius_slider_is_finer_near_the_low_end_than_the_high_end() {
+        // More raw slider ticks are spent representing 1 mi than are spent
+        // representing 100 mi — a given drag distance changes the radius by
+        // less near the low end (fine control) than near the high end
+        // (coarse control), which is the point of the log scale.
+        let low_end_ticks = (0..=RADIUS_SLIDER_STEPS)
+            .take_while(|&pos| radius_from_slider(pos) <= 1)
+            .count();
+        let high_end_ticks = (0..=RADIUS_SLIDER_STEPS)
+            .rev()
+            .take_while(|&pos| radius_from_slider(pos) >= 100)
+            .count();
+        assert!(
+            low_end_ticks > high_end_ticks,
+            "low_end_ticks={low_end_ticks} high_end_ticks={high_end_ticks}"
+        );
+    }
+
+    #[test]
+    fn radius_to_slider_round_trips_through_radius_from_slider() {
+        for mi in [1, 2, 5, 10, 25, 50, 75, 100] {
+            let pos = radius_to_slider(mi);
+            assert_eq!(radius_from_slider(pos), mi, "mi={mi} pos={pos}");
+        }
     }
 
     #[test]

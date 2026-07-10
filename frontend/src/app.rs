@@ -86,6 +86,10 @@ pub fn app() -> Html {
     let started = use_state(|| LocalStorage::get::<bool>("sb_started").unwrap_or(false));
     let tab = use_state(|| Tab::Map);
     let origin = use_state(|| None::<(f64, f64)>);
+    // Set only when the browser's geolocation actually succeeds, as
+    // opposed to `origin`, which falls back to a fixed map center on
+    // failure — used to show the user's real location on the map picker.
+    let user_location = use_state(|| None::<(f64, f64)>);
     let places = use_state(Vec::<PlaceSummary>::new);
     let selected = use_state(|| None::<Uuid>);
     let detail = use_state(|| None::<PlaceDetail>);
@@ -113,11 +117,14 @@ pub fn app() -> Html {
     // Ask for the user's location once the app has started.
     {
         let origin = origin.clone();
+        let user_location = user_location.clone();
         use_effect_with(*started, move |started| {
             if *started && origin.is_none() {
                 let ok_origin = origin.clone();
+                let ok_user_location = user_location.clone();
                 let ok = Closure::<dyn FnMut(f64, f64)>::new(move |lat: f64, lng: f64| {
                     ok_origin.set(Some((lat, lng)));
+                    ok_user_location.set(Some((lat, lng)));
                 });
                 let err = Closure::<dyn FnMut(String)>::new(move |_: String| {
                     origin.set(Some(FALLBACK_CENTER));
@@ -364,6 +371,7 @@ pub fn app() -> Html {
                         <AddForm
                             device_id={(*device).clone()}
                             origin={*origin}
+                            user_location={*user_location}
                             on_created={on_created}
                             on_toast={show_toast.clone()}
                         />

@@ -89,7 +89,7 @@
       };
 
       // Separate map instance for picking a location when adding a place.
-      let pickMap = null, pickMarker = null;
+      let pickMap = null, pickMarker = null, pickUserMarker = null;
 
       function setPickMarker(lat, lng) {
         if (!pickMap) return;
@@ -105,7 +105,7 @@
       }
 
       window.sbInitPickMap = function (elId, lat, lng, zoom, hasMarker, onPick) {
-        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; }
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; pickUserMarker = null; }
         pickMap = L.map(document.getElementById(elId), { zoomControl: false });
         pickMap.setView([lat, lng], zoom);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -120,7 +120,20 @@
       };
 
       window.sbDestroyPickMap = function () {
-        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; }
+        if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; pickUserMarker = null; }
+      };
+
+      // Shows where the user currently is on the picker map, so they can
+      // place a pin relative to themselves without guessing.
+      window.sbSetPickUser = function (lat, lng) {
+        if (!pickMap) return;
+        if (pickUserMarker) { pickUserMarker.setLatLng([lat, lng]); return; }
+        const icon = L.divIcon({
+          className: 'sb-user-wrap',
+          html: '<div class="sb-user-pulse"></div><div class="sb-user-dot"></div>',
+          iconSize: [0, 0]
+        });
+        pickUserMarker = L.marker([lat, lng], { icon, interactive: false }).addTo(pickMap);
       };
 
       window.sbLocate = function (ok, err) {

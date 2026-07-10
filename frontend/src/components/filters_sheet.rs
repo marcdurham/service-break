@@ -43,9 +43,9 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
         let cb = props.on_change.clone();
         Callback::from(move |e: InputEvent| {
             if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
-                if let Ok(v) = el.value().parse::<u8>() {
+                if let Ok(pos) = el.value().parse::<u32>() {
                     let mut f = filters.clone();
-                    f.radius_mi = v.clamp(1, 10);
+                    f.radius_mi = shared::radius_from_slider(pos);
                     cb.emit(f);
                 }
             }
@@ -86,10 +86,10 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
                 <input
                     type="range"
                     class="range"
-                    min="1"
-                    max="10"
+                    min="0"
+                    max={shared::RADIUS_SLIDER_STEPS.to_string()}
                     step="1"
-                    value={props.filters.radius_mi.to_string()}
+                    value={shared::radius_to_slider(props.filters.radius_mi).to_string()}
                     oninput={on_radius}
                 />
                 <button class="sheet-apply" onclick={close_apply}>

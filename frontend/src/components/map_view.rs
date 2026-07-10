@@ -220,7 +220,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 }
             </div>
 
-            <button class="recenter" onclick={recenter}>
+            <button
+                class={if featured.is_some() { "recenter above-card" } else { "recenter" }}
+                onclick={recenter}
+            >
                 <span class="mi">{"my_location"}</span>
             </button>
 

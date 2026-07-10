@@ -39,6 +39,11 @@ extern "C" {
     #[wasm_bindgen(js_name = sbDestroyPickMap)]
     pub fn sb_destroy_pick_map();
 
+    /// Shows (or moves) a marker for the user's own location on the
+    /// location-picker map, distinct from the dropped pin.
+    #[wasm_bindgen(js_name = sbSetPickUser)]
+    pub fn sb_set_pick_user(lat: f64, lng: f64);
+
     /// Browser geolocation: `ok(lat, lng)` or `err(message)`.
     #[wasm_bindgen(js_name = sbLocate)]
     pub fn sb_locate(ok: &JsValue, err: &JsValue);

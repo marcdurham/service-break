@@ -78,6 +78,9 @@ impl Default for Form {
 pub struct AddFormProps {
     pub device_id: String,
     pub origin: Option<(f64, f64)>,
+    /// The user's live location, if they're sharing it (as opposed to
+    /// `origin`, which may be a fallback center).
+    pub user_location: Option<(f64, f64)>,
     pub on_created: Callback<PlaceDetail>,
     pub on_toast: Callback<String>,
 }
@@ -344,6 +347,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
             <LocationPicker
                 center={props.origin.unwrap_or(FALLBACK_CENTER)}
                 initial={shared::parse_latlng(&form.address)}
+                user_location={props.user_location}
                 on_confirm={confirm_picker}
                 on_cancel={cancel_picker}
             />
