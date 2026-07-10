@@ -6,7 +6,10 @@ short description.
 
 ## 2026-07-10
 
+- 15:37 — Merged branch `nav-invite` into `main`.
 - 15:36 — Merged branch `place-model` into `main`.
+- 15:34 — Added client-side routing (yew-router) with a URL per page and
+  per-place deep links, plus a new Invite page reachable from the tab bar.
 - 15:32 — Renamed "stop"/"stops" to "place"/"places" throughout the UI,
   API errors, and demo data; replaced business-category place types
   (Coffee, Grocery, Bookstore, Gas, Restroom) with generic venue types

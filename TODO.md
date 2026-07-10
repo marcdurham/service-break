@@ -9,5 +9,5 @@
 - [x] For toggles like "Purchase required?" change it to three state: Yes, No, don't kow.
 - Show user's current location, if they're sharing it, when on the "point to the spot" page.
 - On the map page the current location button on the right side seems like it should be aligned to the bottom, please align it in the bottom right corner.
-- Add URL routes so I can navigate backwards and fowdards and save and maybe share links (if appropriate)
-- Add a "Invite" page to invite friends as new users.  There is a service-break.cd.html file that might help show what this would look like.
+- [x] Add URL routes so I can navigate backwards and fowdards and save and maybe share links (if appropriate)
+- [x] Add a "Invite" page to invite friends as new users.  There is a service-break.cd.html file that might help show what this would look like.
