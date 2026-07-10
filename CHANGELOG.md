@@ -6,6 +6,7 @@ short description.
 
 ## 2026-07-10
 
+- 15:36 — Merged branch `place-model` into `main`.
 - 15:32 — Renamed "stop"/"stops" to "place"/"places" throughout the UI,
   API errors, and demo data; replaced business-category place types
   (Coffee, Grocery, Bookstore, Gas, Restroom) with generic venue types
