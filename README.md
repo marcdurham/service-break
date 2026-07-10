@@ -25,11 +25,11 @@ docker compose up -d
 # 2. Backend API on 127.0.0.1:8081 (runs migrations + demo seed on startup)
 cargo run -p backend
 
-# 3. Frontend on http://127.0.0.1:8080 (proxies /api to the backend)
+# 3. Frontend on http://127.0.0.1:8020 (proxies /api to the backend)
 cd frontend && trunk serve
 ```
 
-Then open <http://127.0.0.1:8080>. Demo seed data is placed around downtown
+Then open <http://127.0.0.1:8020>. Demo seed data is placed around downtown
 Seattle; deny the location prompt (or be elsewhere) and the app falls back to
 that area.
 

@@ -2,7 +2,7 @@
 target = "index.html"
 
 [serve]
-port = 8080
+port = 8020
 
 # Forward API calls to the Actix backend (cargo run -p backend, port 8081).
 [[proxy]]

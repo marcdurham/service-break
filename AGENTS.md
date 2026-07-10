@@ -1,0 +1,50 @@
+# Service Break — agent instructions
+
+## What this is
+
+A mobile-first PWA for finding and rating clean bathrooms at coffee shops,
+groceries, parks, gas stations, etc. Rust everywhere: Yew (wasm) frontend,
+Actix Web backend, PostgreSQL. The visual design follows the prototype
+mockup `service-break.dc.html` kept at the repo root — treat it as the
+design reference when adding UI.
+
+## Layout
+
+| Path        | What it is                                                            |
+|-------------|-----------------------------------------------------------------------|
+| `shared/`   | DTOs + pure logic (haversine, lat/lng parsing) used by both sides     |
+| `backend/`  | Actix Web API, sqlx/Postgres, Nominatim geocoding, `migrations/`, `seed.sql` |
+| `frontend/` | Yew app served by Trunk; Leaflet/OSM map via JS glue in `index.html`; styles in `assets/styles.css` |
+
+Ports: frontend (Trunk) **8020**, backend API **8081**, Postgres (docker)
+**127.0.0.1:5433**. `DATABASE_URL` is set in `.cargo/config.toml`.
+
+Identity is an anonymous per-device id in localStorage — no auth in v1.
+Place cleanliness is the average of its reviews' `clean` scores (1–5).
+
+## Commands
+
+```sh
+docker compose up -d            # Postgres (required for backend + its tests)
+cargo run -p backend            # API on 127.0.0.1:8081; migrates + seeds on start
+cd frontend && trunk serve      # app on http://127.0.0.1:8020, proxies /api
+cargo test --workspace          # all tests
+cargo clippy --workspace --all-targets
+cargo clippy -p frontend --target wasm32-unknown-unknown
+```
+
+## Working conventions
+
+- **Commit changes as you go.** Make small, focused commits after each
+  working change lands (builds + tests pass) rather than batching
+  everything into one commit at the end.
+- **Add tests where needed.** New pure logic in `shared` gets unit tests
+  next to it. New or changed API behavior gets a `#[sqlx::test]`
+  integration test in `backend/tests/api.rs` (these create disposable
+  databases on the docker Postgres, which must be running). Frontend
+  logic that is testable belongs in `shared` where it can be unit-tested.
+- Keep both native and wasm targets clippy-clean before committing.
+- The backend runs migrations at startup; add schema changes as new files
+  in `backend/migrations/`, never edit applied migrations.
+- Nominatim (OpenStreetMap geocoding) requires a User-Agent header — it is
+  set in `backend::http_client`; tests must not call the live service.
