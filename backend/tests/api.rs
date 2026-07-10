@@ -11,7 +11,7 @@ use actix_web::web::Data;
 use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
-use shared::{Parking, PlaceDetail, PlaceSummary, PlaceType};
+use shared::{Parking, PlaceDetail, PlaceSummary, PlaceType, Requirement};
 use sqlx::PgPool;
 
 async fn app(
@@ -31,7 +31,7 @@ fn new_place_json(name: &str) -> serde_json::Value {
     json!({
         "device_id": "test-device-1",
         "name": name,
-        "place_type": "coffee",
+        "place_type": "shop",
         "lat": 47.6117,
         "lng": -122.3402,
         "address": "214 Maple Ave",
@@ -39,8 +39,9 @@ fn new_place_json(name: &str) -> serde_json::Value {
         "door_ft": 15,
         "door_note": "Right past the counter",
         "parking": "street",
-        "purchase_required": true,
-        "code_required": true,
+        "purchase_required": "yes",
+        "code_required": "yes",
+        "amenities": ["restrooms", "coffee"],
         "comment": "Spotless."
     })
 }
@@ -68,14 +69,17 @@ async fn create_place_then_list_returns_it(pool: PgPool) {
     let places: Vec<PlaceSummary> = read_body_json(res).await;
     assert_eq!(places.len(), 1);
     assert_eq!(places[0].id, created.summary.id);
-    assert_eq!(places[0].place_type, PlaceType::Coffee);
+    assert_eq!(places[0].place_type, PlaceType::Shop);
     assert_eq!(places[0].parking, Parking::Street);
+    assert_eq!(places[0].purchase_required, Requirement::Yes);
+    assert_eq!(places[0].code_required, Requirement::Yes);
+    assert_eq!(places[0].amenities.len(), 2);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn create_place_accepts_latlng_typed_into_address(pool: PgPool) {
     let app = app(pool).await;
-    let mut body = new_place_json("Roadside Stop");
+    let mut body = new_place_json("Roadside Place");
     body["lat"] = json!(null);
     body["lng"] = json!(null);
     body["address"] = json!("37.7749, -122.4194");
@@ -103,7 +107,7 @@ async fn create_place_without_location_is_rejected(pool: PgPool) {
 async fn list_sorts_by_distance_and_respects_radius(pool: PgPool) {
     let app = app(pool).await;
     // Near place ~0.7 mi north of origin; far place ~7 mi north.
-    for (name, lat) in [("Near Stop", 47.6197), ("Far Stop", 47.7107)] {
+    for (name, lat) in [("Near Place", 47.6197), ("Far Place", 47.7107)] {
         let mut body = new_place_json(name);
         body["lat"] = json!(lat);
         body["lng"] = json!(-122.3422);
@@ -116,7 +120,7 @@ async fn list_sorts_by_distance_and_respects_radius(pool: PgPool) {
         .to_request();
     let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
     assert_eq!(places.len(), 2);
-    assert_eq!(places[0].name, "Near Stop");
+    assert_eq!(places[0].name, "Near Place");
     let near_dist = places[0].distance_mi.expect("distance");
     assert!((near_dist - 0.69).abs() < 0.05, "got {near_dist}");
 
@@ -125,7 +129,7 @@ async fn list_sorts_by_distance_and_respects_radius(pool: PgPool) {
         .to_request();
     let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
     assert_eq!(places.len(), 1);
-    assert_eq!(places[0].name, "Near Stop");
+    assert_eq!(places[0].name, "Near Place");
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -133,8 +137,8 @@ async fn list_filters_by_type_and_purchase(pool: PgPool) {
     let app = app(pool).await;
     let mut park = new_place_json("Elm Street Park");
     park["place_type"] = json!("park");
-    park["purchase_required"] = json!(false);
-    park["code_required"] = json!(false);
+    park["purchase_required"] = json!("no");
+    park["code_required"] = json!("no");
     for body in [new_place_json("Camber Coffee"), park] {
         let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
         assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);

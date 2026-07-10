@@ -194,7 +194,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
                         <span class="mi">{"search"}</span>
                         <input
                             class="search-input"
-                            placeholder="Search coffee, parks, restrooms…"
+                            placeholder="Search shops, malls, parks…"
                             value={(*query).clone()}
                             oninput={on_search_input}
                         />
@@ -235,7 +235,7 @@ fn search_results(list: &[PlaceSummary], pick: &Callback<PlaceSummary>) -> Html 
     if list.is_empty() {
         return html! {
             <div class="search-results">
-                <div class="sresult-empty">{"No stops found"}</div>
+                <div class="sresult-empty">{"No places found"}</div>
             </div>
         };
     }

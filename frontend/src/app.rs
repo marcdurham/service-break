@@ -300,7 +300,7 @@ pub fn app() -> Html {
             detail.set(Some(d));
             tab.set(Tab::Map);
             refresh.set(refresh.wrapping_add(1));
-            show_toast.emit("Stop added — thanks, scout!".to_owned());
+            show_toast.emit("Place added — thanks, scout!".to_owned());
         })
     };
 

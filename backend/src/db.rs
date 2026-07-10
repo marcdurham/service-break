@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use shared::{Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Review, SortBy};
+use shared::{
+    Amenity, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement, Review,
+    SortBy,
+};
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
@@ -31,12 +34,15 @@ fn push_distance_expr(qb: &mut QueryBuilder<'_, Postgres>, lat: f64, lng: f64) {
 }
 
 const SUMMARY_COLS: &str = "p.id, p.name, p.place_type, p.lat, p.lng, p.address, p.door_ft, \
-     p.parking, p.purchase_required, p.code_required, \
+     p.parking, p.purchase_required, p.code_required, p.amenities, \
      avg(r.clean)::float8 AS clean_avg, count(r.id) AS review_count, ";
 
 fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
     let place_type: String = row.try_get("place_type")?;
     let parking: String = row.try_get("parking")?;
+    let purchase_required: String = row.try_get("purchase_required")?;
+    let code_required: String = row.try_get("code_required")?;
+    let amenities: Vec<String> = row.try_get("amenities")?;
     Ok(PlaceSummary {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
@@ -50,8 +56,13 @@ fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
         parking: parking
             .parse::<Parking>()
             .map_err(|()| ApiError::BadRequest(format!("unknown parking {parking:?}")))?,
-        purchase_required: row.try_get("purchase_required")?,
-        code_required: row.try_get("code_required")?,
+        purchase_required: purchase_required.parse::<Requirement>().map_err(|()| {
+            ApiError::BadRequest(format!("unknown requirement {purchase_required:?}"))
+        })?,
+        code_required: code_required.parse::<Requirement>().map_err(|()| {
+            ApiError::BadRequest(format!("unknown requirement {code_required:?}"))
+        })?,
+        amenities: amenities.iter().filter_map(|a| a.parse().ok()).collect(),
         clean_avg: row.try_get("clean_avg")?,
         review_count: row.try_get("review_count")?,
         distance_mi: row.try_get("distance_mi")?,
@@ -99,7 +110,7 @@ fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
         qb.push(")");
     }
     if q.no_purchase == Some(true) {
-        qb.push(" AND NOT p.purchase_required AND NOT p.code_required");
+        qb.push(" AND p.purchase_required = 'no' AND p.code_required = 'no'");
     }
     if q.has_parking == Some(true) {
         qb.push(" AND p.parking <> 'none'");
@@ -201,16 +212,18 @@ pub struct InsertPlace {
     pub door_ft: i32,
     pub door_note: String,
     pub parking: Parking,
-    pub purchase_required: bool,
-    pub code_required: bool,
+    pub purchase_required: Requirement,
+    pub code_required: Requirement,
+    pub amenities: Vec<Amenity>,
     pub device_id: String,
 }
 
 pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiError> {
+    let amenities: Vec<&str> = p.amenities.iter().map(|a| a.as_str()).collect();
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO places (name, place_type, lat, lng, address, door_ft, door_note, \
-         parking, purchase_required, code_required, device_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
+         parking, purchase_required, code_required, amenities, device_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id",
     )
     .bind(&p.name)
     .bind(p.place_type.as_str())
@@ -220,8 +233,9 @@ pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiErr
     .bind(p.door_ft)
     .bind(&p.door_note)
     .bind(p.parking.as_str())
-    .bind(p.purchase_required)
-    .bind(p.code_required)
+    .bind(p.purchase_required.as_str())
+    .bind(p.code_required.as_str())
+    .bind(&amenities)
     .bind(&p.device_id)
     .fetch_one(pool)
     .await?;

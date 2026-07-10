@@ -41,7 +41,7 @@ pub async fn create_place(new: &NewPlace) -> ApiResult<PlaceDetail> {
         .map_err(err)?;
     if res.status() >= 400 {
         let body: serde_json::Value = res.json().await.unwrap_or_default();
-        return Err(body["error"].as_str().unwrap_or("could not add stop").to_owned());
+        return Err(body["error"].as_str().unwrap_or("could not add place").to_owned());
     }
     res.json().await.map_err(err)
 }

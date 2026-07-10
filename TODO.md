@@ -3,10 +3,10 @@
 - [x] Add a feature to pick a point on the map when a user doesn't know the address so they can just point to where it is on the map to create a new place.
 - [x] Add a "Show on map" to places
 - Increase the distance scale to go up to 100 miles on the List view filter, make the scale logarithmic.
-- Change the term "stop" or "stops" to "place" or "places" everywhere
-- Change "Type of place" options to: Shop, Store, Mall, Park, Public, Hall, Other
-- Add options for things a place has: Restrooms, Coffee, Food, Groceries, Seating, Parking
-- For toggles like "Purchase required?" change it to three state: Yes, No, don't kow.
+- [x] Change the term "stop" or "stops" to "place" or "places" everywhere
+- [x] Change "Type of place" options to: Shop, Store, Mall, Park, Public, Hall, Other
+- [x] Add options for things a place has: Restrooms, Coffee, Food, Groceries, Seating, Parking
+- [x] For toggles like "Purchase required?" change it to three state: Yes, No, don't kow.
 - Show user's current location, if they're sharing it, when on the "point to the spot" page.
 - On the map page the current location button on the right side seems like it should be aligned to the bottom, please align it in the bottom right corner.
 - Add URL routes so I can navigate backwards and fowdards and save and maybe share links (if appropriate)

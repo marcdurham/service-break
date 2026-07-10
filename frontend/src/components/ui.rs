@@ -1,6 +1,6 @@
 //! Small shared render helpers.
 
-use shared::{Parking, PlaceSummary, PlaceType};
+use shared::{Parking, PlaceSummary, PlaceType, Requirement};
 use yew::prelude::*;
 
 use crate::glue;
@@ -43,12 +43,32 @@ pub fn parking_tag(parking: Parking) -> Html {
     }
 }
 
-pub fn access_label(purchase_required: bool, code_required: bool) -> &'static str {
-    match (purchase_required, code_required) {
-        (true, true) => "Purchase & code",
-        (true, false) => "Purchase required",
-        (false, true) => "Code / key required",
-        (false, false) => "Free · no purchase",
+pub fn access_label(purchase_required: Requirement, code_required: Requirement) -> String {
+    let mut parts = Vec::new();
+    match purchase_required {
+        Requirement::Yes => parts.push("Purchase required"),
+        Requirement::Unknown => parts.push("Purchase unknown"),
+        Requirement::No => {}
+    }
+    match code_required {
+        Requirement::Yes => parts.push("Code required"),
+        Requirement::Unknown => parts.push("Code unknown"),
+        Requirement::No => {}
+    }
+    if parts.is_empty() {
+        "Free · no purchase".to_owned()
+    } else {
+        parts.join(" · ")
+    }
+}
+
+pub fn access_class(purchase_required: Requirement, code_required: Requirement) -> &'static str {
+    if purchase_required == Requirement::Yes || code_required == Requirement::Yes {
+        "tag tag-code"
+    } else if purchase_required == Requirement::Unknown || code_required == Requirement::Unknown {
+        "tag tag-unknown"
+    } else {
+        "tag tag-free"
     }
 }
 
@@ -71,12 +91,12 @@ pub struct TypeChipsProps {
 #[function_component(TypeChips)]
 pub fn type_chips(props: &TypeChipsProps) -> Html {
     let chips = [
-        (PlaceType::Coffee, "Coffee"),
-        (PlaceType::Grocery, "Grocery"),
-        (PlaceType::Bookstore, "Books"),
-        (PlaceType::Park, "Parks"),
-        (PlaceType::Gas, "Gas"),
-        (PlaceType::Restroom, "Restrooms"),
+        (PlaceType::Shop, "Shop"),
+        (PlaceType::Store, "Store"),
+        (PlaceType::Mall, "Mall"),
+        (PlaceType::Park, "Park"),
+        (PlaceType::Public, "Public"),
+        (PlaceType::Hall, "Hall"),
     ];
     html! {
         <div class="chips sb-scroll">

@@ -59,10 +59,10 @@ input,textarea,button{font-family:inherit}
             </div>
             <div>
               <div style="font-family:'Instrument Serif',serif;font-size:30px;color:#f6ecd9;line-height:.9">{{ appName }}</div>
-              <div style="font-size:11px;color:#c9a26a;letter-spacing:2.5px;font-weight:600;text-transform:uppercase;margin-top:3px">find a clean stop</div>
+              <div style="font-size:11px;color:#c9a26a;letter-spacing:2.5px;font-weight:600;text-transform:uppercase;margin-top:3px">find a clean place</div>
             </div>
           </div>
-          <h1 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:44px;line-height:1.02;color:#f6ecd9;margin:0 0 16px">Every good trip needs a clean pit stop.</h1>
+          <h1 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:44px;line-height:1.02;color:#f6ecd9;margin:0 0 16px">Every good trip needs a clean break.</h1>
           <p style="font-size:15.5px;line-height:1.55;color:#d8c3ac;margin:0 34px 0 0">Real ratings for bathrooms at coffee shops, groceries, parks, gas stations & more — sorted by what's closest to you.</p>
         </div>
         <div style="position:relative;padding:0 26px 46px">
@@ -79,7 +79,7 @@ input,textarea,button{font-family:inherit}
           <button onClick="{{ enableLocation }}" style="width:100%;border:none;border-radius:16px;padding:16px;background:#e7b877;color:#3a2418;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer;box-shadow:0 12px 28px -10px rgba(231,184,119,.7)">
             <span class="mi" style="font-size:21px">my_location</span>Enable location & explore
           </button>
-          <div style="text-align:center;font-size:11.5px;color:#a98d70;margin-top:14px">We only use your location to sort nearby stops.</div>
+          <div style="text-align:center;font-size:11.5px;color:#a98d70;margin-top:14px">We only use your location to sort nearby places.</div>
         </div>
       </div>
       </sc-if>
@@ -188,7 +188,7 @@ input,textarea,button{font-family:inherit}
       <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 16px 100px">
         <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:4px">
           <div>
-            <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Nearby stops</div>
+            <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Nearby places</div>
             <div style="font-size:13px;color:#8a7863;margin-top:3px">{{ listCount }} places · sorted by {{ sortLabel }}</div>
           </div>
           <button onClick="{{ openFilters }}" style="width:42px;height:42px;border:none;border-radius:13px;background:#fff;box-shadow:0 4px 12px -6px rgba(74,53,39,.4);display:flex;align-items:center;justify-content:center;cursor:pointer">
@@ -227,7 +227,7 @@ input,textarea,button{font-family:inherit}
         <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}">
           <div style="text-align:center;padding:50px 20px;color:#9a8a78">
             <span class="mi" style="font-size:42px;color:#c9b79f">travel_explore</span>
-            <div style="font-size:15px;font-weight:600;margin-top:10px;color:#6b5c4c">No stops match your filters</div>
+            <div style="font-size:15px;font-weight:600;margin-top:10px;color:#6b5c4c">No places match your filters</div>
             <button onClick="{{ resetFilters }}" style="margin-top:14px;border:none;background:#f0e6d6;color:#8a5a3c;font-weight:700;padding:10px 18px;border-radius:12px;cursor:pointer">Clear filters</button>
           </div>
         </sc-if>
@@ -237,7 +237,7 @@ input,textarea,button{font-family:inherit}
       <!-- ---------- ADD TAB ---------- -->
       <sc-if value="{{ isAdd }}" hint-placeholder-val="{{ false }}">
       <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 18px 100px">
-        <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Add a stop</div>
+        <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Add a place</div>
         <div style="font-size:13px;color:#8a7863;margin-top:3px;margin-bottom:20px">Help the next traveler find a clean break.</div>
 
         <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Place name</div>
@@ -296,7 +296,7 @@ input,textarea,button{font-family:inherit}
         <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Comment</div>
         <textarea value="{{ form.comment }}" onChange="{{ onComment }}" placeholder="Anything worth knowing? (code location, accessibility, tips…)" style="width:100%;height:90px;border:1px solid #e5dac8;border-radius:13px;padding:13px 14px;font-size:14.5px;color:#2c211a;background:#fff;outline:none;resize:none;margin-bottom:20px"></textarea>
 
-        <button onClick="{{ submitAdd }}" style="{{ submitStyle }}"><span class="mi" style="font-size:20px">add_location_alt</span>Add this stop</button>
+        <button onClick="{{ submitAdd }}" style="{{ submitStyle }}"><span class="mi" style="font-size:20px">add_location_alt</span>Add this place</button>
       </div>
       </sc-if>
 
@@ -584,7 +584,7 @@ class Component extends DCLogic {
   seed() {
     return [
       { id: 'p1', name: 'Camber Coffee', type: 'coffee', dist: 0.2, x: 52, y: 41, clean: 4.8, rating: 4.7, doorFt: 15, doorNote: 'Right past the counter, first door on the left', parking: 'street', purchase: 'code', code: 'Code printed on your receipt', address: '214 Maple Ave', hours: 'Open · closes 8:00 PM',
-        reviews: [ { name: 'Priya M.', initial: 'P', time: '2 days ago', r: 5, text: 'Spotless. Single room, key on a wooden spoon by the register. Worth the stop.' }, { name: 'Dev R.', initial: 'D', time: '1 week ago', r: 4, text: 'Clean and quick. Small line at peak but the code is on the receipt.' } ] },
+        reviews: [ { name: 'Priya M.', initial: 'P', time: '2 days ago', r: 5, text: 'Spotless. Single room, key on a wooden spoon by the register. Worth the visit.' }, { name: 'Dev R.', initial: 'D', time: '1 week ago', r: 4, text: 'Clean and quick. Small line at peak but the code is on the receipt.' } ] },
       { id: 'p2', name: 'Riverside Grocery', type: 'grocery', dist: 0.4, x: 30, y: 30, clean: 4.2, rating: 4.1, doorFt: 90, doorNote: 'Back-left corner past produce', parking: 'easy', purchase: false, address: '88 River Rd', hours: 'Open · closes 10:00 PM',
         reviews: [ { name: 'Sam K.', initial: 'S', time: '4 days ago', r: 4, text: 'No purchase needed, family restroom is big and clean. Long walk from the door though.' } ] },
       { id: 'p3', name: 'Chapter & Verse Books', type: 'bookstore', dist: 0.6, x: 70, y: 24, clean: 4.5, rating: 4.4, doorFt: 40, doorNote: 'Upstairs by the cafe', parking: 'street', purchase: 'code', code: 'Ask a bookseller for the code', address: '12 Oak St', hours: 'Open · closes 9:00 PM',
@@ -698,7 +698,7 @@ class Component extends DCLogic {
     const added = places.filter(x => x.userAdded);
     try { localStorage.setItem('sb_added', JSON.stringify(added)); } catch (e) {}
     this.setState({ places, form: this.blankForm(), tab: 'map', selectedId: id, overlay: 'detail' });
-    this.toast('Stop added — thanks, scout!');
+    this.toast('Place added — thanks, scout!');
   };
 
   // ---- derived ----
