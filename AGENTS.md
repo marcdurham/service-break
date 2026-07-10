@@ -38,6 +38,10 @@ cargo clippy -p frontend --target wasm32-unknown-unknown
 - **Commit changes as you go.** Make small, focused commits after each
   working change lands (builds + tests pass) rather than batching
   everything into one commit at the end.
+- **Log every commit in `CHANGELOG.md`.** Before or alongside each commit,
+  add an entry under today's date (`## YYYY-MM-DD`, newest date at top) as
+  a bullet `- HH:MM — short description`, using the current local
+  date/time. Create a new date heading if today's isn't there yet.
 - **Add tests where needed.** New pure logic in `shared` gets unit tests
   next to it. New or changed API behavior gets a `#[sqlx::test]`
   integration test in `backend/tests/api.rs` (these create disposable
