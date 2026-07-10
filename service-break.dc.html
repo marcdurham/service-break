@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e7dccb;font-family:'DM Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#c05f38;text-decoration:none}a:hover{color:#a54e2c}
+.mi{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased;font-variation-settings:'FILL' 1,'wght' 500}
+.sb-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sb-scroll::-webkit-scrollbar{width:0;height:0}
+input,textarea,button{font-family:inherit}
+@keyframes sbpulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.45}70%{transform:translate(-50%,-50%) scale(3);opacity:0}100%{opacity:0}}
+@keyframes sbup{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes sbfade{from{opacity:0}to{opacity:1}}
+@keyframes sbtoast{0%{transform:translate(-50%,16px);opacity:0}14%{transform:translate(-50%,0);opacity:1}86%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-6px);opacity:0}}
+@keyframes sbpin{from{transform:translate(-50%,-100%) scale(.4);opacity:0}to{transform:translate(-50%,-100%) scale(1);opacity:1}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:26px 14px">
+
+  <div style="position:relative;width:393px;height:852px;border-radius:54px;box-shadow:0 44px 90px -34px rgba(60,38,22,.6),0 0 0 12px #17110d,0 0 0 14px #322820">
+
+    <div style="position:absolute;inset:0;overflow:hidden;border-radius:42px;background:#f6efe4">
+
+      <!-- STATUS BAR -->
+      <div style="position:absolute;top:0;left:0;right:0;height:52px;z-index:80;display:flex;align-items:center;justify-content:space-between;padding:0 30px;pointer-events:none">
+        <span style="font-size:15px;font-weight:700;color:{{ chromeInk }};letter-spacing:.3px;margin-top:6px">9:41</span>
+        <span style="display:flex;gap:6px;align-items:center;margin-top:6px;color:{{ chromeInk }}">
+          <span class="mi" style="font-size:17px">signal_cellular_alt</span>
+          <span class="mi" style="font-size:17px">wifi</span>
+          <span class="mi" style="font-size:19px">battery_full</span>
+        </span>
+      </div>
+
+      <!-- DYNAMIC ISLAND -->
+      <div style="position:absolute;top:11px;left:50%;transform:translateX(-50%);width:116px;height:33px;background:#0c0a08;border-radius:20px;z-index:90"></div>
+
+      <!-- ================= ONBOARDING ================= -->
+      <sc-if value="{{ notStarted }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;z-index:70;background:#3a2418;display:flex;flex-direction:column;overflow:hidden">
+        <div style="position:absolute;top:-80px;right:-70px;width:280px;height:280px;border-radius:50%;background:#4a3020;opacity:.7"></div>
+        <div style="position:absolute;bottom:120px;left:-90px;width:240px;height:240px;border-radius:50%;background:#4a3020;opacity:.5"></div>
+        <div style="position:relative;flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 34px">
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:26px">
+            <div style="width:52px;height:52px;border-radius:16px;background:#c9a26a;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px -6px rgba(0,0,0,.4)">
+              <span class="mi" style="font-size:30px;color:#3a2418">wc</span>
+            </div>
+            <div>
+              <div style="font-family:'Instrument Serif',serif;font-size:30px;color:#f6ecd9;line-height:.9">{{ appName }}</div>
+              <div style="font-size:11px;color:#c9a26a;letter-spacing:2.5px;font-weight:600;text-transform:uppercase;margin-top:3px">find a clean stop</div>
+            </div>
+          </div>
+          <h1 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:44px;line-height:1.02;color:#f6ecd9;margin:0 0 16px">Every good trip needs a clean pit stop.</h1>
+          <p style="font-size:15.5px;line-height:1.55;color:#d8c3ac;margin:0 34px 0 0">Real ratings for bathrooms at coffee shops, groceries, parks, gas stations & more — sorted by what's closest to you.</p>
+        </div>
+        <div style="position:relative;padding:0 26px 46px">
+          <div style="display:flex;gap:10px;margin-bottom:22px">
+            <div style="flex:1;background:#4a3020;border-radius:14px;padding:13px 14px">
+              <span class="mi" style="font-size:20px;color:#c9a26a">mop</span>
+              <div style="font-size:12.5px;color:#e8d8c2;font-weight:600;margin-top:6px;line-height:1.25">Cleanliness you can trust</div>
+            </div>
+            <div style="flex:1;background:#4a3020;border-radius:14px;padding:13px 14px">
+              <span class="mi" style="font-size:20px;color:#c9a26a">near_me</span>
+              <div style="font-size:12.5px;color:#e8d8c2;font-weight:600;margin-top:6px;line-height:1.25">Directions in one tap</div>
+            </div>
+          </div>
+          <button onClick="{{ enableLocation }}" style="width:100%;border:none;border-radius:16px;padding:16px;background:#e7b877;color:#3a2418;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer;box-shadow:0 12px 28px -10px rgba(231,184,119,.7)">
+            <span class="mi" style="font-size:21px">my_location</span>Enable location & explore
+          </button>
+          <div style="text-align:center;font-size:11.5px;color:#a98d70;margin-top:14px">We only use your location to sort nearby stops.</div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ================= APP ================= -->
+      <sc-if value="{{ started }}" hint-placeholder-val="{{ true }}">
+
+      <!-- ---------- MAP TAB ---------- -->
+      <sc-if value="{{ isMap }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;overflow:hidden">
+        <!-- map canvas -->
+        <div style="position:absolute;inset:0;background:#dce4cf">
+          <!-- water -->
+          <div style="position:absolute;left:-4%;top:74%;width:112%;height:38%;background:#bcd6dd;transform:rotate(-6deg)"></div>
+          <!-- park -->
+          <div style="position:absolute;left:50%;top:56%;width:120px;height:96px;background:#c2d6a8;border-radius:16px"></div>
+          <div style="position:absolute;left:55%;top:60%;font-size:10px;color:#6f8256;font-weight:700;letter-spacing:.5px">ELM ST PARK</div>
+          <!-- building blocks -->
+          <div style="position:absolute;left:8%;top:20%;width:70px;height:52px;background:#e7dcc7;border-radius:5px"></div>
+          <div style="position:absolute;left:70%;top:16%;width:82px;height:60px;background:#e7dcc7;border-radius:5px"></div>
+          <div style="position:absolute;left:12%;top:66%;width:64px;height:70px;background:#e7dcc7;border-radius:5px"></div>
+          <div style="position:absolute;left:74%;top:64%;width:78px;height:52px;background:#e7dcc7;border-radius:5px"></div>
+          <div style="position:absolute;left:40%;top:8%;width:60px;height:44px;background:#e7dcc7;border-radius:5px"></div>
+          <!-- roads horizontal -->
+          <div style="position:absolute;left:0;right:0;top:26%;height:26px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <div style="position:absolute;left:0;right:0;top:52%;height:30px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <div style="position:absolute;left:0;right:0;top:82%;height:22px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <!-- roads vertical -->
+          <div style="position:absolute;top:0;bottom:0;left:28%;width:24px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <div style="position:absolute;top:0;bottom:0;left:62%;width:28px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <div style="position:absolute;top:0;bottom:0;left:86%;width:20px;background:#faf6ee;box-shadow:0 0 0 1px #e2d8c6"></div>
+          <!-- center line hints -->
+          <div style="position:absolute;left:0;right:0;top:53.3%;height:2px;background:repeating-linear-gradient(90deg,#d8ba7e 0 10px,transparent 10px 22px)"></div>
+
+          <!-- pins -->
+          <sc-for list="{{ mapPins }}" as="p" hint-placeholder-count="6">
+            <button onClick="{{ p.select }}" style="{{ p.pinWrapStyle }}">
+              <sc-if value="{{ p.isSelected }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:7px;background:#3a2418;color:#f6ecd9;padding:5px 9px;border-radius:9px;white-space:nowrap;font-size:11px;font-weight:700;box-shadow:0 6px 16px -6px rgba(0,0,0,.5);animation:sbpin .18s ease-out">{{ p.name }}</div>
+              </sc-if>
+              <div style="{{ p.pinDotStyle }}"><span class="mi" style="font-size:{{ p.pinIconSize }};color:#fff">{{ p.typeIcon }}</span></div>
+              <div style="{{ p.pinTailStyle }}"></div>
+            </button>
+          </sc-for>
+
+          <!-- user location -->
+          <div style="position:absolute;left:49%;top:47%;transform:translate(-50%,-50%);z-index:5">
+            <div style="position:absolute;left:50%;top:50%;width:26px;height:26px;border-radius:50%;background:#3f7fd6;animation:sbpulse 2.4s ease-out infinite"></div>
+            <div style="width:20px;height:20px;border-radius:50%;background:#3f7fd6;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>
+          </div>
+        </div>
+
+        <!-- top search + filter -->
+        <div style="position:absolute;top:56px;left:0;right:0;padding:0 16px;z-index:40">
+          <div style="display:flex;gap:9px">
+            <div style="flex:1;background:#fff;border-radius:15px;height:46px;display:flex;align-items:center;padding:0 14px;gap:9px;box-shadow:0 6px 18px -8px rgba(74,53,39,.4)">
+              <span class="mi" style="font-size:21px;color:#b09a82">search</span>
+              <span style="font-size:14.5px;color:#9a8a78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Search coffee, parks, restrooms…</span>
+            </div>
+            <button onClick="{{ openFilters }}" style="width:46px;height:46px;border:none;border-radius:15px;background:#fff;box-shadow:0 6px 18px -8px rgba(74,53,39,.4);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative">
+              <span class="mi" style="font-size:22px;color:#4a3527">tune</span>
+              <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:#c05f38;border:1.5px solid #fff"></span></sc-if>
+            </button>
+          </div>
+          <div class="sb-scroll" style="display:flex;gap:7px;margin-top:10px;overflow-x:auto;padding-bottom:2px">
+            <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.toggle }}" style="{{ c.style }}"><span class="mi" style="font-size:15px">{{ c.icon }}</span>{{ c.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- recenter -->
+        <button onClick="{{ recenter }}" style="position:absolute;right:16px;bottom:250px;width:46px;height:46px;border:none;border-radius:14px;background:#fff;box-shadow:0 6px 18px -8px rgba(74,53,39,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:40">
+          <span class="mi" style="font-size:23px;color:#3f7fd6">my_location</span>
+        </button>
+
+        <!-- nearest / selected card -->
+        <div style="position:absolute;left:12px;right:12px;bottom:100px;z-index:40;animation:sbup .28s ease-out">
+          <div onClick="{{ selected.open }}" style="background:#fff;border-radius:20px;padding:14px;box-shadow:0 16px 40px -14px rgba(74,53,39,.55);cursor:pointer;display:flex;gap:13px;align-items:center">
+            <div style="{{ selected.badgeStyle }}"><span class="mi" style="font-size:26px;color:#fff">{{ selected.typeIcon }}</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span style="font-size:11px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.6px">{{ selected.nearTag }}</span>
+                <span style="{{ selected.openDotStyle }}"></span><span style="font-size:11px;color:{{ selected.openColor }};font-weight:600">{{ selected.openLabel }}</span>
+              </div>
+              <div style="font-size:17px;font-weight:700;color:#2c211a;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ selected.name }}</div>
+              <div style="display:flex;align-items:center;gap:12px;margin-top:5px">
+                <span style="display:inline-flex;align-items:center;gap:3px;font-size:12.5px;color:#5c4c3e;font-weight:600"><span class="mi" style="font-size:15px;color:#6f8256">mop</span>{{ selected.cleanNum }}</span>
+                <span style="display:inline-flex;align-items:center;gap:3px;font-size:12.5px;color:#5c4c3e;font-weight:600"><span class="mi" style="font-size:15px;color:#b09a82">directions_walk</span>{{ selected.doorShort }}</span>
+              </div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-family:'Instrument Serif',serif;font-size:26px;color:#c05f38;line-height:.9">{{ selected.distNum }}</div>
+              <div style="font-size:10px;color:#8a7863;font-weight:700;letter-spacing:.5px">{{ selected.distUnit }}</div>
+            </div>
+          </div>
+          <button onClick="{{ selected.directions }}" style="width:100%;margin-top:9px;border:none;border-radius:15px;padding:14px;background:#c05f38;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 10px 24px -10px rgba(192,95,56,.8)">
+            <span class="mi" style="font-size:20px">directions</span>Directions to {{ selected.name }}
+          </button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- LIST TAB ---------- -->
+      <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+      <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 16px 100px">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:4px">
+          <div>
+            <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Nearby stops</div>
+            <div style="font-size:13px;color:#8a7863;margin-top:3px">{{ listCount }} places · sorted by {{ sortLabel }}</div>
+          </div>
+          <button onClick="{{ openFilters }}" style="width:42px;height:42px;border:none;border-radius:13px;background:#fff;box-shadow:0 4px 12px -6px rgba(74,53,39,.4);display:flex;align-items:center;justify-content:center;cursor:pointer">
+            <span class="mi" style="font-size:21px;color:#4a3527">tune</span>
+          </button>
+        </div>
+        <div class="sb-scroll" style="display:flex;gap:7px;margin:14px 0 16px;overflow-x:auto">
+          <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="5">
+            <button onClick="{{ c.toggle }}" style="{{ c.style }}"><span class="mi" style="font-size:15px">{{ c.icon }}</span>{{ c.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ listPlaces }}" as="p" hint-placeholder-count="5">
+            <div onClick="{{ p.open }}" style="background:#fff;border-radius:18px;padding:14px;box-shadow:0 3px 12px -7px rgba(74,53,39,.4);cursor:pointer;display:flex;gap:13px">
+              <div style="{{ p.badgeStyle }}"><span class="mi" style="font-size:24px;color:#fff">{{ p.typeIcon }}</span></div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                  <div style="min-width:0">
+                    <div style="font-size:16px;font-weight:700;color:#2c211a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</div>
+                    <div style="font-size:12px;color:#8a7863;margin-top:1px">{{ p.typeLabel }}</div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-family:'Instrument Serif',serif;font-size:22px;color:#c05f38;line-height:.9">{{ p.distNum }}</div>
+                    <div style="font-size:9.5px;color:#8a7863;font-weight:700;letter-spacing:.5px">{{ p.distUnit }}</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;font-size:11.5px;font-weight:600;background:#eef2e6;color:#5c6f43"><span class="mi" style="font-size:14px">mop</span>{{ p.cleanNum }} clean</span>
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:8px;font-size:11.5px;font-weight:600;background:#f2ece2;color:#6b5c4c"><span class="mi" style="font-size:14px">directions_walk</span>{{ p.doorShort }}</span>
+                  <span style="{{ p.parkChipStyle }}"><span class="mi" style="font-size:14px">local_parking</span>{{ p.parkingLabel }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;padding:50px 20px;color:#9a8a78">
+            <span class="mi" style="font-size:42px;color:#c9b79f">travel_explore</span>
+            <div style="font-size:15px;font-weight:600;margin-top:10px;color:#6b5c4c">No stops match your filters</div>
+            <button onClick="{{ resetFilters }}" style="margin-top:14px;border:none;background:#f0e6d6;color:#8a5a3c;font-weight:700;padding:10px 18px;border-radius:12px;cursor:pointer">Clear filters</button>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- ---------- ADD TAB ---------- -->
+      <sc-if value="{{ isAdd }}" hint-placeholder-val="{{ false }}">
+      <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 18px 100px">
+        <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Add a stop</div>
+        <div style="font-size:13px;color:#8a7863;margin-top:3px;margin-bottom:20px">Help the next traveler find a clean break.</div>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Place name</div>
+        <input value="{{ form.name }}" onChange="{{ onName }}" placeholder="e.g. Camber Coffee" style="width:100%;border:1px solid #e5dac8;border-radius:13px;padding:13px 14px;font-size:15px;color:#2c211a;background:#fff;outline:none;margin-bottom:18px">
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Address <span style="text-transform:none;letter-spacing:0;color:#b0a08c;font-weight:500">· or lat, lng</span></div>
+        <div style="display:flex;align-items:center;gap:9px;border:1px solid #e5dac8;border-radius:13px;padding:0 14px;background:#fff;margin-bottom:8px">
+          <span class="mi" style="font-size:20px;color:#c05f38">location_on</span>
+          <input value="{{ form.address }}" onChange="{{ onAddress }}" placeholder="214 Maple Ave  ·  or  37.7749, -122.4194" style="flex:1;border:none;padding:13px 0;font-size:15px;color:#2c211a;background:none;outline:none">
+        </div>
+        <button onClick="{{ useMyLocation }}" style="display:inline-flex;align-items:center;gap:6px;border:none;background:none;color:#c05f38;font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:18px"><span class="mi" style="font-size:17px">my_location</span>Use my current location</button>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Type of place</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px">
+          <sc-for list="{{ formTypes }}" as="t" hint-placeholder-count="6">
+            <button onClick="{{ t.select }}" style="{{ t.style }}"><span class="mi" style="font-size:22px">{{ t.icon }}</span><span style="font-size:11.5px;font-weight:600;margin-top:5px">{{ t.label }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Bathroom cleanliness</div>
+        <div style="display:flex;gap:8px;margin-bottom:18px">
+          <sc-for list="{{ cleanPicks }}" as="c" hint-placeholder-count="5">
+            <button onClick="{{ c.pick }}" style="{{ c.style }}"><span class="mi" style="font-size:24px">{{ c.icon }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">How far is bathroom from the door?</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:18px">
+          <sc-for list="{{ doorPicks }}" as="d" hint-placeholder-count="4">
+            <button onClick="{{ d.pick }}" style="{{ d.style }}">{{ d.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Parking</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px">
+          <sc-for list="{{ parkPicks }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.pick }}" style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+
+        <div onClick="{{ togglePurchase }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5dac8;border-radius:13px;padding:13px 14px;margin-bottom:10px;cursor:pointer">
+          <div>
+            <div style="font-size:14.5px;font-weight:600;color:#2c211a">Purchase required?</div>
+            <div style="font-size:12px;color:#9a8a78;margin-top:1px">Do you need to buy something to use it?</div>
+          </div>
+          <div style="{{ purchaseToggleStyle }}"><div style="{{ purchaseKnobStyle }}"></div></div>
+        </div>
+        <div onClick="{{ toggleCode }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5dac8;border-radius:13px;padding:13px 14px;margin-bottom:18px;cursor:pointer">
+          <div>
+            <div style="font-size:14.5px;font-weight:600;color:#2c211a">Code required?</div>
+            <div style="font-size:12px;color:#9a8a78;margin-top:1px">Do you need a door code or a key?</div>
+          </div>
+          <div style="{{ codeToggleStyle }}"><div style="{{ codeKnobStyle }}"></div></div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Comment</div>
+        <textarea value="{{ form.comment }}" onChange="{{ onComment }}" placeholder="Anything worth knowing? (code location, accessibility, tips…)" style="width:100%;height:90px;border:1px solid #e5dac8;border-radius:13px;padding:13px 14px;font-size:14.5px;color:#2c211a;background:#fff;outline:none;resize:none;margin-bottom:20px"></textarea>
+
+        <button onClick="{{ submitAdd }}" style="{{ submitStyle }}"><span class="mi" style="font-size:20px">add_location_alt</span>Add this stop</button>
+      </div>
+      </sc-if>
+
+      <!-- ---------- SAVED TAB ---------- -->
+      <sc-if value="{{ isSaved }}" hint-placeholder-val="{{ false }}">
+      <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 16px 100px">
+        <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1">Saved</div>
+        <div style="font-size:13px;color:#8a7863;margin-top:3px;margin-bottom:18px">{{ savedCount }} spots you can count on.</div>
+        <sc-if value="{{ hasSaved }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <sc-for list="{{ savedPlaces }}" as="p" hint-placeholder-count="3">
+              <div onClick="{{ p.open }}" style="background:#fff;border-radius:18px;padding:14px;box-shadow:0 3px 12px -7px rgba(74,53,39,.4);cursor:pointer;display:flex;gap:13px;align-items:center">
+                <div style="{{ p.badgeStyle }}"><span class="mi" style="font-size:24px;color:#fff">{{ p.typeIcon }}</span></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:16px;font-weight:700;color:#2c211a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</div>
+                  <div style="font-size:12px;color:#8a7863;margin-top:2px">{{ p.typeLabel }} · {{ p.distNum }} {{ p.distUnit }} away</div>
+                </div>
+                <button onClick="{{ p.directions }}" style="width:40px;height:40px;border:none;border-radius:12px;background:#f4ead9;display:flex;align-items:center;justify-content:center;cursor:pointer"><span class="mi" style="font-size:20px;color:#c05f38">directions</span></button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noSaved }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;padding:60px 24px;color:#9a8a78">
+            <span class="mi" style="font-size:46px;color:#c9b79f">bookmark_border</span>
+            <div style="font-size:15px;font-weight:600;margin-top:12px;color:#6b5c4c">Nothing saved yet</div>
+            <div style="font-size:13px;margin-top:4px">Tap the bookmark on any place to keep it here.</div>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- ---------- PROFILE TAB ---------- -->
+      <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+      <div class="sb-scroll" style="position:absolute;inset:0;padding:60px 16px 100px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px">
+          <div style="width:64px;height:64px;border-radius:50%;background:#c05f38;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:28px;color:#fff">J</div>
+          <div>
+            <div style="font-size:21px;font-weight:700;color:#2c211a">Jordan Vega</div>
+            <div style="font-size:13px;color:#8a7863;margin-top:2px">Level 3 · Trusted Scout</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:22px">
+          <div style="flex:1;background:#fff;border-radius:15px;padding:15px 10px;text-align:center;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)"><div style="font-family:'Instrument Serif',serif;font-size:26px;color:#c05f38">{{ reviewsCount }}</div><div style="font-size:11px;color:#8a7863;font-weight:600;margin-top:2px">Reviews</div></div>
+          <div style="flex:1;background:#fff;border-radius:15px;padding:15px 10px;text-align:center;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)"><div style="font-family:'Instrument Serif',serif;font-size:26px;color:#c05f38">{{ addedCount }}</div><div style="font-size:11px;color:#8a7863;font-weight:600;margin-top:2px">Added</div></div>
+          <div style="flex:1;background:#fff;border-radius:15px;padding:15px 10px;text-align:center;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)"><div style="font-family:'Instrument Serif',serif;font-size:26px;color:#c05f38">{{ savedCount }}</div><div style="font-size:11px;color:#8a7863;font-weight:600;margin-top:2px">Saved</div></div>
+        </div>
+
+        <div onClick="{{ openInvite }}" style="background:#3a2418;border-radius:18px;padding:16px 17px;display:flex;align-items:center;gap:13px;cursor:pointer;margin-bottom:16px">
+          <div style="width:44px;height:44px;border-radius:13px;background:#c9a26a;display:flex;align-items:center;justify-content:center"><span class="mi" style="font-size:24px;color:#3a2418">group_add</span></div>
+          <div style="flex:1">
+            <div style="font-size:15.5px;font-weight:700;color:#f6ecd9">Invite friends</div>
+            <div style="font-size:12.5px;color:#c9a26a;margin-top:1px">Better maps with more scouts</div>
+          </div>
+          <span class="mi" style="font-size:22px;color:#c9a26a">chevron_right</span>
+        </div>
+
+        <div style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)">
+          <sc-for list="{{ menuItems }}" as="m" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:13px;padding:15px 16px;border-bottom:1px solid #f2ece2;cursor:pointer">
+              <span class="mi" style="font-size:22px;color:#8a7863">{{ m.icon }}</span>
+              <span style="flex:1;font-size:15px;color:#2c211a;font-weight:500">{{ m.label }}</span>
+              <span class="mi" style="font-size:20px;color:#c9b79f">chevron_right</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="text-align:center;font-size:12px;color:#b0a08c;margin-top:22px">{{ appName }} · v1.0 prototype</div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- BOTTOM TAB BAR ---------- -->
+      <div style="position:absolute;left:0;right:0;bottom:0;height:88px;background:rgba(250,246,238,.94);backdrop-filter:blur(12px);border-top:1px solid #ece2d2;z-index:50;display:flex;align-items:flex-start;padding:11px 8px 0">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+          <button onClick="{{ t.go }}" style="flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0">
+            <sc-if value="{{ t.isAdd }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ t.addStyle }}"><span class="mi" style="font-size:26px;color:#fff">add</span></div>
+            </sc-if>
+            <sc-if value="{{ t.notAdd }}" hint-placeholder-val="{{ true }}">
+              <span class="mi" style="font-size:25px;color:{{ t.color }}">{{ t.icon }}</span>
+              <span style="font-size:10px;font-weight:600;color:{{ t.color }}">{{ t.label }}</span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <!-- ================= OVERLAYS ================= -->
+
+      <!-- DETAIL -->
+      <sc-if value="{{ ovDetail }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;inset:0;z-index:100;background:#f6efe4;animation:sbup .25s ease-out">
+        <div class="sb-scroll" style="position:absolute;inset:0;padding-bottom:118px">
+          <!-- hero -->
+          <div style="{{ selected.heroStyle }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(-45deg,rgba(255,255,255,.06) 0 12px,transparent 12px 24px)"></div>
+            <span class="mi" style="font-size:90px;color:rgba(255,255,255,.9);position:relative">{{ selected.typeIcon }}</span>
+            <div style="position:absolute;top:56px;left:14px;right:14px;display:flex;justify-content:space-between;z-index:2">
+              <button onClick="{{ closeOverlay }}" style="width:42px;height:42px;border:none;border-radius:13px;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)"><span class="mi" style="font-size:23px;color:#2c211a">arrow_back</span></button>
+              <button onClick="{{ selected.toggleSave }}" style="width:42px;height:42px;border:none;border-radius:13px;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)"><span class="mi" style="font-size:23px;color:{{ selected.saveColor }}">{{ selected.saveIcon }}</span></button>
+            </div>
+          </div>
+          <div style="padding:16px 18px 0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+              <span style="font-size:12.5px;font-weight:700;color:#8a7863">{{ selected.typeLabel }}</span>
+              <span style="{{ selected.openDotStyle }}"></span><span style="font-size:12.5px;color:{{ selected.openColor }};font-weight:600">{{ selected.openLabel }}</span>
+            </div>
+            <div style="font-family:'Instrument Serif',serif;font-size:32px;color:#2c211a;line-height:1.05">{{ selected.name }}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+              <div style="display:flex;gap:1px">
+                <sc-for list="{{ selected.stars }}" as="s" hint-placeholder-count="5"><span class="mi" style="font-size:18px;color:{{ s.color }}">star</span></sc-for>
+              </div>
+              <span style="font-size:13.5px;color:#5c4c3e;font-weight:700">{{ selected.rating }}</span>
+              <span style="font-size:13px;color:#9a8a78">({{ selected.reviewCount }} reviews)</span>
+            </div>
+
+            <div style="display:flex;gap:9px;margin-top:16px">
+              <button onClick="{{ selected.directions }}" style="flex:1;border:none;border-radius:15px;padding:15px;background:#c05f38;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 10px 24px -10px rgba(192,95,56,.8)"><span class="mi" style="font-size:20px">directions</span>Directions</button>
+              <button onClick="{{ selected.rateHere }}" style="border:1.5px solid #e0d3bf;border-radius:15px;padding:15px 17px;background:#fff;color:#8a5a3c;font-size:15px;font-weight:700;display:flex;align-items:center;gap:7px;cursor:pointer"><span class="mi" style="font-size:20px">rate_review</span>Rate</button>
+            </div>
+
+            <!-- breakdown -->
+            <div style="background:#fff;border-radius:18px;padding:6px 16px;margin-top:18px;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #f2ece2">
+                <span class="mi" style="font-size:22px;color:#6f8256">mop</span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600;color:#2c211a">Cleanliness</div>
+                  <div style="height:6px;background:#eee5d5;border-radius:3px;margin-top:6px;overflow:hidden"><div style="{{ selected.cleanBarStyle }}"></div></div>
+                </div>
+                <span style="font-size:15px;font-weight:700;color:#5c6f43">{{ selected.cleanNum }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #f2ece2">
+                <span class="mi" style="font-size:22px;color:#b09a82">directions_walk</span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600;color:#2c211a">Bathroom distance from door</div><div style="font-size:12.5px;color:#9a8a78;margin-top:1px">{{ selected.doorNote }}</div></div>
+                <span style="font-size:14px;font-weight:700;color:#5c4c3e">{{ selected.doorShort }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #f2ece2">
+                <span class="mi" style="font-size:22px;color:#c08a4a">local_parking</span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600;color:#2c211a">Parking</div></div>
+                <span style="{{ selected.parkChipStyle }}">{{ selected.parkingLabel }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 0">
+                <span class="mi" style="font-size:22px;color:#a8795a">key</span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600;color:#2c211a">Bathroom Access</div></div>
+                <span style="{{ selected.purchaseChipStyle }}">{{ selected.purchaseLabel }}</span>
+              </div>
+            </div>
+
+            <!-- address -->
+            <div style="display:flex;align-items:center;gap:11px;background:#fff;border-radius:15px;padding:14px 16px;margin-top:12px;box-shadow:0 3px 12px -8px rgba(74,53,39,.4)">
+              <span class="mi" style="font-size:22px;color:#c05f38">location_on</span>
+              <div style="flex:1"><div style="font-size:14px;color:#2c211a;font-weight:600">{{ selected.address }}</div><div style="font-size:12.5px;color:#9a8a78;margin-top:1px">{{ selected.hours }}</div></div>
+            </div>
+
+            <!-- reviews -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin:22px 0 12px">
+              <div style="font-size:17px;font-weight:700;color:#2c211a">Reviews</div>
+              <button onClick="{{ selected.rateHere }}" style="border:none;background:none;color:#c05f38;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px"><span class="mi" style="font-size:17px">add</span>Add yours</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ selected.reviews }}" as="r" hint-placeholder-count="2">
+                <div style="background:#fff;border-radius:16px;padding:14px;box-shadow:0 3px 12px -9px rgba(74,53,39,.4)">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="{{ r.avatarStyle }}">{{ r.initial }}</div>
+                    <div style="flex:1"><div style="font-size:14px;font-weight:700;color:#2c211a">{{ r.name }}</div><div style="font-size:11.5px;color:#9a8a78">{{ r.time }}</div></div>
+                    <div style="display:flex;gap:1px"><sc-for list="{{ r.stars }}" as="s" hint-placeholder-count="5"><span class="mi" style="font-size:14px;color:{{ s.color }}">star</span></sc-for></div>
+                  </div>
+                  <div style="font-size:13.5px;line-height:1.5;color:#4c4034;margin-top:9px">{{ r.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- FILTERS SHEET -->
+      <sc-if value="{{ ovFilters }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;z-index:105;background:rgba(44,33,26,.4);animation:sbfade .2s ease-out;display:flex;flex-direction:column;justify-content:flex-end">
+        <div onClick="{{ stop }}" style="background:#f6efe4;border-radius:26px 26px 0 0;padding:10px 20px 34px;animation:sbup .28s ease-out">
+          <div style="width:40px;height:5px;background:#dbcdb8;border-radius:3px;margin:0 auto 16px"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+            <div style="font-family:'Instrument Serif',serif;font-size:26px;color:#2c211a">Filters</div>
+            <button onClick="{{ resetFilters }}" style="border:none;background:none;color:#c05f38;font-weight:700;font-size:13.5px;cursor:pointer">Reset</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ toggleFilters }}" as="f" hint-placeholder-count="4">
+              <div onClick="{{ f.toggle }}" style="display:flex;align-items:center;gap:13px;background:#fff;border-radius:14px;padding:14px 15px;cursor:pointer;border:1.5px solid {{ f.border }}">
+                <span class="mi" style="font-size:23px;color:{{ f.iconColor }}">{{ f.icon }}</span>
+                <span style="flex:1;font-size:15px;font-weight:600;color:#2c211a">{{ f.label }}</span>
+                <div style="{{ f.trackStyle }}"><div style="{{ f.knobStyle }}"></div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:#8a7863;text-transform:uppercase;letter-spacing:.7px;margin:20px 0 10px">Within {{ radiusLabel }}</div>
+          <input type="range" min="1" max="10" step="1" value="{{ radius }}" onChange="{{ onRadius }}" style="width:100%;accent-color:#c05f38">
+          <button onClick="{{ closeOverlay }}" style="width:100%;margin-top:22px;border:none;border-radius:15px;padding:15px;background:#c05f38;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Show {{ listCount }} places</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- DIRECTIONS SHEET -->
+      <sc-if value="{{ ovDirections }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;z-index:110;background:rgba(44,33,26,.4);animation:sbfade .2s ease-out;display:flex;flex-direction:column;justify-content:flex-end">
+        <div onClick="{{ stop }}" style="background:#f6efe4;border-radius:26px 26px 0 0;padding:10px 20px 36px;animation:sbup .28s ease-out">
+          <div style="width:40px;height:5px;background:#dbcdb8;border-radius:3px;margin:0 auto 16px"></div>
+          <div style="font-family:'Instrument Serif',serif;font-size:25px;color:#2c211a;line-height:1.1">Directions to<br>{{ selected.name }}</div>
+          <div style="font-size:13px;color:#8a7863;margin:6px 0 20px">{{ selected.address }} · {{ selected.distNum }} {{ selected.distUnit }} away</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button onClick="{{ openGoogle }}" style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #eadfcd;border-radius:16px;padding:15px 16px;cursor:pointer;text-align:left">
+              <div style="width:44px;height:44px;border-radius:12px;background:#eaf1e9;display:flex;align-items:center;justify-content:center"><span class="mi" style="font-size:24px;color:#3a7d44">map</span></div>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:700;color:#2c211a">Google Maps</div><div style="font-size:12.5px;color:#9a8a78">Open turn-by-turn driving</div></div>
+              <span class="mi" style="font-size:22px;color:#c9b79f">open_in_new</span>
+            </button>
+            <button onClick="{{ openApple }}" style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #eadfcd;border-radius:16px;padding:15px 16px;cursor:pointer;text-align:left">
+              <div style="width:44px;height:44px;border-radius:12px;background:#eef0f2;display:flex;align-items:center;justify-content:center"><span class="mi" style="font-size:24px;color:#5b6470">navigation</span></div>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:700;color:#2c211a">Apple Maps</div><div style="font-size:12.5px;color:#9a8a78">Open turn-by-turn driving</div></div>
+              <span class="mi" style="font-size:22px;color:#c9b79f">open_in_new</span>
+            </button>
+            <button onClick="{{ copyAddress }}" style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #eadfcd;border-radius:16px;padding:15px 16px;cursor:pointer;text-align:left">
+              <div style="width:44px;height:44px;border-radius:12px;background:#f4ead9;display:flex;align-items:center;justify-content:center"><span class="mi" style="font-size:23px;color:#c05f38">content_copy</span></div>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:700;color:#2c211a">Copy address</div><div style="font-size:12.5px;color:#9a8a78">{{ selected.address }}</div></div>
+            </button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- INVITE SHEET -->
+      <sc-if value="{{ ovInvite }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;z-index:110;background:rgba(44,33,26,.45);animation:sbfade .2s ease-out;display:flex;flex-direction:column;justify-content:flex-end">
+        <div onClick="{{ stop }}" style="background:#3a2418;border-radius:26px 26px 0 0;padding:10px 22px 38px;animation:sbup .28s ease-out;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-60px;right:-40px;width:180px;height:180px;border-radius:50%;background:#4a3020"></div>
+          <div style="position:relative">
+            <div style="width:40px;height:5px;background:#5a4432;border-radius:3px;margin:0 auto 20px"></div>
+            <div style="width:60px;height:60px;border-radius:18px;background:#c9a26a;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><span class="mi" style="font-size:34px;color:#3a2418">group_add</span></div>
+            <div style="font-family:'Instrument Serif',serif;font-size:28px;color:#f6ecd9;line-height:1.05">Invite your fellow travelers</div>
+            <div style="font-size:14px;color:#d8c3ac;margin:8px 0 20px;line-height:1.5">Every scout makes the map better. Share your code and unlock the Trusted Scout badge together.</div>
+            <div style="background:#4a3020;border:1.5px dashed #7a5d40;border-radius:15px;padding:16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <div><div style="font-size:11px;color:#a98d70;font-weight:700;letter-spacing:1px;text-transform:uppercase">Your code</div><div style="font-family:'Instrument Serif',serif;font-size:28px;color:#e7b877;letter-spacing:3px;margin-top:2px">BREAK-JV7</div></div>
+              <button onClick="{{ copyCode }}" style="border:none;background:#e7b877;color:#3a2418;font-weight:700;border-radius:11px;padding:11px 15px;cursor:pointer;font-size:13.5px">Copy</button>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ shareInvite }}" style="flex:1;border:none;border-radius:14px;padding:15px;background:#e7b877;color:#3a2418;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer"><span class="mi" style="font-size:20px">ios_share</span>Share invite</button>
+              <button onClick="{{ closeOverlay }}" style="border:1.5px solid #5a4432;border-radius:14px;padding:15px 18px;background:none;color:#d8c3ac;font-size:15px;font-weight:700;cursor:pointer">Later</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- TOAST -->
+      <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;bottom:104px;left:50%;z-index:130;background:#2c211a;color:#f6ecd9;padding:12px 18px;border-radius:14px;font-size:13.5px;font-weight:600;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);animation:sbtoast 2.4s ease-out forwards;display:flex;align-items:center;gap:8px;white-space:nowrap">
+          <span class="mi" style="font-size:18px;color:#8fc194">check_circle</span>{{ toast }}
+        </div>
+      </sc-if>
+
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:393,&quot;height&quot;:852},&quot;appName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Service Break&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;onboarding&quot;,&quot;map&quot;],&quot;default&quot;:&quot;onboarding&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;sortBy&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;distance&quot;,&quot;cleanliness&quot;],&quot;default&quot;:&quot;distance&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behavior&quot;},&quot;unit&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mi&quot;,&quot;km&quot;],&quot;default&quot;:&quot;mi&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let saved = {}, added = [];
+    try { const s = JSON.parse(localStorage.getItem('sb_saved') || '{}'); if (s && typeof s === 'object') saved = s; } catch (e) {}
+    try { const a = JSON.parse(localStorage.getItem('sb_added') || '[]'); if (Array.isArray(a)) added = a; } catch (e) {}
+    this.state = {
+      started: (props.startScreen ?? 'onboarding') === 'map',
+      tab: 'map',
+      overlay: null,
+      selectedId: null,
+      places: this.seed().concat(added),
+      saved,
+      filters: { cleanOnly: false, parking: false, openNow: false, noPurchase: false, types: {} },
+      radius: 5,
+      form: this.blankForm(),
+      toast: null,
+    };
+    this._toastTimer = null;
+  }
+
+  blankForm() { return { name: '', type: 'coffee', clean: 5, door: 'door', parking: 'easy', purchase: false, code: false, address: '', comment: '' }; }
+
+  seed() {
+    return [
+      { id: 'p1', name: 'Camber Coffee', type: 'coffee', dist: 0.2, x: 52, y: 41, clean: 4.8, rating: 4.7, doorFt: 15, doorNote: 'Right past the counter, first door on the left', parking: 'street', purchase: 'code', code: 'Code printed on your receipt', address: '214 Maple Ave', hours: 'Open · closes 8:00 PM',
+        reviews: [ { name: 'Priya M.', initial: 'P', time: '2 days ago', r: 5, text: 'Spotless. Single room, key on a wooden spoon by the register. Worth the stop.' }, { name: 'Dev R.', initial: 'D', time: '1 week ago', r: 4, text: 'Clean and quick. Small line at peak but the code is on the receipt.' } ] },
+      { id: 'p2', name: 'Riverside Grocery', type: 'grocery', dist: 0.4, x: 30, y: 30, clean: 4.2, rating: 4.1, doorFt: 90, doorNote: 'Back-left corner past produce', parking: 'easy', purchase: false, address: '88 River Rd', hours: 'Open · closes 10:00 PM',
+        reviews: [ { name: 'Sam K.', initial: 'S', time: '4 days ago', r: 4, text: 'No purchase needed, family restroom is big and clean. Long walk from the door though.' } ] },
+      { id: 'p3', name: 'Chapter & Verse Books', type: 'bookstore', dist: 0.6, x: 70, y: 24, clean: 4.5, rating: 4.4, doorFt: 40, doorNote: 'Upstairs by the cafe', parking: 'street', purchase: 'code', code: 'Ask a bookseller for the code', address: '12 Oak St', hours: 'Open · closes 9:00 PM',
+        reviews: [ { name: 'Lena T.', initial: 'L', time: '6 days ago', r: 5, text: 'Cozy and clean. They give you the code at the counter, no purchase required.' } ] },
+      { id: 'p4', name: 'QuikFuel Station', type: 'gas', dist: 0.5, x: 22, y: 62, clean: 2.6, rating: 2.8, doorFt: 25, doorNote: 'Around the side of the building', parking: 'easy', purchase: false, address: '400 Highway 9', hours: 'Open 24 hours',
+        reviews: [ { name: 'Marco B.', initial: 'M', time: '3 days ago', r: 3, text: 'It is a gas station bathroom. Functional, key at the register. Bring your own wipes.' } ] },
+      { id: 'p5', name: 'Elm Street Park', type: 'park', dist: 0.3, x: 60, y: 60, clean: 3.4, rating: 3.6, doorFt: 0, doorNote: 'Restroom building by the trailhead', parking: 'easy', purchase: false, address: 'Elm St & 5th', hours: 'Open · dawn to dusk',
+        reviews: [ { name: 'Nadia F.', initial: 'N', time: '1 day ago', r: 4, text: 'Surprisingly well kept for a public park. Baby changing table too.' } ] },
+      { id: 'p6', name: 'City Center Restroom', type: 'restroom', dist: 0.7, x: 44, y: 18, clean: 3.0, rating: 3.1, doorFt: 0, doorNote: 'Standalone public facility on the plaza', parking: 'none', purchase: false, address: 'Center Plaza', hours: 'Open · 6 AM–11 PM',
+        reviews: [ { name: 'Owen P.', initial: 'O', time: '5 days ago', r: 3, text: 'Free and central. Cleaned a few times a day, hit or miss depending on time.' } ] },
+      { id: 'p7', name: 'Wildflour Bakery', type: 'coffee', dist: 0.9, x: 80, y: 52, clean: 4.9, rating: 4.8, doorFt: 10, doorNote: 'Immediately right of the entrance', parking: 'street', purchase: 'code', code: 'Customers only — code on receipt', address: '55 Birch Ln', hours: 'Open · closes 6:00 PM',
+        reviews: [ { name: 'Tara W.', initial: 'T', time: '2 days ago', r: 5, text: 'Cleanest bathroom on this whole app. Fresh flowers, always stocked.' } ] },
+      { id: 'p8', name: 'Northgate Market', type: 'grocery', dist: 1.1, x: 16, y: 40, clean: 3.8, rating: 3.9, doorFt: 70, doorNote: 'Near the pharmacy counter', parking: 'easy', purchase: false, address: '900 North Gate Blvd', hours: 'Open · closes 11:00 PM',
+        reviews: [ { name: 'Iris H.', initial: 'I', time: '1 week ago', r: 4, text: 'Reliable and clean, no purchase needed. Lot parking is easy.' } ] },
+    ];
+  }
+
+  // ---- type / label helpers ----
+  typeMeta(t) {
+    const m = {
+      coffee: { label: 'Coffee shop', icon: 'local_cafe', color: '#6f4e37' },
+      grocery: { label: 'Grocery', icon: 'local_grocery_store', color: '#6f8256' },
+      bookstore: { label: 'Bookstore', icon: 'menu_book', color: '#9b6a7d' },
+      gas: { label: 'Gas station', icon: 'local_gas_station', color: '#b5533f' },
+      park: { label: 'Park', icon: 'park', color: '#5c7a4a' },
+      restroom: { label: 'Public restroom', icon: 'wc', color: '#4f7a86' },
+      other: { label: 'Other', icon: 'place', color: '#8a7565' },
+    };
+    return m[t] || m.coffee;
+  }
+  distLabel(mi) {
+    const unit = this.props.unit ?? 'mi';
+    if (unit === 'km') return { num: (mi * 1.609).toFixed(1), unit: 'km' };
+    return { num: mi.toFixed(1), unit: 'mi' };
+  }
+  doorShort(p) {
+    const unit = this.props.unit ?? 'mi';
+    if (p.doorFt === 0) return 'At entrance';
+    return unit === 'km' ? Math.round(p.doorFt * 0.3048) + ' m' : p.doorFt + ' ft';
+  }
+  parkMeta(pk) {
+    const m = { easy: { label: 'Easy lot', bg: '#eaf1e6', fg: '#5c7a4a' }, street: { label: 'Street', bg: '#f7efdc', fg: '#a8792f' }, none: { label: 'No parking', bg: '#f6e6e0', fg: '#b5533f' } };
+    return m[pk] || m.street;
+  }
+  starsArr(r) { const n = Math.round(r); return [0,1,2,3,4].map(i => ({ color: i < n ? '#e0a53c' : '#e3d7c3' })); }
+
+  // ---- actions ----
+  enableLocation = () => this.setState({ started: true, tab: 'map' });
+  setTab = (t) => this.setState({ tab: t, overlay: null });
+  openDetail = (id) => this.setState({ selectedId: id, overlay: 'detail' });
+  selectPin = (id) => this.setState({ selectedId: id });
+  closeOverlay = () => this.setState({ overlay: null });
+  openFilters = () => this.setState({ overlay: 'filters' });
+  openDirections = (id) => this.setState({ selectedId: id, overlay: 'directions' });
+  openInvite = () => this.setState({ overlay: 'invite' });
+  recenter = () => this.setState({ selectedId: null });
+  stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
+
+  toggleSave = (id) => {
+    const saved = Object.assign({}, this.state.saved);
+    if (saved[id]) { delete saved[id]; this.toast('Removed from saved'); }
+    else { saved[id] = true; this.toast('Saved'); }
+    this.setState({ saved });
+    try { localStorage.setItem('sb_saved', JSON.stringify(saved)); } catch (e) {}
+  };
+
+  toast = (msg) => {
+    this.setState({ toast: null });
+    clearTimeout(this._toastTimer);
+    setTimeout(() => this.setState({ toast: msg }), 20);
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 2400);
+  };
+
+  toggleFilter = (k) => { const f = Object.assign({}, this.state.filters); f[k] = !f[k]; this.setState({ filters: f }); };
+  toggleType = (t) => { const f = Object.assign({}, this.state.filters); const types = Object.assign({}, f.types); if (types[t]) delete types[t]; else types[t] = true; f.types = types; this.setState({ filters: f }); };
+  resetFilters = () => this.setState({ filters: { cleanOnly: false, parking: false, openNow: false, noPurchase: false, types: {} }, radius: 5 });
+  onRadius = (e) => this.setState({ radius: +e.target.value });
+
+  destUrl(p) { return encodeURIComponent(p.name + ', ' + p.address); }
+  openGoogle = () => { const p = this.selectedPlace(); if (p) window.open('https://www.google.com/maps/dir/?api=1&destination=' + this.destUrl(p), '_blank'); this.setState({ overlay: null }); this.toast('Opening Google Maps…'); };
+  openApple = () => { const p = this.selectedPlace(); if (p) window.open('https://maps.apple.com/?daddr=' + this.destUrl(p), '_blank'); this.setState({ overlay: null }); this.toast('Opening Apple Maps…'); };
+  copyAddress = () => { const p = this.selectedPlace(); if (p && navigator.clipboard) navigator.clipboard.writeText(p.name + ', ' + p.address).catch(()=>{}); this.setState({ overlay: null }); this.toast('Address copied'); };
+  copyCode = () => { if (navigator.clipboard) navigator.clipboard.writeText('BREAK-JV7').catch(()=>{}); this.toast('Invite code copied'); };
+  shareInvite = () => { if (navigator.share) navigator.share({ title: 'Service Break', text: 'Join me on Service Break — code BREAK-JV7' }).catch(()=>{}); else this.toast('Invite link copied'); };
+
+  // form
+  onName = (e) => { const form = Object.assign({}, this.state.form, { name: e.target.value }); this.setState({ form }); };
+  onComment = (e) => { const form = Object.assign({}, this.state.form, { comment: e.target.value }); this.setState({ form }); };
+  onAddress = (e) => { const form = Object.assign({}, this.state.form, { address: e.target.value }); this.setState({ form }); };
+  useMyLocation = () => { this.setForm('address', '37.7749, -122.4194'); this.toast('Using your current location'); };
+  setForm = (k, v) => { const form = Object.assign({}, this.state.form); form[k] = v; this.setState({ form }); };
+  togglePurchase = () => this.setForm('purchase', !this.state.form.purchase);
+  toggleCode = () => this.setForm('code', !this.state.form.code);
+  rateHere = (id) => { const p = this.state.places.find(x => x.id === id); const form = Object.assign(this.blankForm(), { name: p ? p.name : '', type: p ? p.type : 'coffee' }); this.setState({ tab: 'add', overlay: null, form }); };
+
+  submitAdd = () => {
+    const f = this.state.form;
+    if (!f.name.trim()) { this.toast('Add a place name first'); return; }
+    const doorMap = { door: 10, short: 40, far: 90, upstairs: 45 };
+    const doorNoteMap = { door: 'Right by the entrance', short: 'A short walk inside', far: 'Toward the back', upstairs: 'Up a flight of stairs' };
+    const id = 'u' + Date.now();
+    const place = {
+      id, name: f.name.trim(), type: f.type, dist: 0.1, x: 46, y: 50,
+      clean: f.clean, rating: f.clean, doorFt: doorMap[f.door], doorNote: doorNoteMap[f.door],
+      parking: f.parking, purchase: (f.purchase || f.code) ? 'req' : false,
+      code: (f.purchase && f.code) ? 'Purchase & code required' : f.code ? 'Code / key required' : f.purchase ? 'Purchase required' : '',
+      address: f.address.trim() || 'Added by you', hours: 'Hours unknown', userAdded: true,
+      reviews: f.comment.trim() ? [{ name: 'You', initial: 'Y', time: 'Just now', r: f.clean, text: f.comment.trim() }] : [],
+    };
+    const places = this.state.places.concat([place]);
+    const added = places.filter(x => x.userAdded);
+    try { localStorage.setItem('sb_added', JSON.stringify(added)); } catch (e) {}
+    this.setState({ places, form: this.blankForm(), tab: 'map', selectedId: id, overlay: 'detail' });
+    this.toast('Stop added — thanks, scout!');
+  };
+
+  // ---- derived ----
+  filteredList() {
+    const f = this.state.filters, r = this.state.radius;
+    const typeKeys = Object.keys(f.types);
+    let list = this.state.places.filter(p => {
+      if (f.cleanOnly && p.clean < 4) return false;
+      if (f.parking && p.parking === 'none') return false;
+      if (f.noPurchase && p.purchase) return false;
+      if (typeKeys.length && !f.types[p.type]) return false;
+      if (p.dist > r) return false;
+      return true;
+    });
+    const sortBy = this.props.sortBy ?? 'distance';
+    list.sort((a, b) => sortBy === 'cleanliness' ? b.clean - a.clean : a.dist - b.dist);
+    return list;
+  }
+  selectedPlace() {
+    if (this.state.selectedId) { const p = this.state.places.find(x => x.id === this.state.selectedId); if (p) return p; }
+    const l = this.filteredList(); if (l.length) return l[0];
+    return this.state.places.slice().sort((a, b) => a.dist - b.dist)[0];
+  }
+
+  view(p) {
+    if (!p) return {};
+    const tm = this.typeMeta(p.type), d = this.distLabel(p.dist), pk = this.parkMeta(p.parking);
+    const isSel = this.state.selectedId === p.id;
+    const saved = !!this.state.saved[p.id];
+    const parkChip = 'display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:700;background:' + pk.bg + ';color:' + pk.fg;
+    const purch = p.purchase ? { label: p.code || 'Purchase/code', bg: '#f7efdc', fg: '#a8792f' } : { label: 'Free · no purchase', bg: '#eaf1e6', fg: '#5c7a4a' };
+    return {
+      id: p.id, name: p.name, typeIcon: tm.icon, typeLabel: tm.label,
+      distNum: d.num, distUnit: d.unit,
+      cleanNum: p.clean.toFixed(1), rating: p.rating.toFixed(1), reviewCount: p.reviews.length,
+      doorShort: this.doorShort(p), doorNote: p.doorNote, address: p.address, hours: p.hours,
+      parkingLabel: pk.label, parkChipStyle: parkChip,
+      purchaseLabel: purch.label, purchaseChipStyle: 'display:inline-flex;align-items:center;padding:4px 10px;border-radius:8px;font-size:11.5px;font-weight:700;background:' + purch.bg + ';color:' + purch.fg,
+      nearTag: (this.state.selectedId === p.id ? 'Selected' : 'Nearest to you'),
+      openLabel: (p.hours.indexOf('24') > -1 ? 'Open 24h' : 'Open now'), openColor: '#5c7a4a',
+      openDotStyle: 'width:7px;height:7px;border-radius:50%;background:#6f8256;display:inline-block',
+      badgeStyle: 'width:54px;height:54px;border-radius:15px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:' + tm.color,
+      heroStyle: 'position:relative;height:210px;display:flex;align-items:center;justify-content:center;background:' + tm.color,
+      cleanBarStyle: 'height:100%;width:' + (p.clean / 5 * 100) + '%;background:#6f8256;border-radius:3px',
+      saveIcon: saved ? 'bookmark' : 'bookmark_border', saveColor: saved ? '#c05f38' : '#2c211a',
+      stars: this.starsArr(p.rating),
+      reviews: p.reviews.map((rv, i) => ({
+        name: rv.name, initial: rv.initial, time: rv.time, text: rv.text, stars: this.starsArr(rv.r),
+        avatarStyle: 'width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;background:' + ['#c05f38','#6f8256','#9b6a7d','#4f7a86'][i % 4],
+      })),
+      open: () => this.openDetail(p.id),
+      select: () => this.selectPin(p.id),
+      toggleSave: (e) => { this.stop(e); this.toggleSave(p.id); },
+      directions: (e) => { this.stop(e); this.openDirections(p.id); },
+      rateHere: () => this.rateHere(p.id),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const chips = [
+      { t: 'coffee', label: 'Coffee', icon: 'local_cafe' }, { t: 'grocery', label: 'Grocery', icon: 'local_grocery_store' },
+      { t: 'bookstore', label: 'Books', icon: 'menu_book' }, { t: 'park', label: 'Parks', icon: 'park' },
+      { t: 'gas', label: 'Gas', icon: 'local_gas_station' }, { t: 'restroom', label: 'Restrooms', icon: 'wc' },
+    ];
+    const chipBase = 'display:inline-flex;align-items:center;gap:5px;padding:8px 13px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;flex-shrink:0;border:1.5px solid ';
+    const typeChips = chips.map(c => ({
+      label: c.label, icon: c.icon, toggle: () => this.toggleType(c.t),
+      style: s.filters.types[c.t] ? chipBase + '#c05f38;background:#c05f38;color:#fff' : chipBase + '#e6dbc9;background:#fff;color:#5c4c3e',
+    }));
+
+    // map pins
+    const pinWrap = (p, isSel) => 'position:absolute;left:' + p.x + '%;top:' + p.y + '%;transform:translate(-50%,-100%);z-index:' + (isSel ? 20 : 6) + ';background:none;border:none;padding:0;cursor:pointer';
+    const pinDot = (color, isSel) => 'width:' + (isSel ? 46 : 38) + 'px;height:' + (isSel ? 46 : 38) + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + color + ';border:3px solid #fff;box-shadow:0 4px 10px -2px rgba(0,0,0,.4)';
+    const pinTail = (color, isSel) => 'width:0;height:0;margin:-2px auto 0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid ' + color;
+    const mapPins = s.places.map(p => {
+      const tm = this.typeMeta(p.type); const isSel = s.selectedId === p.id;
+      return { name: p.name, typeIcon: tm.icon, isSelected: isSel, pinIconSize: (isSel ? 24 : 20) + 'px',
+        pinWrapStyle: pinWrap(p, isSel), pinDotStyle: pinDot(tm.color, isSel), pinTailStyle: pinTail(tm.color, isSel),
+        select: () => this.selectPin(p.id) };
+    });
+
+    const list = this.filteredList().map(p => this.view(p));
+    const savedPlaces = s.places.filter(p => s.saved[p.id]).map(p => this.view(p));
+    const selected = this.view(this.selectedPlace());
+
+    // tabs
+    const tabDefs = [
+      { key: 'map', label: 'Map', icon: 'map' }, { key: 'list', label: 'List', icon: 'format_list_bulleted' },
+      { key: 'add', label: 'Add', icon: 'add', add: true }, { key: 'saved', label: 'Saved', icon: 'bookmark' },
+      { key: 'profile', label: 'Profile', icon: 'person' },
+    ];
+    const tabs = tabDefs.map(t => ({
+      label: t.label, icon: t.icon, isAdd: !!t.add, notAdd: !t.add,
+      color: s.tab === t.key ? '#c05f38' : '#a99b87',
+      addStyle: 'width:52px;height:40px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:#c05f38;box-shadow:0 8px 18px -6px rgba(192,95,56,.7);margin-top:-2px',
+      go: () => this.setTab(t.key),
+    }));
+
+    // add form controls
+    const typeGrid = [ { t: 'coffee', label: 'Coffee', icon: 'local_cafe' }, { t: 'grocery', label: 'Grocery', icon: 'local_grocery_store' }, { t: 'gas', label: 'Gas', icon: 'local_gas_station' }, { t: 'park', label: 'Park', icon: 'park' }, { t: 'restroom', label: 'Restroom', icon: 'wc' }, { t: 'other', label: 'Other', icon: 'place' } ];
+    const tileBase = (on) => 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 6px;border-radius:14px;cursor:pointer;border:1.5px solid ' + (on ? '#c05f38' : '#e6dbc9') + ';background:' + (on ? '#fbeee6' : '#fff') + ';color:' + (on ? '#c05f38' : '#6b5c4c');
+    const formTypes = typeGrid.map(t => ({ label: t.label, icon: t.icon, style: tileBase(s.form.type === t.t), select: () => this.setForm('type', t.t) }));
+    const cleanPicks = [1,2,3,4,5].map(n => ({ icon: n <= s.form.clean ? 'sentiment_very_satisfied' : 'sentiment_neutral',
+      style: 'flex:1;padding:12px 0;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;border:1.5px solid ' + (n <= s.form.clean ? '#6f8256' : '#e6dbc9') + ';background:' + (n <= s.form.clean ? '#eef2e6' : '#fff') + ';color:' + (n <= s.form.clean ? '#5c7a4a' : '#c9b79f'),
+      pick: () => this.setForm('clean', n) }));
+    const doorOpts = [ { k: 'door', label: 'Right by door' }, { k: 'short', label: 'Short walk in' }, { k: 'far', label: 'Toward the back' }, { k: 'upstairs', label: 'Up a flight' } ];
+    const pillBase = (on) => 'padding:13px 8px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;border:1.5px solid ' + (on ? '#c05f38' : '#e6dbc9') + ';background:' + (on ? '#fbeee6' : '#fff') + ';color:' + (on ? '#c05f38' : '#6b5c4c');
+    const doorPicks = doorOpts.map(d => ({ label: d.label, style: pillBase(s.form.door === d.k), pick: () => this.setForm('door', d.k) }));
+    const parkOpts = [ { k: 'easy', label: 'Easy lot' }, { k: 'street', label: 'Street' }, { k: 'none', label: 'None' } ];
+    const parkPicks = parkOpts.map(p => ({ label: p.label, style: pillBase(s.form.parking === p.k), pick: () => this.setForm('parking', p.k) }));
+
+    // filters sheet
+    const fdefs = [ { k: 'cleanOnly', label: 'Clean spots only (4.0+)', icon: 'mop' }, { k: 'parking', label: 'Has parking', icon: 'local_parking' }, { k: 'openNow', label: 'Open now', icon: 'schedule' }, { k: 'noPurchase', label: 'No purchase required', icon: 'money_off' } ];
+    const toggleFilters = fdefs.map(f => { const on = s.filters[f.k]; return {
+      label: f.label, icon: f.icon, toggle: () => this.toggleFilter(f.k),
+      border: on ? '#c05f38' : '#efe6d6', iconColor: on ? '#c05f38' : '#a99b87',
+      trackStyle: 'width:44px;height:26px;border-radius:14px;flex-shrink:0;padding:3px;transition:all .15s;background:' + (on ? '#c05f38' : '#dccfba'),
+      knobStyle: 'width:20px;height:20px;border-radius:50%;background:#fff;transition:all .15s;transform:translateX(' + (on ? '18px' : '0') + ')',
+    }; });
+
+    const purchaseOn = s.form.purchase;
+    const codeOn = s.form.code;
+    const knob = (on) => 'width:21px;height:21px;border-radius:50%;background:#fff;transition:all .15s;transform:translateX(' + (on ? '19px' : '0') + ')';
+    const track = (on) => 'width:46px;height:27px;border-radius:14px;flex-shrink:0;padding:3px;background:' + (on ? '#c05f38' : '#dccfba');
+    const filtersActive = s.filters.cleanOnly || s.filters.parking || s.filters.openNow || s.filters.noPurchase || Object.keys(s.filters.types).length > 0;
+
+    return {
+      appName: this.props.appName ?? 'Service Break',
+      notStarted: !s.started, started: s.started,
+      chromeInk: s.started && s.tab === 'map' && !s.overlay ? '#2c211a' : '#2c211a',
+      isMap: s.tab === 'map', isList: s.tab === 'list', isAdd: s.tab === 'add', isSaved: s.tab === 'saved', isProfile: s.tab === 'profile',
+      ovDetail: s.overlay === 'detail', ovFilters: s.overlay === 'filters', ovDirections: s.overlay === 'directions', ovInvite: s.overlay === 'invite',
+      enableLocation: this.enableLocation, openFilters: this.openFilters, closeOverlay: this.closeOverlay, recenter: this.recenter, stop: this.stop,
+      openGoogle: this.openGoogle, openApple: this.openApple, copyAddress: this.copyAddress, openInvite: this.openInvite, copyCode: this.copyCode, shareInvite: this.shareInvite,
+      resetFilters: this.resetFilters, onRadius: this.onRadius, radius: s.radius, radiusLabel: s.radius + ' mi',
+      hasFilters: filtersActive,
+      mapPins, typeChips, tabs, listPlaces: list, savedPlaces, selected,
+      listCount: list.length, listEmpty: list.length === 0, listPlacesLen: list.length,
+      sortLabel: (this.props.sortBy ?? 'distance') === 'cleanliness' ? 'cleanliness' : 'distance',
+      hasSaved: savedPlaces.length > 0, noSaved: savedPlaces.length === 0, savedCount: savedPlaces.length,
+      reviewsCount: 12, addedCount: s.places.filter(p => p.userAdded).length,
+      toggleFilters,
+      form: s.form, onName: this.onName, onComment: this.onComment, onAddress: this.onAddress, useMyLocation: this.useMyLocation, submitAdd: this.submitAdd, togglePurchase: this.togglePurchase,
+      formTypes, cleanPicks, doorPicks, parkPicks,
+      purchaseToggleStyle: track(purchaseOn), purchaseKnobStyle: knob(purchaseOn),
+      codeToggleStyle: track(codeOn), codeKnobStyle: knob(codeOn), toggleCode: this.toggleCode,
+      submitStyle: 'width:100%;border:none;border-radius:16px;padding:16px;background:#c05f38;color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 12px 28px -10px rgba(192,95,56,.75)',
+      menuItems: [ { label: 'Notification settings', icon: 'notifications' }, { label: 'Saved & offline maps', icon: 'download_for_offline' }, { label: 'Contribution history', icon: 'history' }, { label: 'Help & guidelines', icon: 'help' } ],
+      toast: s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>
