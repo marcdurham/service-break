@@ -366,6 +366,45 @@ pub struct NewReview {
     pub text: String,
 }
 
+/// Username + password sent to `POST /api/auth/register` and `/login`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+}
+
+/// A logged-in session: the bearer token plus the display username.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuthSession {
+    pub token: String,
+    pub username: String,
+}
+
+pub const USERNAME_MIN: usize = 3;
+pub const USERNAME_MAX: usize = 24;
+pub const PASSWORD_MIN: usize = 8;
+
+/// Validates a username for registration: 3–24 chars, letters, digits,
+/// `_` or `-`. Shared so the form and the API reject the same inputs.
+pub fn validate_username(username: &str) -> Result<(), &'static str> {
+    let n = username.chars().count();
+    if !(USERNAME_MIN..=USERNAME_MAX).contains(&n) {
+        return Err("username must be 3-24 characters");
+    }
+    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err("username may only use letters, digits, - and _");
+    }
+    Ok(())
+}
+
+/// Validates a password for registration.
+pub fn validate_password(password: &str) -> Result<(), &'static str> {
+    if password.chars().count() < PASSWORD_MIN {
+        return Err("password must be at least 8 characters");
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeocodeResult {
     pub lat: f64,
@@ -652,6 +691,27 @@ mod tests {
     fn door_short_labels() {
         assert_eq!(door_short(0), "At entrance");
         assert_eq!(door_short(40), "40 ft");
+    }
+
+    #[test]
+    fn validate_username_accepts_reasonable_names() {
+        assert_eq!(validate_username("sam"), Ok(()));
+        assert_eq!(validate_username("Trail_Scout-42"), Ok(()));
+    }
+
+    #[test]
+    fn validate_username_rejects_bad_lengths_and_chars() {
+        assert!(validate_username("ab").is_err());
+        assert!(validate_username(&"x".repeat(25)).is_err());
+        assert!(validate_username("sam smith").is_err());
+        assert!(validate_username("sam@home").is_err());
+        assert!(validate_username("").is_err());
+    }
+
+    #[test]
+    fn validate_password_requires_min_length() {
+        assert_eq!(validate_password("longenough"), Ok(()));
+        assert!(validate_password("short").is_err());
     }
 
     #[test]

@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 
 use gloo_storage::{LocalStorage, Storage};
-use shared::{PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{AuthSession, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::components::account_view::AccountView;
 use crate::components::add_form::AddForm;
 use crate::components::detail_view::DetailView;
 use crate::components::filters_sheet::FiltersSheet;
@@ -104,6 +105,7 @@ pub fn app() -> Html {
     let saved_places = use_state(Vec::<PlaceSummary>::new);
     let toast = use_state(|| None::<String>);
     let refresh = use_state(|| 0u32);
+    let auth = use_state(api::stored_auth);
 
     let show_toast = {
         let toast = toast.clone();
@@ -153,6 +155,22 @@ pub fn app() -> Html {
                 });
             } else {
                 detail.set(None);
+            }
+        });
+    }
+
+    // Drop a stored session the server no longer accepts (expired or
+    // logged out elsewhere); a failed check (offline) changes nothing.
+    {
+        let auth = auth.clone();
+        use_effect_with((), move |()| {
+            if auth.is_some() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    if api::session_is_valid().await == Ok(false) {
+                        api::clear_auth();
+                        auth.set(None);
+                    }
+                });
             }
         });
     }
@@ -277,12 +295,54 @@ pub fn app() -> Html {
         })
     };
 
+    // Sends the user to the Account page when a gated action needs a login.
+    let require_login = {
+        let navigator = navigator.clone();
+        let show_toast = show_toast.clone();
+        Callback::from(move |msg: String| {
+            show_toast.emit(msg);
+            navigator.push(&Route::Account);
+        })
+    };
+
+    let on_login = {
+        let auth = auth.clone();
+        let show_toast = show_toast.clone();
+        Callback::from(move |session: AuthSession| {
+            api::store_auth(&session);
+            show_toast.emit(format!("Signed in as {}", session.username));
+            auth.set(Some(session));
+        })
+    };
+
+    let on_logout = {
+        let auth = auth.clone();
+        let show_toast = show_toast.clone();
+        Callback::from(move |()| {
+            let auth = auth.clone();
+            let show_toast = show_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                // Invalidate server-side first: logout reads the stored token.
+                api::logout().await;
+                api::clear_auth();
+                auth.set(None);
+                show_toast.emit("Signed out".to_owned());
+            });
+        })
+    };
+
     let on_toggle_save = {
         let saved_ids = saved_ids.clone();
         let device = device.clone();
         let show_toast = show_toast.clone();
         let refresh = refresh.clone();
+        let auth = auth.clone();
+        let require_login = require_login.clone();
         Callback::from(move |id: Uuid| {
+            if auth.is_none() {
+                require_login.emit("Sign in to save places".to_owned());
+                return;
+            }
             let mut ids = (*saved_ids).clone();
             let device = device.to_string();
             let removing = ids.contains(&id);
@@ -403,7 +463,14 @@ pub fn app() -> Html {
                             device_id={(*device).clone()}
                             origin={*origin}
                             user_location={*user_location}
+                            logged_in={auth.is_some()}
                             on_created={on_created}
+                            on_sign_in={{
+                                let require_login = require_login.clone();
+                                Callback::from(move |()| {
+                                    require_login.emit("Sign in to add places".to_owned())
+                                })
+                            }}
                             on_toast={show_toast.clone()}
                         />
                     },
@@ -415,6 +482,14 @@ pub fn app() -> Html {
                     },
                     Route::Invite => html! {
                         <InviteView device_id={(*device).clone()} on_toast={show_toast.clone()} />
+                    },
+                    Route::Account => html! {
+                        <AccountView
+                            auth={(*auth).clone()}
+                            on_login={on_login}
+                            on_logout={on_logout}
+                            on_toast={show_toast.clone()}
+                        />
                     },
                     _ => html! {
                         <MapView
@@ -441,6 +516,13 @@ pub fn app() -> Html {
                     detail={d}
                     device_id={(*device).clone()}
                     saved={detail.as_ref().is_some_and(|d| saved_ids.contains(&d.summary.id))}
+                    logged_in={auth.is_some()}
+                    on_require_login={{
+                        let require_login = require_login.clone();
+                        Callback::from(move |()| {
+                            require_login.emit("Sign in to post a review".to_owned())
+                        })
+                    }}
                     on_close={close_detail}
                     on_show_on_map={on_show_on_map}
                     on_toggle_save={on_toggle_save}
