@@ -149,15 +149,17 @@
         if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
       };
 
-      // Opens the native share sheet with the invite text and this app's
-      // URL; returns true if it did. Falls back to the clipboard otherwise.
-      window.sbShareInvite = function (text) {
+      // Opens the native share sheet with the invite text and a link back to
+      // this app carrying the invite code; returns true if it did. Falls
+      // back to the clipboard otherwise.
+      window.sbShareInvite = function (text, code) {
+        const url = location.origin + '/invite?code=' + encodeURIComponent(code);
         if (navigator.share) {
-          navigator.share({ title: 'Service Break', text, url: location.origin + '/' }).catch(() => {});
+          navigator.share({ title: 'Service Break', text, url }).catch(() => {});
           return true;
         }
         if (navigator.clipboard) {
-          navigator.clipboard.writeText(text + ' ' + location.origin + '/').catch(() => {});
+          navigator.clipboard.writeText(text + ' ' + url).catch(() => {});
         }
         return false;
       };

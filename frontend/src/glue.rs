@@ -52,10 +52,11 @@ extern "C" {
     #[wasm_bindgen(js_name = sbCopyText)]
     pub fn sb_copy_text(text: &str);
 
-    /// Opens the native share sheet with `text` and the app's URL; returns
-    /// `true` if it did, `false` if it fell back to copying the clipboard.
+    /// Opens the native share sheet with `text` and a link back to the app
+    /// carrying `code`; returns `true` if it did, `false` if it fell back to
+    /// copying the clipboard.
     #[wasm_bindgen(js_name = sbShareInvite)]
-    pub fn sb_share_invite(text: &str) -> bool;
+    pub fn sb_share_invite(text: &str, code: &str) -> bool;
 }
 
 /// Opens a URL in a new tab (directions handoff to Google Maps / OSM).

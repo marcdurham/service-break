@@ -34,7 +34,7 @@ pub fn invite_view(props: &InviteViewProps) -> Html {
         Callback::from(move |_| {
             let text =
                 format!("Join me on Service Break — use code {code} to find clean bathrooms nearby.");
-            let shared = glue::sb_share_invite(&text);
+            let shared = glue::sb_share_invite(&text, &code);
             let msg = if shared { "Opening share…" } else { "Invite link copied" };
             toast.emit(msg.to_owned());
         })
