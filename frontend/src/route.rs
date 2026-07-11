@@ -15,6 +15,8 @@ pub enum Route {
     Saved,
     #[at("/invite")]
     Invite,
+    #[at("/account")]
+    Account,
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]
@@ -23,7 +25,7 @@ pub enum Route {
 }
 
 impl Route {
-    /// True for the five top-level pages shown in the tab bar; false for
+    /// True for the top-level pages shown in the tab bar; false for
     /// overlay-style routes (the place detail sheet) and the 404 fallback.
     pub fn is_nav(self) -> bool {
         !matches!(self, Route::Place { .. } | Route::NotFound)

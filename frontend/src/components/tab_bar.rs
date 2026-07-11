@@ -16,6 +16,7 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
         (Route::Add, "Add", "add"),
         (Route::Saved, "Saved", "bookmark"),
         (Route::Invite, "Invite", "group_add"),
+        (Route::Account, "Account", "person"),
     ];
     html! {
         <div class="tabbar">

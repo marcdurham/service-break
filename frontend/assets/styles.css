@@ -509,6 +509,53 @@ button { cursor: pointer; }
 }
 .invite-share-btn .mi { font-size: 20px; }
 
+/* ---------- account ---------- */
+
+.account-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 22px;
+  padding: 26px 20px; margin-top: 18px; text-align: center;
+}
+.account-avatar {
+  width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 12px;
+  background: var(--accent); color: #fff;
+  font-size: 28px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.account-name {
+  font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--ink);
+}
+.account-sub { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.signout-btn {
+  margin-top: 18px; border: 1.5px solid var(--border); border-radius: 14px;
+  background: none; color: var(--ink-soft); font-size: 14px; font-weight: 700;
+  padding: 12px 22px; display: inline-flex; align-items: center; gap: 8px;
+}
+.signout-btn .mi { font-size: 18px; }
+.alt-auth-btn {
+  width: 100%; border: 1.5px solid var(--border); border-radius: 16px;
+  padding: 15px; margin-top: 10px; background: #fff; color: var(--ink-soft);
+  font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.alt-auth-btn:disabled { opacity: .55; }
+.alt-auth-btn .mi { font-size: 20px; }
+.auth-note {
+  font-size: 12.5px; color: var(--faint); text-align: center;
+  margin-top: 14px; line-height: 1.5;
+}
+
+/* Sign-in prompt shown in place of login-only content. */
+.gate-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 22px;
+  padding: 28px 20px; margin-top: 18px; text-align: center;
+}
+.gate-card > .mi { font-size: 34px; color: var(--faint); }
+.gate-title {
+  font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--ink);
+  margin-top: 8px;
+}
+.gate-sub { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
 /* ---------- detail overlay ---------- */
 
 .detail-overlay {

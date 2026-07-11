@@ -1,3 +1,4 @@
+pub mod account_view;
 pub mod add_form;
 pub mod detail_view;
 pub mod filters_sheet;

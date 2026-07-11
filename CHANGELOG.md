@@ -6,6 +6,10 @@ short description.
 
 ## 2026-07-10
 
+- 16:53 — Added an Account page (sign in / create account / sign out) and
+  a sixth tab for it; the Add form, review composer and save button now
+  ask logged-out users to sign in and route them to the Account page.
+  Verified the whole flow end-to-end in the browser.
 - 16:17 — Added user accounts to the backend: register/login/logout/me
   endpoints with Argon2 password hashing and 30-day bearer-token sessions;
   adding places, posting reviews, and saving/unsaving now require login,
