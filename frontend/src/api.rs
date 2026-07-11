@@ -1,13 +1,43 @@
 //! Thin async client for the backend API (proxied by Trunk at /api).
 
-use gloo_net::http::Request;
-use shared::{NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery};
+use gloo_net::http::{Request, RequestBuilder, Response};
+use gloo_storage::{LocalStorage, Storage};
+use shared::{AuthSession, Credentials, NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery};
 use uuid::Uuid;
 
 pub type ApiResult<T> = Result<T, String>;
 
+const AUTH_KEY: &str = "sb_auth";
+
+/// The session from the last login on this device, if any.
+pub fn stored_auth() -> Option<AuthSession> {
+    LocalStorage::get(AUTH_KEY).ok()
+}
+
+pub fn store_auth(session: &AuthSession) {
+    let _ = LocalStorage::set(AUTH_KEY, session);
+}
+
+pub fn clear_auth() {
+    LocalStorage::delete(AUTH_KEY);
+}
+
 fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
+}
+
+/// Attaches the stored session's bearer token, when logged in.
+fn with_auth(req: RequestBuilder) -> RequestBuilder {
+    match stored_auth() {
+        Some(s) => req.header("Authorization", &format!("Bearer {}", s.token)),
+        None => req,
+    }
+}
+
+/// The `error` field of an API error body, or `fallback`.
+async fn error_message(res: Response, fallback: &str) -> String {
+    let body: serde_json::Value = res.json().await.unwrap_or_default();
+    body["error"].as_str().unwrap_or(fallback).to_owned()
 }
 
 fn origin_qs(origin: Option<(f64, f64)>) -> String {
@@ -33,28 +63,27 @@ pub async fn fetch_place(id: Uuid, origin: Option<(f64, f64)>) -> ApiResult<Plac
 }
 
 pub async fn create_place(new: &NewPlace) -> ApiResult<PlaceDetail> {
-    let res = Request::post("/api/places")
+    let res = with_auth(Request::post("/api/places"))
         .json(new)
         .map_err(err)?
         .send()
         .await
         .map_err(err)?;
     if res.status() >= 400 {
-        let body: serde_json::Value = res.json().await.unwrap_or_default();
-        return Err(body["error"].as_str().unwrap_or("could not add place").to_owned());
+        return Err(error_message(res, "could not add place").await);
     }
     res.json().await.map_err(err)
 }
 
 pub async fn create_review(place_id: Uuid, review: &NewReview) -> ApiResult<PlaceDetail> {
-    let res = Request::post(&format!("/api/places/{place_id}/reviews"))
+    let res = with_auth(Request::post(&format!("/api/places/{place_id}/reviews")))
         .json(review)
         .map_err(err)?
         .send()
         .await
         .map_err(err)?;
     if res.status() >= 400 {
-        return Err("could not post review".to_owned());
+        return Err(error_message(res, "could not post review").await);
     }
     res.json().await.map_err(err)
 }
@@ -68,17 +97,52 @@ pub async fn fetch_saved(
 }
 
 pub async fn save_place(device_id: &str, place_id: Uuid) -> ApiResult<()> {
-    Request::put(&format!("/api/devices/{device_id}/saved/{place_id}"))
+    let res = with_auth(Request::put(&format!("/api/devices/{device_id}/saved/{place_id}")))
         .send()
         .await
         .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not save place").await);
+    }
     Ok(())
 }
 
 pub async fn unsave_place(device_id: &str, place_id: Uuid) -> ApiResult<()> {
-    Request::delete(&format!("/api/devices/{device_id}/saved/{place_id}"))
+    let res = with_auth(Request::delete(&format!("/api/devices/{device_id}/saved/{place_id}")))
         .send()
         .await
         .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not remove place").await);
+    }
     Ok(())
+}
+
+pub async fn register(creds: &Credentials) -> ApiResult<AuthSession> {
+    auth_request("/api/auth/register", creds, "could not create account").await
+}
+
+pub async fn login(creds: &Credentials) -> ApiResult<AuthSession> {
+    auth_request("/api/auth/login", creds, "could not sign in").await
+}
+
+async fn auth_request(url: &str, creds: &Credentials, fallback: &str) -> ApiResult<AuthSession> {
+    let res = Request::post(url).json(creds).map_err(err)?.send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, fallback).await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// Best-effort server-side session invalidation.
+pub async fn logout() {
+    let _ = with_auth(Request::post("/api/auth/logout")).send().await;
+}
+
+/// Checks the stored token against the server: `Ok(true)` if it's still a
+/// valid session, `Ok(false)` if the server rejected it, `Err` if the
+/// check itself failed (e.g. offline) and nothing should be concluded.
+pub async fn session_is_valid() -> ApiResult<bool> {
+    let res = with_auth(Request::get("/api/auth/me")).send().await.map_err(err)?;
+    Ok(res.status() < 400)
 }

@@ -180,8 +180,9 @@ pub async fn get_place(
 
 async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiError> {
     let rows = sqlx::query(
-        "SELECT id, device_id, clean, text, created_at FROM reviews \
-         WHERE place_id = $1 ORDER BY created_at DESC",
+        "SELECT r.id, r.device_id, r.clean, r.text, r.created_at, u.username \
+         FROM reviews r LEFT JOIN users u ON u.id = r.user_id \
+         WHERE r.place_id = $1 ORDER BY r.created_at DESC",
     )
     .bind(place_id)
     .fetch_all(pool)
@@ -190,10 +191,13 @@ async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiE
     rows.iter()
         .map(|row| {
             let device_id: String = row.try_get("device_id")?;
+            let username: Option<String> = row.try_get("username")?;
             let created_at: DateTime<Utc> = row.try_get("created_at")?;
             Ok(Review {
                 id: row.try_get("id")?,
-                author: shared::scout_name(&device_id),
+                // Pre-account rows (and seed data) have no user: fall back
+                // to the anonymous scout name derived from the device id.
+                author: username.unwrap_or_else(|| shared::scout_name(&device_id)),
                 clean: row.try_get("clean")?,
                 text: row.try_get("text")?,
                 created_at: created_at.to_rfc3339(),
@@ -216,14 +220,15 @@ pub struct InsertPlace {
     pub code_required: Requirement,
     pub amenities: Vec<Amenity>,
     pub device_id: String,
+    pub user_id: Uuid,
 }
 
 pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiError> {
     let amenities: Vec<&str> = p.amenities.iter().map(|a| a.as_str()).collect();
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO places (name, place_type, lat, lng, address, door_ft, door_note, \
-         parking, purchase_required, code_required, amenities, device_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id",
+         parking, purchase_required, code_required, amenities, device_id, user_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
     )
     .bind(&p.name)
     .bind(p.place_type.as_str())
@@ -237,6 +242,7 @@ pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiErr
     .bind(p.code_required.as_str())
     .bind(&amenities)
     .bind(&p.device_id)
+    .bind(p.user_id)
     .fetch_one(pool)
     .await?;
     Ok(id)
@@ -246,6 +252,7 @@ pub async fn insert_review(
     pool: &PgPool,
     place_id: Uuid,
     device_id: &str,
+    user_id: Uuid,
     clean: i16,
     text: &str,
 ) -> Result<Uuid, ApiError> {
@@ -257,16 +264,104 @@ pub async fn insert_review(
         return Err(ApiError::NotFound);
     }
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO reviews (place_id, device_id, clean, text) \
-         VALUES ($1, $2, $3, $4) RETURNING id",
+        "INSERT INTO reviews (place_id, device_id, user_id, clean, text) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
     )
     .bind(place_id)
     .bind(device_id)
+    .bind(user_id)
     .bind(clean)
     .bind(text)
     .fetch_one(pool)
     .await?;
     Ok(id)
+}
+
+pub struct UserRow {
+    pub id: Uuid,
+    pub username: String,
+    pub password_hash: String,
+}
+
+pub async fn create_user(
+    pool: &PgPool,
+    username: &str,
+    password_hash: &str,
+) -> Result<Uuid, ApiError> {
+    let res = sqlx::query_scalar(
+        "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(username)
+    .bind(password_hash)
+    .fetch_one(pool)
+    .await;
+    match res {
+        Ok(id) => Ok(id),
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+            Err(ApiError::Conflict("that username is taken".to_owned()))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Looks a user up by username, case-insensitively.
+pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
+    let row = sqlx::query(
+        "SELECT id, username, password_hash FROM users WHERE lower(username) = lower($1)",
+    )
+    .bind(username)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|r| {
+        Ok(UserRow {
+            id: r.try_get("id")?,
+            username: r.try_get("username")?,
+            password_hash: r.try_get("password_hash")?,
+        })
+    })
+    .transpose()
+}
+
+/// How long a login stays valid.
+const SESSION_DAYS: i32 = 30;
+
+pub async fn create_session(pool: &PgPool, token: &str, user_id: Uuid) -> Result<(), ApiError> {
+    sqlx::query(
+        "INSERT INTO sessions (token, user_id, expires_at) \
+         VALUES ($1, $2, now() + make_interval(days => $3))",
+    )
+    .bind(token)
+    .bind(user_id)
+    .bind(SESSION_DAYS)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_session(pool: &PgPool, token: &str) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM sessions WHERE token = $1").bind(token).execute(pool).await?;
+    Ok(())
+}
+
+/// Resolves a session token to its user, if the session is still valid.
+pub async fn session_user(
+    pool: &PgPool,
+    token: &str,
+) -> Result<Option<crate::auth::AuthUser>, ApiError> {
+    let row = sqlx::query(
+        "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id \
+         WHERE s.token = $1 AND s.expires_at > now()",
+    )
+    .bind(token)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|r| {
+        Ok(crate::auth::AuthUser {
+            id: r.try_get("id")?,
+            username: r.try_get("username")?,
+        })
+    })
+    .transpose()
 }
 
 pub async fn save_place(pool: &PgPool, device_id: &str, place_id: Uuid) -> Result<(), ApiError> {

@@ -5,12 +5,14 @@ use serde_json::json;
 use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery};
 use uuid::Uuid;
 
+use crate::auth::AuthUser;
 use crate::db;
 use crate::error::ApiError;
 use crate::geocode;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
+    crate::auth::configure(cfg);
     cfg.service(health)
         .service(list_places)
         .service(create_place)
@@ -61,6 +63,7 @@ async fn get_place(
 #[post("/api/places")]
 async fn create_place(
     state: Data<AppState>,
+    user: AuthUser,
     body: Json<NewPlace>,
 ) -> Result<HttpResponse, ApiError> {
     let new = body.into_inner();
@@ -109,9 +112,11 @@ async fn create_place(
         code_required: new.code_required,
         amenities: new.amenities.clone(),
         device_id: new.device_id.clone(),
+        user_id: user.id,
     };
     let id = db::insert_place(&state.pool, &place).await?;
-    db::insert_review(&state.pool, id, &new.device_id, new.clean, new.comment.trim()).await?;
+    db::insert_review(&state.pool, id, &new.device_id, user.id, new.clean, new.comment.trim())
+        .await?;
     let detail = db::get_place(&state.pool, id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
@@ -119,6 +124,7 @@ async fn create_place(
 #[post("/api/places/{id}/reviews")]
 async fn create_review(
     state: Data<AppState>,
+    user: AuthUser,
     id: Path<Uuid>,
     body: Json<NewReview>,
 ) -> Result<HttpResponse, ApiError> {
@@ -127,7 +133,8 @@ async fn create_review(
             "cleanliness must be between 1 and 5".to_owned(),
         ));
     }
-    db::insert_review(&state.pool, *id, &body.device_id, body.clean, body.text.trim()).await?;
+    db::insert_review(&state.pool, *id, &body.device_id, user.id, body.clean, body.text.trim())
+        .await?;
     let detail = db::get_place(&state.pool, *id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
@@ -145,6 +152,7 @@ async fn list_saved(
 #[put("/api/devices/{device_id}/saved/{place_id}")]
 async fn save_place(
     state: Data<AppState>,
+    _user: AuthUser,
     path: Path<(String, Uuid)>,
 ) -> Result<HttpResponse, ApiError> {
     let (device_id, place_id) = path.into_inner();
@@ -155,6 +163,7 @@ async fn save_place(
 #[delete("/api/devices/{device_id}/saved/{place_id}")]
 async fn unsave_place(
     state: Data<AppState>,
+    _user: AuthUser,
     path: Path<(String, Uuid)>,
 ) -> Result<HttpResponse, ApiError> {
     let (device_id, place_id) = path.into_inner();

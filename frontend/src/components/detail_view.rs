@@ -13,6 +13,10 @@ pub struct DetailViewProps {
     pub detail: PlaceDetail,
     pub device_id: String,
     pub saved: bool,
+    /// Posting a review requires an account; when false the composer
+    /// buttons emit `on_require_login` instead of opening the composer.
+    pub logged_in: bool,
+    pub on_require_login: Callback<()>,
     pub on_close: Callback<()>,
     pub on_show_on_map: Callback<PlaceSummary>,
     pub on_toggle_save: Callback<Uuid>,
@@ -49,7 +53,15 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     };
     let open_composer = {
         let composing = composing.clone();
-        Callback::from(move |_| composing.set(true))
+        let logged_in = props.logged_in;
+        let require_login = props.on_require_login.clone();
+        Callback::from(move |_| {
+            if logged_in {
+                composing.set(true);
+            } else {
+                require_login.emit(());
+            }
+        })
     };
     let cancel_composer = {
         let composing = composing.clone();

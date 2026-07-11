@@ -11,7 +11,7 @@ use actix_web::web::Data;
 use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
-use shared::{Parking, PlaceDetail, PlaceSummary, PlaceType, Requirement};
+use shared::{AuthSession, Parking, PlaceDetail, PlaceSummary, PlaceType, Requirement};
 use sqlx::PgPool;
 
 async fn app(
@@ -25,6 +25,30 @@ async fn app(
         nominatim_url: "http://127.0.0.1:1".to_owned(),
     });
     init_service(App::new().app_data(state).configure(handlers::configure)).await
+}
+
+const TEST_PASSWORD: &str = "correct-horse-battery";
+
+/// Registers `username` and returns their session token.
+async fn register<S, B>(app: &S, username: &str) -> String
+where
+    S: Service<actix_http::Request, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    B: MessageBody,
+{
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({ "username": username, "password": TEST_PASSWORD }))
+        .to_request();
+    let res = call_service(app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let session: AuthSession = read_body_json(res).await;
+    assert_eq!(session.username, username);
+    session.token
+}
+
+/// `Authorization: Bearer` header pair for [`TestRequest::insert_header`].
+fn auth(token: &str) -> (&'static str, String) {
+    ("Authorization", format!("Bearer {token}"))
 }
 
 fn new_place_json(name: &str) -> serde_json::Value {
@@ -49,9 +73,11 @@ fn new_place_json(name: &str) -> serde_json::Value {
 #[sqlx::test(migrations = "./migrations")]
 async fn create_place_then_list_returns_it(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
 
     let req = TestRequest::post()
         .uri("/api/places")
+        .insert_header(auth(&token))
         .set_json(new_place_json("Camber Coffee"))
         .to_request();
     let res = call_service(&app, req).await;
@@ -62,6 +88,8 @@ async fn create_place_then_list_returns_it(pool: PgPool) {
     assert_eq!(created.summary.clean_avg, Some(5.0));
     assert_eq!(created.reviews.len(), 1);
     assert_eq!(created.reviews[0].text, "Spotless.");
+    // The review is attributed to the logged-in account, not the device.
+    assert_eq!(created.reviews[0].author, "scout-one");
 
     let req = TestRequest::get().uri("/api/places").to_request();
     let res = call_service(&app, req).await;
@@ -79,11 +107,16 @@ async fn create_place_then_list_returns_it(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn create_place_accepts_latlng_typed_into_address(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let mut body = new_place_json("Roadside Place");
     body["lat"] = json!(null);
     body["lng"] = json!(null);
     body["address"] = json!("37.7749, -122.4194");
-    let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(body)
+        .to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let created: PlaceDetail = read_body_json(res).await;
@@ -94,11 +127,16 @@ async fn create_place_accepts_latlng_typed_into_address(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn create_place_without_location_is_rejected(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let mut body = new_place_json("Nowhere");
     body["lat"] = json!(null);
     body["lng"] = json!(null);
     body["address"] = json!("");
-    let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(body)
+        .to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
@@ -106,12 +144,17 @@ async fn create_place_without_location_is_rejected(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn list_sorts_by_distance_and_respects_radius(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     // Near place ~0.7 mi north of origin; far place ~7 mi north.
     for (name, lat) in [("Near Place", 47.6197), ("Far Place", 47.7107)] {
         let mut body = new_place_json(name);
         body["lat"] = json!(lat);
         body["lng"] = json!(-122.3422);
-        let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+        let req = TestRequest::post()
+            .uri("/api/places")
+            .insert_header(auth(&token))
+            .set_json(body)
+            .to_request();
         assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
     }
 
@@ -135,12 +178,17 @@ async fn list_sorts_by_distance_and_respects_radius(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn list_filters_by_type_and_purchase(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let mut park = new_place_json("Elm Street Park");
     park["place_type"] = json!("park");
     park["purchase_required"] = json!("no");
     park["code_required"] = json!("no");
     for body in [new_place_json("Camber Coffee"), park] {
-        let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+        let req = TestRequest::post()
+            .uri("/api/places")
+            .insert_header(auth(&token))
+            .set_json(body)
+            .to_request();
         assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
     }
 
@@ -158,15 +206,19 @@ async fn list_filters_by_type_and_purchase(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let req = TestRequest::post()
         .uri("/api/places")
+        .insert_header(auth(&token))
         .set_json(new_place_json("Camber Coffee"))
         .to_request();
     let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
     let id = created.summary.id;
 
+    let other = register(&app, "scout-two").await;
     let req = TestRequest::post()
         .uri(&format!("/api/places/{id}/reviews"))
+        .insert_header(auth(&other))
         .set_json(json!({ "device_id": "other-device", "clean": 3, "text": "Okay." }))
         .to_request();
     let res = call_service(&app, req).await;
@@ -175,9 +227,11 @@ async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
     assert_eq!(detail.summary.review_count, 2);
     assert_eq!(detail.summary.clean_avg, Some(4.0));
     assert_eq!(detail.reviews.len(), 2);
+    assert_eq!(detail.reviews[0].author, "scout-two");
 
     let req = TestRequest::post()
         .uri(&format!("/api/places/{id}/reviews"))
+        .insert_header(auth(&other))
         .set_json(json!({ "device_id": "other-device", "clean": 9, "text": "" }))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
@@ -186,8 +240,10 @@ async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn saved_places_round_trip(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let req = TestRequest::post()
         .uri("/api/places")
+        .insert_header(auth(&token))
         .set_json(new_place_json("Camber Coffee"))
         .to_request();
     let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
@@ -195,6 +251,7 @@ async fn saved_places_round_trip(pool: PgPool) {
 
     let req = TestRequest::put()
         .uri(&format!("/api/devices/dev-a/saved/{id}"))
+        .insert_header(auth(&token))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 
@@ -209,6 +266,7 @@ async fn saved_places_round_trip(pool: PgPool) {
 
     let req = TestRequest::delete()
         .uri(&format!("/api/devices/dev-a/saved/{id}"))
+        .insert_header(auth(&token))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 
@@ -220,10 +278,15 @@ async fn saved_places_round_trip(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn list_searches_name_and_address(pool: PgPool) {
     let app = app(pool).await;
+    let token = register(&app, "scout-one").await;
     let mut park = new_place_json("Elm Street Park");
     park["address"] = json!("Elm St & 5th");
     for body in [new_place_json("Camber Coffee"), park] {
-        let req = TestRequest::post().uri("/api/places").set_json(body).to_request();
+        let req = TestRequest::post()
+            .uri("/api/places")
+            .insert_header(auth(&token))
+            .set_json(body)
+            .to_request();
         assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
     }
 
@@ -256,4 +319,112 @@ async fn get_unknown_place_is_404(pool: PgPool) {
         .uri("/api/places/00000000-0000-0000-0000-00000000dead")
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn writes_require_login(pool: PgPool) {
+    let app = app(pool).await;
+
+    // No Authorization header at all.
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .set_json(new_place_json("Sneaky Place"))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // A made-up token is just as unauthorized.
+    let req = TestRequest::post()
+        .uri("/api/places/00000000-0000-0000-0000-00000000dead/reviews")
+        .insert_header(auth("not-a-real-token"))
+        .set_json(json!({ "device_id": "dev-a", "clean": 4, "text": "" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    let req = TestRequest::put()
+        .uri("/api/devices/dev-a/saved/00000000-0000-0000-0000-00000000dead")
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    let req = TestRequest::delete()
+        .uri("/api/devices/dev-a/saved/00000000-0000-0000-0000-00000000dead")
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // Reads stay public.
+    let req = TestRequest::get().uri("/api/places").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn register_login_logout_flow(pool: PgPool) {
+    let app = app(pool).await;
+    register(&app, "wanderer").await;
+
+    // Fresh login issues a working token (username matched case-insensitively).
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "WANDERER", "password": TEST_PASSWORD }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let session: AuthSession = read_body_json(res).await;
+    assert_eq!(session.username, "wanderer");
+
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&session.token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let me: serde_json::Value = read_body_json(res).await;
+    assert_eq!(me["username"], "wanderer");
+
+    // Logout invalidates the token.
+    let req = TestRequest::post()
+        .uri("/api/auth/logout")
+        .insert_header(auth(&session.token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&session.token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn login_with_wrong_password_is_rejected(pool: PgPool) {
+    let app = app(pool).await;
+    register(&app, "wanderer").await;
+
+    for (username, password) in [("wanderer", "wrong-password"), ("nobody", TEST_PASSWORD)] {
+        let req = TestRequest::post()
+            .uri("/api/auth/login")
+            .set_json(json!({ "username": username, "password": password }))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn register_validates_input_and_rejects_taken_names(pool: PgPool) {
+    let app = app(pool).await;
+    register(&app, "wanderer").await;
+
+    // Same name (any case) is a conflict.
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({ "username": "Wanderer", "password": TEST_PASSWORD }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CONFLICT);
+
+    // Bad usernames and short passwords are 400s.
+    for body in [
+        json!({ "username": "ab", "password": TEST_PASSWORD }),
+        json!({ "username": "has space", "password": TEST_PASSWORD }),
+        json!({ "username": "fine-name", "password": "short" }),
+    ] {
+        let req = TestRequest::post().uri("/api/auth/register").set_json(body).to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
 }

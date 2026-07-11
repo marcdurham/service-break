@@ -19,8 +19,12 @@ design reference when adding UI.
 Ports: frontend (Trunk) **8020**, backend API **8081**, Postgres (docker)
 **127.0.0.1:5433**. `DATABASE_URL` is set in `.cargo/config.toml`.
 
-Identity is an anonymous per-device id in localStorage — no auth in v1.
-Place cleanliness is the average of its reviews' `clean` scores (1–5).
+Identity: username/password accounts (Argon2 hashes, 30-day bearer-token
+sessions; see `backend/src/auth.rs`). All writes — adding places, posting
+reviews, saving/unsaving — require login; reads stay public. An anonymous
+per-device id in localStorage remains for scoping saved lists and naming
+pre-account reviews. Place cleanliness is the average of its reviews'
+`clean` scores (1–5).
 
 ## Commands
 

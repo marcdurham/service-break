@@ -85,7 +85,11 @@ pub struct AddFormProps {
     /// The user's live location, if they're sharing it (as opposed to
     /// `origin`, which may be a fallback center).
     pub user_location: Option<(f64, f64)>,
+    /// Adding a place requires an account; when false the form is replaced
+    /// by a sign-in prompt that emits `on_sign_in`.
+    pub logged_in: bool,
     pub on_created: Callback<PlaceDetail>,
+    pub on_sign_in: Callback<()>,
     pub on_toast: Callback<String>,
 }
 
@@ -95,7 +99,32 @@ pub fn add_form(props: &AddFormProps) -> Html {
     let submitting = use_state(|| false);
     let picking = use_state(|| false);
 
-    let set = |f: &UseStateHandle<Form>, update: fn(&mut Form, String)| {
+    // After the hooks so the hook count stays the same once the user logs in.
+    if !props.logged_in {
+        let sign_in = {
+            let cb = props.on_sign_in.clone();
+            Callback::from(move |_| cb.emit(()))
+        };
+        return html! {
+            <div class="screen sb-scroll">
+                <div class="screen-title">{"Add a place"}</div>
+                <div class="screen-sub">{"Help the next traveler find a clean break."}</div>
+                <div class="gate-card">
+                    <span class="mi">{"lock"}</span>
+                    <div class="gate-title">{"Sign in to add places"}</div>
+                    <div class="gate-sub">
+                        {"Adding places, reviews and saves needs an account, \
+                          so every tip has a scout behind it."}
+                    </div>
+                    <button class="submit-btn" onclick={sign_in}>
+                        <span class="mi">{"login"}</span>{"Sign in"}
+                    </button>
+                </div>
+            </div>
+        };
+    }
+
+    let set =|f: &UseStateHandle<Form>, update: fn(&mut Form, String)| {
         let f = f.clone();
         Callback::from(move |value: String| {
             let mut next = (*f).clone();
