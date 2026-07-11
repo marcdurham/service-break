@@ -16,5 +16,33 @@ services:
       timeout: 3s
       retries: 10
 
+  # backend + frontend are profile-gated so the dev workflow
+  # (`docker compose up -d` for Postgres only, cargo/trunk run natively)
+  # keeps working. Full containerized stack:
+  #   docker compose --profile app up --build
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: service-break-backend
+    profiles: ["app"]
+    environment:
+      DATABASE_URL: postgres://service_break:service_break_dev@db:5432/service_break
+      BIND_ADDR: 0.0.0.0:8081
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: service-break-frontend
+    profiles: ["app"]
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
+
 volumes:
   db-data:
