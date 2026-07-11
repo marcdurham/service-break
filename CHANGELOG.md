@@ -6,6 +6,13 @@ short description.
 
 ## 2026-07-10
 
+- 20:35 — Containerized the app: multi-stage Dockerfiles for the backend
+  (Rust build → slim Debian runtime) and frontend (Trunk wasm build →
+  nginx serving the SPA and proxying `/api`), wired into
+  docker-compose.yml behind an `app` profile so plain
+  `docker compose up -d` still starts only Postgres;
+  `docker compose --profile app up --build` runs the full stack on
+  http://127.0.0.1:8080.
 - 16:53 — Added an Account page (sign in / create account / sign out) and
   a sixth tab for it; the Add form, review composer and save button now
   ask logged-out users to sign in and route them to the Account page.
