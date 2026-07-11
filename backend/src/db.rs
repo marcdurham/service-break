@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    Amenity, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement, Review,
-    SortBy,
+    Amenity, Invitation, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement,
+    Review, SortBy,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -283,25 +283,88 @@ pub struct UserRow {
     pub password_hash: String,
 }
 
-pub async fn create_user(
+/// Atomically redeems `invite_code` and creates the account it admits.
+/// Rolls back (leaving the invitation unredeemed) if the code is invalid,
+/// already used, or the username is taken.
+pub async fn register_user(
     pool: &PgPool,
     username: &str,
     password_hash: &str,
+    invite_code: &str,
 ) -> Result<Uuid, ApiError> {
-    let res = sqlx::query_scalar(
+    let mut tx = pool.begin().await?;
+
+    let invitation_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL FOR UPDATE",
+    )
+    .bind(invite_code)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let invitation_id = invitation_id.ok_or_else(|| {
+        ApiError::BadRequest("that invite code is invalid or already used".to_owned())
+    })?;
+
+    let user_id: Uuid = match sqlx::query_scalar(
         "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
     )
     .bind(username)
     .bind(password_hash)
-    .fetch_one(pool)
-    .await;
-    match res {
-        Ok(id) => Ok(id),
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(id) => id,
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-            Err(ApiError::Conflict("that username is taken".to_owned()))
+            return Err(ApiError::Conflict("that username is taken".to_owned()));
         }
-        Err(e) => Err(e.into()),
+        Err(e) => return Err(e.into()),
+    };
+
+    sqlx::query("UPDATE invitations SET redeemed_at = now(), redeemed_by = $1 WHERE id = $2")
+        .bind(user_id)
+        .bind(invitation_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(user_id)
+}
+
+/// Issues a fresh, unredeemed invitation code for `inviter_id`.
+pub async fn create_invitation(pool: &PgPool, inviter_id: Uuid) -> Result<String, ApiError> {
+    for _ in 0..5 {
+        let code = format!("BREAK-{}", &Uuid::new_v4().simple().to_string()[..6].to_uppercase());
+        let res = sqlx::query("INSERT INTO invitations (code, inviter_id) VALUES ($1, $2)")
+            .bind(&code)
+            .bind(inviter_id)
+            .execute(pool)
+            .await;
+        match res {
+            Ok(_) => return Ok(code),
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => continue,
+            Err(e) => return Err(e.into()),
+        }
     }
+    Err(ApiError::Internal("could not generate a unique invite code".to_owned()))
+}
+
+/// This user's invitations, most recent first.
+pub async fn list_invitations(pool: &PgPool, inviter_id: Uuid) -> Result<Vec<Invitation>, ApiError> {
+    let rows = sqlx::query(
+        "SELECT code, redeemed_at IS NOT NULL AS redeemed FROM invitations \
+         WHERE inviter_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(inviter_id)
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|r| {
+            Ok(Invitation {
+                code: r.try_get("code")?,
+                redeemed: r.try_get("redeemed")?,
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()
+        .map_err(ApiError::from)
 }
 
 /// Looks a user up by username, case-insensitively.

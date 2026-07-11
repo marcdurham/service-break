@@ -18,11 +18,13 @@ pub struct AccountViewProps {
 pub fn account_view(props: &AccountViewProps) -> Html {
     let username = use_state(String::new);
     let password = use_state(String::new);
+    let invite_code = use_state(String::new);
     let busy = use_state(|| false);
 
     let submit = |registering: bool| {
         let username = username.clone();
         let password = password.clone();
+        let invite_code = invite_code.clone();
         let busy = busy.clone();
         let on_login = props.on_login.clone();
         let on_toast = props.on_toast.clone();
@@ -30,6 +32,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
             let creds = Credentials {
                 username: username.trim().to_owned(),
                 password: (*password).clone(),
+                invite_code: invite_code.trim().to_owned(),
             };
             if creds.username.is_empty() || creds.password.is_empty() {
                 on_toast.emit("Enter a username and password".to_owned());
@@ -42,12 +45,17 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     on_toast.emit(e.to_owned());
                     return;
                 }
+                if creds.invite_code.is_empty() {
+                    on_toast.emit("Enter the invite code a friend gave you".to_owned());
+                    return;
+                }
             }
             if *busy {
                 return;
             }
             busy.set(true);
             let password = password.clone();
+            let invite_code = invite_code.clone();
             let busy = busy.clone();
             let on_login = on_login.clone();
             let on_toast = on_toast.clone();
@@ -60,6 +68,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                 match res {
                     Ok(session) => {
                         password.set(String::new());
+                        invite_code.set(String::new());
                         on_login.emit(session);
                     }
                     Err(msg) => on_toast.emit(msg),
@@ -131,6 +140,21 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     }}
                 />
 
+                <div class="field-label">{"Invite code (new accounts only)"}</div>
+                <input
+                    class="input"
+                    placeholder="e.g. BREAK-A1B2C3"
+                    value={(*invite_code).clone()}
+                    oninput={{
+                        let invite_code = invite_code.clone();
+                        Callback::from(move |e: InputEvent| {
+                            if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                                invite_code.set(el.value());
+                            }
+                        })
+                    }}
+                />
+
                 <button class="submit-btn" onclick={log_in} disabled={*busy}>
                     <span class="mi">{"login"}</span>
                     {if *busy { "One moment…" } else { "Sign in" }}
@@ -139,7 +163,8 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     <span class="mi">{"person_add"}</span>{"Create an account"}
                 </button>
                 <div class="auth-note">
-                    {"New here? Pick a username, type a password and tap Create an account."}
+                    {"New here? You'll need an invite code from an existing scout. \
+                      Pick a username, type a password, enter the code and tap Create an account."}
                 </div>
             }
         </div>

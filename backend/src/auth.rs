@@ -22,7 +22,12 @@ use crate::error::ApiError;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(register).service(login).service(logout).service(me);
+    cfg.service(register)
+        .service(login)
+        .service(logout)
+        .service(me)
+        .service(create_invite)
+        .service(list_invites);
 }
 
 /// The logged-in user behind a request, extracted from the bearer token.
@@ -107,10 +112,14 @@ async fn register(
     let username = creds.username.trim().to_owned();
     validate_username(&username).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     validate_password(&creds.password).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    let invite_code = creds.invite_code.trim().to_owned();
+    if invite_code.is_empty() {
+        return Err(ApiError::BadRequest("an invite code is required to register".to_owned()));
+    }
 
     let password = creds.password;
     let hash = run_blocking(move || hash_password(&password)).await?;
-    let user_id = db::create_user(&state.pool, &username, &hash).await?;
+    let user_id = db::register_user(&state.pool, &username, &hash, &invite_code).await?;
     let session = start_session(&state.pool, user_id, username).await?;
     Ok(HttpResponse::Created().json(session))
 }
@@ -145,4 +154,18 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 #[get("/api/auth/me")]
 async fn me(user: AuthUser) -> HttpResponse {
     HttpResponse::Ok().json(json!({ "username": user.username }))
+}
+
+/// Issues a fresh invite code the signed-in user can hand to a friend.
+#[post("/api/invites")]
+async fn create_invite(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
+    let code = db::create_invitation(&state.pool, user.id).await?;
+    Ok(HttpResponse::Created().json(json!({ "code": code, "redeemed": false })))
+}
+
+/// The signed-in user's invitations, most recent first.
+#[get("/api/invites")]
+async fn list_invites(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
+    let invites = db::list_invitations(&state.pool, user.id).await?;
+    Ok(HttpResponse::Ok().json(invites))
 }

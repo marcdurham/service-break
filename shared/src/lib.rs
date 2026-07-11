@@ -367,10 +367,21 @@ pub struct NewReview {
 }
 
 /// Username + password sent to `POST /api/auth/register` and `/login`.
+/// `invite_code` is required for registration (ignored, and safe to omit,
+/// on login).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub invite_code: String,
+}
+
+/// A code an existing user can hand to a friend so they can register.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Invitation {
+    pub code: String,
+    pub redeemed: bool,
 }
 
 /// A logged-in session: the bearer token plus the display username.

@@ -2,7 +2,10 @@
 
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
-use shared::{AuthSession, Credentials, NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery};
+use shared::{
+    AuthSession, Credentials, Invitation, NewPlace, NewReview, PlaceDetail, PlaceSummary,
+    PlacesQuery,
+};
 use uuid::Uuid;
 
 pub type ApiResult<T> = Result<T, String>;
@@ -130,6 +133,22 @@ async fn auth_request(url: &str, creds: &Credentials, fallback: &str) -> ApiResu
     let res = Request::post(url).json(creds).map_err(err)?.send().await.map_err(err)?;
     if res.status() >= 400 {
         return Err(error_message(res, fallback).await);
+    }
+    res.json().await.map_err(err)
+}
+
+pub async fn create_invite() -> ApiResult<Invitation> {
+    let res = with_auth(Request::post("/api/invites")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not create an invite code").await);
+    }
+    res.json().await.map_err(err)
+}
+
+pub async fn list_invites() -> ApiResult<Vec<Invitation>> {
+    let res = with_auth(Request::get("/api/invites")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load invite codes").await);
     }
     res.json().await.map_err(err)
 }

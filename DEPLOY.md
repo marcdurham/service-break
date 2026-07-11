@@ -43,6 +43,22 @@ The app becomes reachable at `http://<server-ip>:8020`.
 
 Database migrations run automatically on backend startup — no manual step.
 
+### Registration is invite-only
+
+New accounts require a valid, unredeemed invite code (issued from the
+Invite tab by an existing account). On a brand-new install with zero users,
+nobody can issue one yet, so seed a one-off bootstrap invitation directly:
+
+```
+docker --context service-break-prod compose \
+  -f docker-compose.yml -f docker-compose.prod.yml --profile app \
+  exec db psql -U service_break -d service_break \
+  -c "INSERT INTO invitations (code) VALUES ('choose-a-one-time-code');"
+```
+
+Register the first account with that code, then invite everyone else from
+the app.
+
 ## Rollback
 
 ```

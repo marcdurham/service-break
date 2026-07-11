@@ -481,7 +481,7 @@ pub fn app() -> Html {
                         />
                     },
                     Route::Invite => html! {
-                        <InviteView device_id={(*device).clone()} on_toast={show_toast.clone()} />
+                        <InviteView auth={(*auth).clone()} on_toast={show_toast.clone()} />
                     },
                     Route::Account => html! {
                         <AccountView
