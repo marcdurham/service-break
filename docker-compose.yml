@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: service-break-db
     environment:
-      POSTGRES_USER: service_break
-      POSTGRES_PASSWORD: service_break_dev
-      POSTGRES_DB: service_break
+      POSTGRES_USER: ${POSTGRES_USER:-service_break}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-service_break_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-service_break}
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
@@ -27,7 +27,7 @@ services:
     container_name: service-break-backend
     profiles: ["app"]
     environment:
-      DATABASE_URL: postgres://service_break:service_break_dev@db:5432/service_break
+      DATABASE_URL: postgres://${POSTGRES_USER:-service_break}:${POSTGRES_PASSWORD:-service_break_dev}@db:5432/${POSTGRES_DB:-service_break}
       BIND_ADDR: 0.0.0.0:8081
     depends_on:
       db:
@@ -40,7 +40,7 @@ services:
     container_name: service-break-frontend
     profiles: ["app"]
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8020:80"
     depends_on:
       - backend
 

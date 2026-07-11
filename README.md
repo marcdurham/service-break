@@ -79,3 +79,9 @@ Accounts are username + password (Argon2-hashed) with 30-day session
 tokens; changing anything requires signing in, browsing doesn't. The
 anonymous per-device id in localStorage still scopes saved lists and
 names reviews written before accounts existed.
+
+
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md) for shipping the containerized stack to a remote
+Ubuntu/Docker host over SSH.

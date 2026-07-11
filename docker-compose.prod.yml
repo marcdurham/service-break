@@ -1,0 +1,11 @@
+services:
+  db:
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+
+  frontend:
+    restart: unless-stopped
+    ports: !override
+      - "0.0.0.0:8020:80"
