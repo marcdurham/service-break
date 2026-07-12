@@ -6,6 +6,14 @@ short description.
 
 ## 2026-07-11
 
+- 20:25 — Added a dedicated "Create an account" page at `/register`:
+  username, password + confirm-password fields, and the invite code —
+  pre-filled when the page is opened from an invitation link
+  (`/register?code=XYZ`, which shared invites now point at). The Account
+  page links to it when signed out; signed in, it gained an "Invite your
+  friends" button (the Invite tab left the tab bar), a friends &
+  invitations list with pending/expired/joined status, who invited you,
+  and an editable name for your own invitation.
 - 20:13 — Hardened invitations: codes now expire after 7 days, each user
   may send at most 5 per day, accounts younger than 24 hours can't invite
   yet, and codes are just the 8-character code (no `BREAK-` prefix).

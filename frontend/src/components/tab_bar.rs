@@ -15,7 +15,6 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
         (Route::List, "List", "format_list_bulleted"),
         (Route::Add, "Add", "add"),
         (Route::Saved, "Saved", "bookmark"),
-        (Route::Invite, "Invite", "group_add"),
         (Route::Account, "Account", "person"),
     ];
     html! {
