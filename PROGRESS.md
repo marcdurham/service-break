@@ -4,7 +4,7 @@
 
 **Goal:** Implement four TODO items: user name fields, revised invite limits, invite revocation, and place sharing.
 
-### M1 — User given/family name fields ✅ Backend complete
+### M1 — User given/family name fields ✅ Complete
 - [x] Migration `20260711140000_user_names.sql` adds `given_name` and `family_name` columns to users
 - [x] Updated `UserRow` struct in `db.rs` to include new fields
 - [x] Updated queries: `find_user`, `find_user_by_id`, `session_user` fetch the new columns
@@ -12,7 +12,7 @@
 - [x] Added `UpdateProfile` DTO and `validate_name` helper in `shared/src/lib.rs`
 - [x] Added `PATCH /api/auth/profile` endpoint in `auth.rs`
 - [x] Updated `GET /api/auth/me` to return the new fields
-- [ ] Frontend: Account view with Given/Family name inputs and Save button
+- [x] Frontend: Account view with Given/Family name inputs and Save button
 
 ### M2 — Revised invite limits
 - [ ] Change constants: `INVITE_WAIT_HOURS = 0`, `INVITES_PER_DAY_NEW = 25`, `INVITES_PER_DAY_OLD_AGE = 100`
