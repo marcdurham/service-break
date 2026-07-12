@@ -60,7 +60,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that leading/trailing whitespace is properly handled when updating profile names.
 
-### 15. Add clippy lints configuration for workspace
+### 15. ~~Fix whitespace-only name validation~~ ✅
+**Files:** `shared/src/lib.rs`, `backend/tests/api.rs`  
+**Acceptance:** Updated validate_name to trim input before checking emptiness, preventing whitespace-only strings from being accepted as valid names.
+
+### 16. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
