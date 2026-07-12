@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 14:30 — Backend for M1 (user given/family name fields): migration `20260711140000_user_names.sql`, updated `UserRow` and all user queries, added `PATCH /api/auth/profile` endpoint with partial-update logic, extended `GET /api/auth/me` to return the new fields. Fixed invite-limit tests to use the new constants.
+
 - 23:10 — Changed invitation limits per TODO #2: new accounts can send 25 invites/day immediately (no more 24-hour wait), and accounts older than 24 hours get 100/day. Admins bypass the limit entirely.
 
 - 22:45 — Added show/hide password toggles (eye button) to the Password and Confirm password fields on `/register`, matching the existing toggle on the Account page's change-password section.
