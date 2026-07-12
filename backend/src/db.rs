@@ -555,18 +555,21 @@ pub async fn create_invitation(
     pool: &PgPool,
     inviter_id: Uuid,
     name: &str,
+    is_admin: bool,
 ) -> Result<Invitation, ApiError> {
-    let old_enough: Option<bool> = sqlx::query_scalar(
-        "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
-    )
-    .bind(inviter_id)
-    .bind(INVITE_WAIT_HOURS)
-    .fetch_optional(pool)
-    .await?;
-    if !old_enough.unwrap_or(false) {
-        return Err(ApiError::BadRequest(format!(
-            "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
-        )));
+    if !is_admin {
+        let old_enough: Option<bool> = sqlx::query_scalar(
+            "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
+        )
+        .bind(inviter_id)
+        .bind(INVITE_WAIT_HOURS)
+        .fetch_optional(pool)
+        .await?;
+        if !old_enough.unwrap_or(false) {
+            return Err(ApiError::BadRequest(format!(
+                "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
+            )));
+        }
     }
 
     let sent_today: i64 = sqlx::query_scalar(

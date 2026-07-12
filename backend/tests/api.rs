@@ -698,6 +698,22 @@ async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
     assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
 }
 
+/// Admins bypass the 24-hour age gate — they're auto-created at startup and
+/// need to invite people immediately.
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_bypasses_the_age_gate(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let session = login_admin(&app, &pool).await;
+    let token = session.token;
+
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn invitations_are_limited_to_five_per_day(pool: PgPool) {
     let app = app(pool.clone()).await;
