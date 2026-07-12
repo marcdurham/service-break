@@ -11,7 +11,6 @@
 - 105 Make a new page for creating accounts that can be navigated to from the account page, that's where the invite code would be entered, or pre-entered if it was already in the URI from the invitation link.  The invitation link would take a new user directly to th new "create an account" page.  
 - 106 Change this phrase "Invite your fellow travelers" to "Invite your friends".
 - 109 Make the ratings specific to aspects like bathroom cleanliness, coffee, or food.
-- 112 On the main entry page it says: "Find a clean place" change that to "Find places for refreshment".  It also says "Every good trip needs a clean break." change that to "Good places to take breaks" It also says "Real ratings for bathrooms at shops, stores, malls, parks & more" change that to "Places with coffee, food, bathrooms, places to sit at shops, stores, malls, parks & more".  Change "Cleanliness you can trust" to "Cleanliness ratings"
 - 116 re-generate the invite code once copy or share it used.  Add the text "One time use code"
 
 # BACKLOG (Don't do the tasks below yet)

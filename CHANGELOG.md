@@ -6,6 +6,11 @@ short description.
 
 ## 2026-07-11
 
+- 19:30 — Refreshed the onboarding (main entry) copy: tagline is now
+  "find places for refreshment", headline "Good places to take breaks",
+  intro "Places with coffee, food, bathrooms, places to sit at shops,
+  stores, malls, parks & more", and the feature bullet reads
+  "Cleanliness ratings" (TODO 112).
 - 19:25 — Changed the app's main logo glyph from `wc` to `coffee`
   (onboarding badge, desktop nav-rail logo) and redrew the PWA icon
   (icon.svg + regenerated icon-192/512.png) as a steaming coffee cup
