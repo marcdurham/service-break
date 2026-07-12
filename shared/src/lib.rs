@@ -66,7 +66,7 @@ impl PlaceType {
 
     pub fn label(self) -> &'static str {
         match self {
-            PlaceType::Shop => "Shop",
+            PlaceType::Shop => "Café",
             PlaceType::Store => "Store",
             PlaceType::Mall => "Mall",
             PlaceType::Park => "Park",
@@ -79,7 +79,7 @@ impl PlaceType {
     /// Material Symbols icon name used in the UI.
     pub fn icon(self) -> &'static str {
         match self {
-            PlaceType::Shop => "storefront",
+            PlaceType::Shop => "local_cafe",
             PlaceType::Store => "store",
             PlaceType::Mall => "local_mall",
             PlaceType::Park => "park",
