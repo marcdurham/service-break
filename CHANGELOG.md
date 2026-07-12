@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-12
+
+- 13:45 — Added a show/hide password toggle to the login form on `/account`, using the same `password_field` helper as the change-password section.
+
 ## 2026-07-11
 
 - 00:50 — Added rename_invite_authorization test covering inviter/redeemer/unauthorized access to PUT /api/invites/{code}/name; fixed clippy format! suggestion.

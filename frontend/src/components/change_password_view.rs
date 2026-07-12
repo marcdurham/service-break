@@ -14,7 +14,7 @@ pub struct ChangePasswordViewProps {
 
 /// A text input with a small eye button that toggles between password and
 /// plain text. The `show` flag controls the visible type; `on_toggle` flips it.
-fn password_field(show: UseStateHandle<String>, show_pw: bool, on_toggle: Callback<MouseEvent>) -> Html {
+pub(crate) fn password_field(show: UseStateHandle<String>, show_pw: bool, on_toggle: Callback<MouseEvent>) -> Html {
     let input_type = if show_pw { "text" } else { "password" };
     html! {
         <div class="input-row">
