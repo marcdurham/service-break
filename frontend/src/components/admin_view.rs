@@ -22,6 +22,11 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
     let summary = use_state(|| None::<ImportSummary>);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
+    let go_to_users = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| navigator.push(&Route::Users))
+    };
+
     let is_admin = props.auth.as_ref().is_some_and(|s| s.is_admin);
     if !is_admin {
         let go_to_account = Callback::from(move |_| navigator.push(&Route::Account));
@@ -105,6 +110,14 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
             <div class="screen-sub" style="margin-bottom:18px">
                 {"Back up all data, or restore a backup after a re-deploy."}
             </div>
+
+            <button
+                class="alt-auth-btn"
+                onclick={go_to_users}
+                style="margin-bottom:18px"
+            >
+                <span class="mi">{"people"}</span>{"View users"}
+            </button>
 
             <div class="field-label">{"Export"}</div>
             <div class="auth-note" style="margin-bottom:8px">

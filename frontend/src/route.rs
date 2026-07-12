@@ -23,6 +23,9 @@ pub enum Route {
     /// page, not the tab bar.
     #[at("/admin")]
     Admin,
+    /// Admin-only: list all accounts.
+    #[at("/users")]
+    Users,
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]
