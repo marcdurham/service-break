@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use shared::{
     Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
     PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
-    INVITES_PER_DAY, INVITE_EXPIRY_DAYS, INVITE_WAIT_HOURS,
+    INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -557,20 +557,21 @@ pub async fn create_invitation(
     name: &str,
     is_admin: bool,
 ) -> Result<Invitation, ApiError> {
-    if !is_admin {
+    let limit = if !is_admin {
         let old_enough: Option<bool> = sqlx::query_scalar(
-            "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
+            "SELECT created_at <= now() - interval '24 hours' FROM users WHERE id = $1",
         )
         .bind(inviter_id)
-        .bind(INVITE_WAIT_HOURS)
         .fetch_optional(pool)
         .await?;
-        if !old_enough.unwrap_or(false) {
-            return Err(ApiError::BadRequest(format!(
-                "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
-            )));
+        if old_enough.unwrap_or(false) {
+            INVITES_PER_DAY_OLD_AGE
+        } else {
+            INVITES_PER_DAY_NEW
         }
-    }
+    } else {
+        i64::MAX // admins bypass the limit entirely
+    };
 
     let sent_today: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM invitations \
@@ -579,9 +580,9 @@ pub async fn create_invitation(
     .bind(inviter_id)
     .fetch_one(pool)
     .await?;
-    if sent_today >= INVITES_PER_DAY {
+    if sent_today >= limit {
         return Err(ApiError::BadRequest(format!(
-            "invitation limit reached — you can send {INVITES_PER_DAY} per day"
+            "invitation limit reached — you can send {limit} per day"
         )));
     }
 
