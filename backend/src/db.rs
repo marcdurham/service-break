@@ -473,6 +473,7 @@ pub async fn register_user(
 
     let invitation_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL \
+         AND is_expired = false \
          AND created_at > now() - make_interval(days => $2) FOR UPDATE",
     )
     .bind(invite_code)
@@ -659,7 +660,7 @@ pub async fn create_invitation(
 pub async fn invites_overview(pool: &PgPool, user_id: Uuid) -> Result<InvitesOverview, ApiError> {
     let rows = sqlx::query(
         "SELECT i.code, i.name, i.redeemed_at IS NOT NULL AS redeemed, \
-         i.created_at <= now() - make_interval(days => $2) AS expired, \
+         (i.created_at <= now() - make_interval(days => $2) OR i.is_expired) AS expired, \
          u.username AS joined_username \
          FROM invitations i LEFT JOIN users u ON u.id = i.redeemed_by \
          WHERE i.inviter_id = $1 ORDER BY i.created_at DESC",

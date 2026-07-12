@@ -297,9 +297,10 @@ async fn rename_invite(
 async fn delete_invite(
     state: Data<AppState>,
     user: AuthUser,
-    code: Path<String>,
+    path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    db::revoke_invitation(&state.pool, user.id, code.trim()).await?;
+    let code = path.into_inner();
+    db::revoke_invitation(&state.pool, user.id, &code).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

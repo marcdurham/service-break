@@ -1257,3 +1257,45 @@ async fn change_password_works(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoked_invite_cannot_be_redeemed(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let inviter_token = register(&app, &pool, "inviter").await;
+
+    // Create an invitation.
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&inviter_token))
+        .set_json(json!({ "name": "Charlie" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let issued: Invitation = read_body_json(res).await;
+
+    // Revoke it.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", issued.code))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Try to redeem the revoked code — should fail.
+    let res = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "charlie",
+            "password": TEST_PASSWORD,
+            "invite_code": issued.code
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, res).await.status(), StatusCode::BAD_REQUEST);
+
+    // Verify invitation status is now Expired.
+    let req = TestRequest::get()
+        .uri("/api/invites")
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites[0].status, InviteStatus::Expired);
+}
