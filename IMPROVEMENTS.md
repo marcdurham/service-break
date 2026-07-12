@@ -36,7 +36,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New positive test verifies that updating profile with a valid name succeeds and the change is reflected in /api/auth/me.
 
-### 9. Add clippy lints configuration for workspace
+### 9. ~~Add test for updating both given and family names~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that updating profile with both given and family names in a single request succeeds and both values are persisted.
+
+### 10. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
