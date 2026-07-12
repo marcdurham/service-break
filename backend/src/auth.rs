@@ -228,7 +228,7 @@ async fn create_invite(
 ) -> Result<HttpResponse, ApiError> {
     let name = body.into_inner().name.trim().to_owned();
     validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
-    let invite = db::create_invitation(&state.pool, user.id, &name).await?;
+    let invite = db::create_invitation(&state.pool, user.id, &name, user.is_admin).await?;
     Ok(HttpResponse::Created().json(invite))
 }
 

@@ -6,6 +6,10 @@ short description.
 
 ## 2026-07-11
 
+- 22:23 — Fixed admin accounts unable to create invite codes on fresh installs:
+  `create_invitation` now skips the 24-hour age gate for admins, since they're
+  auto-created at startup and need to invite immediately.
+
 - 21:05 — Added /users page (admin-only) listing all accounts with a link from the admin menu.
 
 - 20:40 — Renamed the admin-flag migration `20260711120000` →
