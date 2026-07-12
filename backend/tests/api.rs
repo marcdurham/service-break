@@ -13,7 +13,7 @@ use backend::{handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
     AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
-    PlaceEdit, PlaceSummary, PlaceType, Requirement, INVITES_PER_DAY,
+    PlaceEdit, PlaceSummary, PlaceType, Requirement,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -671,12 +671,22 @@ async fn invited_users_can_issue_and_track_their_own_invites(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
+async fn new_accounts_can_invite_with_lower_limit(pool: PgPool) {
     let app = app(pool.clone()).await;
     let code = seed_invite(&pool).await;
     // Registered just now — not backdated like the `register` helper does.
     let token = register_fresh_with_code(&app, "newbie", &code).await;
 
+    // New accounts can invite immediately (INVITE_WAIT_HOURS = 0),
+    // but are limited to INVITES_PER_DAY_NEW per day.
+    for _ in 0..shared::INVITES_PER_DAY_NEW {
+        let req = TestRequest::post()
+            .uri("/api/invites")
+            .insert_header(auth(&token))
+            .set_json(json!({}))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
     let req = TestRequest::post()
         .uri("/api/invites")
         .insert_header(auth(&token))
@@ -684,7 +694,7 @@ async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 
-    // Once the account is a day old, inviting works.
+    // Once the account is a day old, the limit rises to INVITES_PER_DAY_OLD_AGE.
     sqlx::query("UPDATE users SET created_at = now() - interval '25 hours' WHERE username = $1")
         .bind("newbie")
         .execute(&pool)
@@ -719,7 +729,9 @@ async fn invitations_are_limited_to_five_per_day(pool: PgPool) {
     let app = app(pool.clone()).await;
     let token = register(&app, &pool, "scout-one").await;
 
-    for _ in 0..INVITES_PER_DAY {
+    // The `register` helper backdates accounts 2 days, so they get the
+    // older-user limit of INVITES_PER_DAY_OLD_AGE per day.
+    for _ in 0..shared::INVITES_PER_DAY_OLD_AGE {
         let req = TestRequest::post()
             .uri("/api/invites")
             .insert_header(auth(&token))

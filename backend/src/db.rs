@@ -456,6 +456,8 @@ pub struct UserRow {
     pub username: String,
     pub password_hash: String,
     pub is_admin: bool,
+    pub given_name: String,
+    pub family_name: String,
 }
 
 /// Atomically redeems `invite_code` and creates the account it admits.
@@ -521,13 +523,52 @@ pub async fn update_user_password(
     Ok(())
 }
 
+/// Updates a user's given and/or family name. Only fields that are `Some`
+/// get written; `None` leaves the column untouched.
+pub async fn update_user_names(
+    pool: &PgPool,
+    user_id: Uuid,
+    given_name: Option<&str>,
+    family_name: Option<&str>,
+) -> Result<(), ApiError> {
+    match (
+        given_name.map(|s| s.to_owned()),
+        family_name.map(|s| s.to_owned()),
+    ) {
+        (Some(g), Some(f)) => {
+            sqlx::query("UPDATE users SET given_name = $1, family_name = $2 WHERE id = $3")
+                .bind(&g)
+                .bind(&f)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (Some(g), None) => {
+            sqlx::query("UPDATE users SET given_name = $1 WHERE id = $2")
+                .bind(&g)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (None, Some(f)) => {
+            sqlx::query("UPDATE users SET family_name = $1 WHERE id = $2")
+                .bind(&f)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (None, None) => {}
+    }
+    Ok(())
+}
+
 /// Looks a user up by id. Used when the caller already has an authenticated /// identity but needs to read stored fields (e.g. the password hash).
 pub async fn find_user_by_id(
     pool: &PgPool,
     id: Uuid,
 ) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash, is_admin FROM users WHERE id = $1",
+        "SELECT id, username, password_hash, is_admin, given_name, family_name FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -538,6 +579,8 @@ pub async fn find_user_by_id(
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()
@@ -692,7 +735,7 @@ pub async fn rename_invitation(
 /// Looks a user up by username, case-insensitively.
 pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash, is_admin FROM users \
+        "SELECT id, username, password_hash, is_admin, given_name, family_name FROM users \
          WHERE lower(username) = lower($1)",
     )
     .bind(username)
@@ -704,6 +747,8 @@ pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>,
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()
@@ -736,7 +781,7 @@ pub async fn session_user(
     token: &str,
 ) -> Result<Option<crate::auth::AuthUser>, ApiError> {
     let row = sqlx::query(
-        "SELECT u.id, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id \
+        "SELECT u.id, u.username, u.is_admin, u.given_name, u.family_name FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.token = $1 AND s.expires_at > now()",
     )
     .bind(token)
@@ -747,6 +792,8 @@ pub async fn session_user(
             id: r.try_get("id")?,
             username: r.try_get("username")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()

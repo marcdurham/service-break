@@ -9,14 +9,14 @@ use std::pin::Pin;
 
 use actix_web::dev::Payload;
 use actix_web::web::{self, Data, Json, Path, ServiceConfig};
-use actix_web::{get, post, put, FromRequest, HttpRequest, HttpResponse};
+use actix_web::{get, patch, post, put, FromRequest, HttpRequest, HttpResponse};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use serde_json::json;
 use shared::{
-    validate_invite_name, validate_password, validate_username, AuthSession, ChangePassword,
-    Credentials, InviteNameUpdate, NewInvite,
+    validate_invite_name, validate_name, validate_password, validate_username, AuthSession,
+    ChangePassword, Credentials, InviteNameUpdate, NewInvite, UpdateProfile,
 };
 use uuid::Uuid;
 
@@ -30,6 +30,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(logout)
         .service(me)
         .service(change_password)
+        .service(update_profile)
         .service(create_invite)
         .service(list_invites)
         .service(rename_invite);
@@ -41,6 +42,8 @@ pub struct AuthUser {
     pub id: Uuid,
     pub username: String,
     pub is_admin: bool,
+    pub given_name: String,
+    pub family_name: String,
 }
 
 /// Extractor for admin-only endpoints: like [`AuthUser`], but rejects
@@ -185,7 +188,40 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
 async fn me(user: AuthUser) -> HttpResponse {
-    HttpResponse::Ok().json(json!({ "username": user.username, "is_admin": user.is_admin }))
+    HttpResponse::Ok().json(json!({
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "given_name": user.given_name,
+        "family_name": user.family_name,
+    }))
+}
+
+/// Updates the signed-in user's given and/or family name. Only fields
+/// present in the request body are changed; empty strings are rejected.
+#[patch("/api/auth/profile")]
+async fn update_profile(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<UpdateProfile>,
+) -> Result<HttpResponse, ApiError> {
+    let profile = body.into_inner();
+
+    if let Some(ref name) = profile.given_name {
+        validate_name(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    }
+    if let Some(ref name) = profile.family_name {
+        validate_name(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    }
+
+    db::update_user_names(
+        &state.pool,
+        user.id,
+        profile.given_name.as_deref(),
+        profile.family_name.as_deref(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Swaps the signed-in user's password. The current password is verified

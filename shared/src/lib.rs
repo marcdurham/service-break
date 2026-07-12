@@ -541,6 +541,30 @@ pub struct ChangePassword {
     pub new_password: String,
 }
 
+/// Body for `PATCH /api/auth/profile`: optional given and family name fields.
+/// Only fields present in the JSON are updated; omitting a field leaves it
+/// unchanged on the server.
+pub const NAME_MAX: usize = 40;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateProfile {
+    #[serde(default)]
+    pub given_name: Option<String>,
+    #[serde(default)]
+    pub family_name: Option<String>,
+}
+
+/// Validates a given or family name for the profile update endpoint.
+pub fn validate_name(name: &str) -> Result<(), &'static str> {
+    if name.is_empty() {
+        return Err("name must not be empty");
+    }
+    if name.chars().count() > NAME_MAX {
+        return Err("name must be 40 characters or fewer");
+    }
+    Ok(())
+}
+
 /// Days before an unredeemed invitation code expires.
 pub const INVITE_EXPIRY_DAYS: i32 = 7;
 /// Most invitations a new user may send per (rolling) day, before their
