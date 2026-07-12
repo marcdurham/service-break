@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 22:45 — Added show/hide password toggles (eye button) to the Password and Confirm password fields on `/register`, matching the existing toggle on the Account page's change-password section.
+
 - 22:23 — Fixed admin accounts unable to create invite codes on fresh installs:
   `create_invitation` now skips the 24-hour age gate for admins, since they're
   auto-created at startup and need to invite immediately.
