@@ -29,6 +29,11 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-service_break}:${POSTGRES_PASSWORD:-service_break_dev}@db:5432/${POSTGRES_DB:-service_break}
       BIND_ADDR: 0.0.0.0:8081
+      # "Sign in with Google": all three must be set to enable it, otherwise
+      # it stays hidden/disabled. See DEPLOY.md for how to get these values.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     depends_on:
       db:
         condition: service_healthy

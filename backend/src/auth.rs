@@ -129,7 +129,7 @@ pub(crate) async fn run_blocking<T: Send + 'static>(
         .map_err(|e| ApiError::Internal(format!("blocking task failed: {e}")))?
 }
 
-async fn start_session(
+pub(crate) async fn start_session(
     pool: &sqlx::PgPool,
     user_id: Uuid,
     username: String,
@@ -175,8 +175,13 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
         .await?
         .ok_or_else(bad)?;
 
+    let Some(hash) = user.password_hash else {
+        // Google-only account: no password to check against. Same generic
+        // error as a wrong password, so this endpoint can't be used to
+        // probe which accounts exist or how they sign in.
+        return Err(bad());
+    };
     let password = creds.password;
-    let hash = user.password_hash;
     let ok = run_blocking(move || Ok(verify_password(&password, &hash))).await?;
     if !ok {
         return Err(bad());
@@ -259,7 +264,11 @@ async fn change_password(
         .await?
         .ok_or_else(|| ApiError::Internal("user disappeared from under us".to_owned()))?;
 
-    let hash = user_row.password_hash;
+    let Some(hash) = user_row.password_hash else {
+        return Err(ApiError::BadRequest(
+            "this account signs in with Google and has no password to change".to_owned(),
+        ));
+    };
     let ok = run_blocking(move || Ok(verify_password(&creds.current_password, &hash))).await?;
     if !ok {
         return Err(ApiError::BadRequest(

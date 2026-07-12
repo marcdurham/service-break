@@ -167,6 +167,32 @@ pub async fn register(creds: &Credentials) -> ApiResult<AuthSession> {
     auth_request("/api/auth/register", creds, "could not create account").await
 }
 
+/// Whether this server has a Google OAuth client configured — the
+/// "Continue with Google" buttons stay hidden without one.
+pub async fn google_sign_in_enabled() -> bool {
+    let Ok(res) = Request::get("/api/auth/google/enabled").send().await else {
+        return false;
+    };
+    let Ok(body) = res.json::<serde_json::Value>().await else {
+        return false;
+    };
+    body["enabled"].as_bool().unwrap_or(false)
+}
+
+/// Navigates the whole page (not a SPA route — this leaves the app to
+/// Google's consent screen and back) to start the Google OAuth flow.
+/// `invite_code` is ignored for `mode == "login"`.
+pub fn start_google_auth(mode: &str, invite_code: &str) {
+    let url = format!(
+        "/api/auth/google/start?mode={}&invite_code={}",
+        encode_query_component(mode),
+        encode_query_component(invite_code),
+    );
+    if let Some(window) = web_sys::window() {
+        let _ = window.location().set_href(&url);
+    }
+}
+
 pub async fn login(creds: &Credentials) -> ApiResult<AuthSession> {
     auth_request("/api/auth/login", creds, "could not sign in").await
 }

@@ -75,6 +75,79 @@ wants to join), they can do so from the Account page — pending invites
 show a "Revoke" button. The revoked code becomes invalid immediately and
 cannot be redeemed by anyone.
 
+### Google sign-in (optional)
+
+Lets people sign in — or register, still with an invite code — using their
+Google account, alongside the existing username/password flow. It's off by
+default; the buttons stay hidden until you configure a Google OAuth client.
+
+#### 1. Create the OAuth client in Google Cloud Console
+
+1. Go to <https://console.cloud.google.com/> and create a project (or pick an
+   existing one) — top-left project switcher → **New Project**.
+2. **APIs & Services → OAuth consent screen**:
+   - User type **External** (unless you're on a Google Workspace domain and
+     want it restricted to that org).
+   - Fill in the app name, your support email, and developer contact email.
+   - Scopes: the defaults (`openid`, `email`, `profile`) are enough — this
+     app doesn't ask for anything beyond basic profile info.
+   - While the app is in **Testing** mode, only test users you explicitly add
+     (same screen) can sign in — fine for trying it out. Click **Publish App**
+     when you want anyone with a Google account to be able to use it (Google
+     may want basic verification for a public app, but this scope
+     `openid`/`email`/`profile` combo is low-sensitivity and usually doesn't
+     need a review).
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
+   - Application type: **Web application**.
+   - **Authorized redirect URIs** — add exactly (must match
+     `GOOGLE_REDIRECT_URI` below, byte-for-byte, including the scheme):
+     - Dev: `http://127.0.0.1:8020/api/auth/google/callback`
+     - Prod: `http://<your-server-host-or-domain>:8020/api/auth/google/callback`
+       (or `https://...` if you've put TLS in front of it)
+   - Save — you'll get a **Client ID** and **Client secret**. Treat the
+     secret like a password; it only ever lives server-side.
+
+#### 2. Configure the backend
+
+Set three environment variables (unset any one of them and Google sign-in
+stays disabled — no partial/broken state):
+
+- `GOOGLE_CLIENT_ID` — the Client ID from step 1.
+- `GOOGLE_CLIENT_SECRET` — the Client secret from step 1.
+- `GOOGLE_REDIRECT_URI` — the exact redirect URI you registered, e.g.
+  `https://servicebreak.example.com/api/auth/google/callback`. The frontend
+  origin is derived from this (strip the `/api/auth/google/callback` suffix),
+  so it must be the same origin the app is actually served from.
+
+For the Docker deploy (`./deploy.sh`), add these to your local `.env` (copied
+from `.env.example`) — `docker compose` reads it to fill in
+`docker-compose.yml` before sending build/run instructions to the server:
+
+```
+GOOGLE_CLIENT_ID=123456789-abc...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+GOOGLE_REDIRECT_URI=http://yourserver.example.com:8020/api/auth/google/callback
+```
+
+Then redeploy (`./deploy.sh youruser@yourserver.example.com`) so the backend
+container picks them up. For local dev without Docker, export the same three
+vars before `cargo run -p backend` (or add them to `.cargo/config.toml`'s
+`[env]` table alongside `DATABASE_URL`), using
+`GOOGLE_REDIRECT_URI=http://127.0.0.1:8020/api/auth/google/callback`.
+
+#### How it behaves
+
+- **Create an account** now shows "Continue with Google" once an invite code
+  is entered — it redeems that code exactly like the normal registration
+  form, just with a Google identity instead of a username/password. A
+  username is generated automatically from the Google account's email.
+- **Sign in** shows "Continue with Google" too, but it only ever signs in an
+  account already linked to that Google identity — it can't be used to skip
+  the invite code and create a new account.
+- Accounts created this way have no password; they always sign in via
+  Google. (Password accounts stay untouched — this doesn't change how
+  existing users sign in.)
+
 ### Admin account — change the default password!
 
 On first startup the backend creates an `admin` account with the default

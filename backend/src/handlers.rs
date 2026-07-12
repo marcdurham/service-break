@@ -16,6 +16,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     // Backup imports (admin) can be far larger than the 2 MB default.
     cfg.app_data(actix_web::web::JsonConfig::default().limit(32 * 1024 * 1024));
     crate::auth::configure(cfg);
+    crate::google_auth::configure(cfg);
     crate::admin::configure(cfg);
     cfg.service(health)
         .service(list_places)

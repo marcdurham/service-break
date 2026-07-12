@@ -21,6 +21,10 @@ pub enum Route {
     ChangePassword,
     #[at("/register")]
     Register,
+    /// Where the backend sends the browser back to after the Google OAuth
+    /// round trip, with the session (or an error) in the URL fragment.
+    #[at("/oauth-complete")]
+    OauthComplete,
     /// Admin-only tools (backup export / import); reached from the Account
     /// page, not the tab bar.
     #[at("/admin")]

@@ -15,6 +15,9 @@ pub struct RegisterViewProps {
     pub auth: Option<AuthSession>,
     pub on_login: Callback<AuthSession>,
     pub on_toast: Callback<String>,
+    /// Whether the server has a Google OAuth client configured.
+    #[prop_or_default]
+    pub google_enabled: bool,
 }
 
 /// The `code` query parameter of the current URL, e.g. from a shared
@@ -161,6 +164,19 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
         Callback::from(move |_| navigator.push(&Route::Account))
     };
 
+    let continue_with_google = {
+        let invite_code = invite_code.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            let code = invite_code.trim().to_owned();
+            if code.is_empty() {
+                on_toast.emit("Enter the invite code a friend gave you first".to_owned());
+                return;
+            }
+            api::start_google_auth("register", &code);
+        })
+    };
+
     let toggle_pw = { let s = show_pw.clone(); Callback::from(move |_| s.set(!*s)) };
     let toggle_confirm = { let s = show_confirm.clone(); Callback::from(move |_| s.set(!*s)) };
 
@@ -189,6 +205,14 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
                     <span class="mi">{"person_add"}</span>
                     {if *busy { "One moment…" } else { "Create an account" }}
                 </button>
+                if props.google_enabled {
+                    <button class="alt-auth-btn" onclick={continue_with_google}>
+                        <span class="mi">{"login"}</span>{"Continue with Google"}
+                    </button>
+                    <div class="auth-note">
+                        {"Uses the invite code above — no username or password needed."}
+                    </div>
+                }
                 <button class="alt-auth-btn" onclick={go_to_account}>
                     <span class="mi">{"login"}</span>{"Already have an account? Sign in"}
                 </button>

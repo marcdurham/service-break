@@ -46,7 +46,9 @@ that area.
 
 Config via env (defaults in parentheses): `DATABASE_URL` (set in
 `.cargo/config.toml`), `BIND_ADDR` (`127.0.0.1:8081`), `NOMINATIM_URL`
-(`https://nominatim.openstreetmap.org`).
+(`https://nominatim.openstreetmap.org`). "Sign in with Google" is optional
+and off unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`GOOGLE_REDIRECT_URI` are all set — see DEPLOY.md for how to get them.
 
 ## Tests
 
@@ -72,13 +74,17 @@ register/login.
 - `POST /api/auth/register`, `POST /api/auth/login` — body
   `{ "username", "password" }`, return `{ "token", "username" }`
 - 🔒 `POST /api/auth/logout`, `GET /api/auth/me` — returns `{ "token", "username", "is_admin", "given_name", "family_name" }`
+- `GET /api/auth/google/enabled`, `GET /api/auth/google/start?mode&invite_code`,
+  `GET /api/auth/google/callback` — "Sign in with Google" (see DEPLOY.md);
+  `start`/`callback` are browser redirects, not JSON endpoints
 - 🔒 `GET /api/admin/export`, `POST /api/admin/import` — admin only (403
   otherwise); see "Admin account" below
 - `GET  /api/geocode?q=`
 - `GET  /api/health`
 
-Accounts are username + password (Argon2-hashed) with 30-day session
-tokens; changing anything requires signing in, browsing doesn't. The
+Accounts are username + password (Argon2-hashed) or linked to a Google
+identity, with 30-day session tokens either way; changing anything requires
+signing in, browsing doesn't. The
 anonymous per-device id in localStorage still scopes saved lists and
 names reviews written before accounts existed.
 
