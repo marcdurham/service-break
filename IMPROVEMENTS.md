@@ -76,6 +76,10 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`
 **Acceptance:** New test `invite_name_too_long_rejected` verifies that names over 40 characters are rejected when creating an invitation, while names at or under the limit succeed.
 
+### 19. ~~Add test for duplicate username registration rejection~~ ✅
+**Files:** `backend/tests/api.rs`
+**Acceptance:** New test `duplicate_username_rejected` verifies that attempting to register with a username that already exists returns 409 Conflict.
+
 ## Done
 
 - (none yet)
