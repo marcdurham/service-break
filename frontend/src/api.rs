@@ -3,7 +3,7 @@
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
-    encode_query_component, AuthSession, Credentials, ImportSummary, Invitation,
+    encode_query_component, AuthSession, ChangePassword, Credentials, ImportSummary, Invitation,
     InviteNameUpdate, InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit,
     PlaceSummary, PlacesQuery, UpdatePlace,
 };
@@ -187,6 +187,21 @@ pub async fn rename_invite(code: &str, name: &str) -> ApiResult<()> {
     let res = with_auth(Request::put(&url)).json(&body).map_err(err)?.send().await.map_err(err)?;
     if res.status() >= 400 {
         return Err(error_message(res, "could not update the name").await);
+    }
+    Ok(())
+}
+
+/// Swaps the signed-in user's password. The current password is verified
+/// against the stored hash before the new one is accepted.
+pub async fn change_password(creds: &ChangePassword) -> ApiResult<()> {
+    let res = with_auth(Request::put("/api/auth/password"))
+        .json(creds)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not change password").await);
     }
     Ok(())
 }
