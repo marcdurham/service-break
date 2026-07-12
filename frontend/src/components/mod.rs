@@ -9,6 +9,7 @@ pub mod invite_view;
 pub mod list_view;
 pub mod location_picker;
 pub mod map_view;
+pub mod oauth_complete_view;
 pub mod onboarding;
 pub mod register_view;
 pub mod saved_view;

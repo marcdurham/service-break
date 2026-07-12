@@ -27,6 +27,29 @@ async fn app(
         http: http_client(),
         // Unroutable address: tests must not depend on the live geocoder.
         nominatim_url: "http://127.0.0.1:1".to_owned(),
+        // Google sign-in isn't exercised by these tests.
+        google: None,
+    });
+    init_service(App::new().app_data(state).configure(handlers::configure)).await
+}
+
+/// Like [`app`], but with a (fake, never actually contacted) Google OAuth
+/// client configured — for exercising the parts of the Google sign-in flow
+/// that don't require a live round trip to Google itself.
+async fn app_with_google(
+    pool: PgPool,
+) -> impl Service<actix_http::Request, Response = ServiceResponse<impl MessageBody>, Error = actix_web::Error>
+{
+    let state = Data::new(AppState {
+        pool,
+        http: http_client(),
+        nominatim_url: "http://127.0.0.1:1".to_owned(),
+        google: Some(backend::google_auth::GoogleConfig {
+            client_id: "test-client-id".to_owned(),
+            client_secret: "test-client-secret".to_owned(),
+            redirect_uri: "http://127.0.0.1:8020/api/auth/google/callback".to_owned(),
+            app_base_url: "http://127.0.0.1:8020".to_owned(),
+        }),
     });
     init_service(App::new().app_data(state).configure(handlers::configure)).await
 }
@@ -607,6 +630,228 @@ async fn registration_requires_a_valid_invite_code(pool: PgPool) {
     let req = TestRequest::post()
         .uri("/api/auth/register")
         .set_json(json!({ "username": "scout-three", "password": TEST_PASSWORD, "invite_code": code }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_sign_in_disabled_by_default(pool: PgPool) {
+    let app = app(pool.clone()).await;
+
+    let req = TestRequest::get().uri("/api/auth/google/enabled").to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["enabled"], false);
+
+    let req = TestRequest::get().uri("/api/auth/google/start?mode=login").to_request();
+    assert_eq!(
+        call_service(&app, req).await.status(),
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_start_redirects_to_google_and_stores_state(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+
+    let req = TestRequest::get().uri("/api/auth/google/enabled").to_request();
+    let body: serde_json::Value = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(body["enabled"], true);
+
+    let req = TestRequest::get().uri("/api/auth/google/start?mode=login").to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    let location = res.headers().get("Location").unwrap().to_str().unwrap().to_owned();
+    assert!(location.starts_with("https://accounts.google.com/o/oauth2/v2/auth?"));
+    assert!(location.contains("client_id=test-client-id"));
+    assert!(location.contains(
+        "redirect_uri=http%3A%2F%2F127.0.0.1%3A8020%2Fapi%2Fauth%2Fgoogle%2Fcallback"
+    ));
+
+    // Exactly one single-use state row was stored for the round trip.
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM oauth_states").fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_register_start_requires_an_invite_code(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+    let req = TestRequest::get().uri("/api/auth/google/start?mode=register").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_callback_rejects_unknown_or_replayed_state(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+
+    let req = TestRequest::get()
+        .uri("/api/auth/google/callback?code=abc&state=never-issued")
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    let location = res.headers().get("Location").unwrap().to_str().unwrap().to_owned();
+    assert!(location.starts_with("http://127.0.0.1:8020/oauth-complete#error="));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_callback_surfaces_denied_consent(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+    let req =
+        TestRequest::get().uri("/api/auth/google/callback?error=access_denied").to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    let location = res.headers().get("Location").unwrap().to_str().unwrap().to_owned();
+    assert!(location.starts_with("http://127.0.0.1:8020/oauth-complete#error="));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn oauth_state_round_trips_once_then_is_gone(pool: PgPool) {
+    backend::db::create_oauth_state(&pool, "state-once", "register", "INVITE1").await.unwrap();
+
+    let (mode, invite) =
+        backend::db::take_oauth_state(&pool, "state-once").await.unwrap().unwrap();
+    assert_eq!(mode, "register");
+    assert_eq!(invite, "INVITE1");
+
+    // Single-use: a replay of the same state finds nothing.
+    assert!(backend::db::take_oauth_state(&pool, "state-once").await.unwrap().is_none());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn oauth_state_expires(pool: PgPool) {
+    backend::db::create_oauth_state(&pool, "state-old", "login", "").await.unwrap();
+    sqlx::query("UPDATE oauth_states SET expires_at = now() - interval '1 minute' WHERE state = $1")
+        .bind("state-old")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(backend::db::take_oauth_state(&pool, "state-old").await.unwrap().is_none());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn upsert_google_user_creates_then_reuses_the_same_account(pool: PgPool) {
+    let code = seed_invite(&pool).await;
+    let (id1, username1, is_admin1) = backend::db::upsert_google_user(
+        &pool,
+        "google-sub-1",
+        "scout@example.com",
+        "Sam",
+        "Scout",
+        &code,
+    )
+    .await
+    .unwrap();
+    assert!(!is_admin1);
+    assert_eq!(username1, "scout");
+
+    // Same google_sub again — signs into the same account, no invite needed
+    // even though this one is blank/invalid.
+    let (id2, username2, _) = backend::db::upsert_google_user(
+        &pool,
+        "google-sub-1",
+        "scout@example.com",
+        "Sam",
+        "Scout",
+        "",
+    )
+    .await
+    .unwrap();
+    assert_eq!(id1, id2);
+    assert_eq!(username2, "scout");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn upsert_google_user_disambiguates_username_collisions(pool: PgPool) {
+    sqlx::query("INSERT INTO users (username, password_hash) VALUES ('scout', 'x')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let code = seed_invite(&pool).await;
+    let (_, username, _) = backend::db::upsert_google_user(
+        &pool,
+        "google-sub-2",
+        "scout@example.com",
+        "",
+        "",
+        &code,
+    )
+    .await
+    .unwrap();
+    assert_eq!(username, "scout1");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn upsert_google_user_requires_a_valid_invite_for_new_accounts(pool: PgPool) {
+    let err = backend::db::upsert_google_user(
+        &pool,
+        "google-sub-3",
+        "nobody@example.com",
+        "",
+        "",
+        "FAKE0001",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, backend::error::ApiError::BadRequest(_)));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn find_user_by_google_sub_only_matches_linked_accounts(pool: PgPool) {
+    assert!(backend::db::find_user_by_google_sub(&pool, "nope").await.unwrap().is_none());
+
+    let code = seed_invite(&pool).await;
+    backend::db::upsert_google_user(&pool, "sub-x", "x@example.com", "", "", &code)
+        .await
+        .unwrap();
+    assert!(backend::db::find_user_by_google_sub(&pool, "sub-x").await.unwrap().is_some());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_only_account_cannot_log_in_with_a_password(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    let (_, username, _) = backend::db::upsert_google_user(
+        &pool,
+        "sub-pw-test",
+        "pw-test@example.com",
+        "",
+        "",
+        &code,
+    )
+    .await
+    .unwrap();
+
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": username, "password": TEST_PASSWORD }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_only_account_cannot_change_a_password(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    let (user_id, _, _) = backend::db::upsert_google_user(
+        &pool,
+        "sub-cp-test",
+        "cp-test@example.com",
+        "",
+        "",
+        &code,
+    )
+    .await
+    .unwrap();
+    let token = "test-google-only-session".to_owned();
+    backend::db::create_session(&pool, &token, user_id).await.unwrap();
+
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({ "current_password": "whatever", "new_password": "new-password-123" }))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 }

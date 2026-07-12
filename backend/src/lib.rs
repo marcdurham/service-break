@@ -5,6 +5,7 @@ pub mod auth;
 pub mod db;
 pub mod error;
 pub mod geocode;
+pub mod google_auth;
 pub mod handlers;
 pub mod maps_link;
 pub mod util;
@@ -15,6 +16,8 @@ pub struct AppState {
     pub pool: PgPool,
     pub http: reqwest::Client,
     pub nominatim_url: String,
+    /// `None` disables "Sign in with Google" (`GOOGLE_CLIENT_ID` etc. not set).
+    pub google: Option<google_auth::GoogleConfig>,
 }
 
 pub const DEFAULT_NOMINATIM_URL: &str = "https://nominatim.openstreetmap.org";

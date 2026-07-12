@@ -85,6 +85,13 @@ pub struct ExportUser {
     pub username: String,
     pub is_admin: bool,
     pub created_at: DateTime<Utc>,
+    /// Google sign-in linkage. `#[serde(default)]` so backups made before
+    /// Google sign-in existed still import cleanly (as password-only
+    /// accounts, same as before).
+    #[serde(default)]
+    pub google_sub: Option<String>,
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -152,7 +159,8 @@ async fn export_data(state: Data<AppState>, _admin: AdminUser) -> Result<HttpRes
 
 async fn collect_export(pool: &PgPool) -> Result<ExportData, ApiError> {
     let users = sqlx::query_as::<_, ExportUser>(
-        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at, id",
+        "SELECT id, username, is_admin, created_at, google_sub, email FROM users \
+         ORDER BY created_at, id",
     )
     .fetch_all(pool)
     .await?;
@@ -282,14 +290,16 @@ async fn run_import(
 
     for (u, hash) in to_create.iter().zip(&hashes) {
         sqlx::query(
-            "INSERT INTO users (id, username, password_hash, is_admin, created_at) \
-             VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO users (id, username, password_hash, is_admin, created_at, google_sub, email) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(u.id)
         .bind(&u.username)
         .bind(hash)
         .bind(u.is_admin)
         .bind(u.created_at)
+        .bind(&u.google_sub)
+        .bind(&u.email)
         .execute(&mut *tx)
         .await?;
     }

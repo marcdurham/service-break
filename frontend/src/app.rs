@@ -18,6 +18,7 @@ use crate::components::filters_sheet::FiltersSheet;
 use crate::components::invite_view::InviteView;
 use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
+use crate::components::oauth_complete_view::OauthCompleteView;
 use crate::components::onboarding::Onboarding;
 use crate::components::register_view::RegisterView;
 use crate::components::saved_view::SavedView;
@@ -123,6 +124,18 @@ pub fn app() -> Html {
     let toast = use_state(|| None::<String>);
     let refresh = use_state(|| 0u32);
     let auth = use_state(api::stored_auth);
+    let google_enabled = use_state(|| false);
+
+    // Ask the backend once whether it has a Google OAuth client configured,
+    // so the "Continue with Google" buttons can stay hidden without one.
+    {
+        let google_enabled = google_enabled.clone();
+        use_effect_with((), move |()| {
+            wasm_bindgen_futures::spawn_local(async move {
+                google_enabled.set(api::google_sign_in_enabled().await);
+            });
+        });
+    }
 
     let show_toast = {
         let toast = toast.clone();
@@ -557,6 +570,7 @@ pub fn app() -> Html {
                             on_login={on_login}
                             on_logout={on_logout}
                             on_toast={show_toast.clone()}
+                            google_enabled={*google_enabled}
                         />
                     },
                     Route::ChangePassword => html! {
@@ -570,7 +584,11 @@ pub fn app() -> Html {
                             auth={(*auth).clone()}
                             on_login={on_login}
                             on_toast={show_toast.clone()}
+                            google_enabled={*google_enabled}
                         />
+                    },
+                    Route::OauthComplete => html! {
+                        <OauthCompleteView on_login={on_login} on_toast={show_toast.clone()} />
                     },
                     Route::Admin => html! {
                         <AdminView auth={(*auth).clone()} on_toast={show_toast.clone()} />

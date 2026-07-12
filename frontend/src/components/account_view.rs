@@ -12,6 +12,9 @@ pub struct AccountViewProps {
     pub on_login: Callback<AuthSession>,
     pub on_logout: Callback<()>,
     pub on_toast: Callback<String>,
+    /// Whether the server has a Google OAuth client configured.
+    #[prop_or_default]
+    pub google_enabled: bool,
 }
 
 /// One row in the friends & invitations list.
@@ -170,6 +173,8 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         let navigator = navigator.clone();
         Callback::from(move |_| navigator.push(&Route::Register))
     };
+
+    let continue_with_google = Callback::from(move |_| api::start_google_auth("login", ""));
 
     let go_to_invite = {
         let navigator = navigator.clone();
@@ -381,6 +386,11 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     <span class="mi">{"login"}</span>
                     {if *busy { "One moment…" } else { "Sign in" }}
                 </button>
+                if props.google_enabled {
+                    <button class="alt-auth-btn" onclick={continue_with_google}>
+                        <span class="mi">{"login"}</span>{"Continue with Google"}
+                    </button>
+                }
                 <button class="alt-auth-btn" onclick={go_to_register}>
                     <span class="mi">{"person_add"}</span>{"Create an account"}
                 </button>

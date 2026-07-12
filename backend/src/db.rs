@@ -5,7 +5,7 @@ use shared::{
     INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
 };
 use sqlx::postgres::PgRow;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{Acquire, PgPool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::error::ApiError;
@@ -455,7 +455,8 @@ pub async fn list_place_edits(pool: &PgPool, place_id: Uuid) -> Result<Vec<Place
 pub struct UserRow {
     pub id: Uuid,
     pub username: String,
-    pub password_hash: String,
+    /// `NULL` for accounts that only ever signed up via Google.
+    pub password_hash: Option<String>,
     pub is_admin: bool,
     pub given_name: String,
     pub family_name: String,
@@ -508,6 +509,199 @@ pub async fn register_user(
 
     tx.commit().await?;
     Ok(user_id)
+}
+
+/// Minutes an OAuth `state` value stays redeemable before it's treated as
+/// expired (covers the round trip to Google's consent screen and back).
+const OAUTH_STATE_MINUTES: i32 = 10;
+
+/// Stores a fresh, single-use `state` value for the Google OAuth redirect,
+/// carrying `mode` ("login" or "register") and the invite code (empty for
+/// login) through the round trip. Opportunistically sweeps expired rows so
+/// abandoned sign-in attempts don't accumulate.
+pub async fn create_oauth_state(
+    pool: &PgPool,
+    state: &str,
+    mode: &str,
+    invite_code: &str,
+) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM oauth_states WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query(
+        "INSERT INTO oauth_states (state, mode, invite_code, expires_at) \
+         VALUES ($1, $2, $3, now() + make_interval(mins => $4))",
+    )
+    .bind(state)
+    .bind(mode)
+    .bind(invite_code)
+    .bind(OAUTH_STATE_MINUTES)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Consumes a `state` value: deletes it (so it can never be replayed) and
+/// returns its `(mode, invite_code)` if it existed and hadn't expired.
+pub async fn take_oauth_state(
+    pool: &PgPool,
+    state: &str,
+) -> Result<Option<(String, String)>, ApiError> {
+    let row = sqlx::query(
+        "DELETE FROM oauth_states WHERE state = $1 \
+         RETURNING mode, invite_code, expires_at > now() AS still_valid",
+    )
+    .bind(state)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|r| {
+        let still_valid: bool = r.try_get("still_valid").ok()?;
+        if !still_valid {
+            return None;
+        }
+        Some((r.try_get("mode").ok()?, r.try_get("invite_code").ok()?))
+    }))
+}
+
+/// Looks up an account already linked to a Google subject id — the
+/// "sign in with Google" path, which never creates an account.
+pub async fn find_user_by_google_sub(
+    pool: &PgPool,
+    google_sub: &str,
+) -> Result<Option<UserRow>, ApiError> {
+    let row = sqlx::query(
+        "SELECT id, username, password_hash, is_admin, given_name, family_name FROM users \
+         WHERE google_sub = $1",
+    )
+    .bind(google_sub)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|r| {
+        Ok(UserRow {
+            id: r.try_get("id")?,
+            username: r.try_get("username")?,
+            password_hash: r.try_get("password_hash")?,
+            is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
+        })
+    })
+    .transpose()
+}
+
+/// A username candidate derived from the local part of an email address:
+/// lowercased, stripped of anything outside the allowed username charset,
+/// and capped well under [`shared::validate_username`]'s max so a numeric
+/// disambiguating suffix always fits.
+fn username_from_email(email: &str) -> String {
+    let local = email.split('@').next().unwrap_or("");
+    let cleaned: String = local
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .map(|c| c.to_ascii_lowercase())
+        .take(20)
+        .collect();
+    if cleaned.chars().count() < 3 {
+        "scout".to_owned()
+    } else {
+        cleaned
+    }
+}
+
+/// The "sign up with Google" path: logs in if `google_sub` is already
+/// linked to an account (so clicking "Continue with Google" again just
+/// signs you in), otherwise atomically redeems `invite_code` and creates a
+/// new account the same way [`register_user`] does. Returns
+/// `(user_id, username, is_admin)`.
+pub async fn upsert_google_user(
+    pool: &PgPool,
+    google_sub: &str,
+    email: &str,
+    given_name: &str,
+    family_name: &str,
+    invite_code: &str,
+) -> Result<(Uuid, String, bool), ApiError> {
+    let mut tx = pool.begin().await?;
+
+    if let Some(row) = sqlx::query("SELECT id, username, is_admin FROM users WHERE google_sub = $1")
+        .bind(google_sub)
+        .fetch_optional(&mut *tx)
+        .await?
+    {
+        let id: Uuid = row.try_get("id")?;
+        let username: String = row.try_get("username")?;
+        let is_admin: bool = row.try_get("is_admin")?;
+        tx.commit().await?;
+        return Ok((id, username, is_admin));
+    }
+
+    let invitation_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL \
+         AND is_expired = false \
+         AND created_at > now() - make_interval(days => $2) FOR UPDATE",
+    )
+    .bind(invite_code)
+    .bind(INVITE_EXPIRY_DAYS)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let invitation_id = invitation_id.ok_or_else(|| {
+        ApiError::BadRequest("that invite code is invalid, expired, or already used".to_owned())
+    })?;
+
+    // Each attempt runs in its own savepoint: a unique-violation aborts
+    // whatever Postgres transaction it happened in, so retrying the INSERT
+    // (with a disambiguated username) has to happen in a fresh one rather
+    // than reusing `tx`, which Postgres would otherwise refuse to accept
+    // any further commands on.
+    let base = username_from_email(email);
+    let mut username = base.clone();
+    let mut suffix = 0u32;
+    let user_id: Uuid = loop {
+        let mut savepoint = tx.begin().await?;
+        let attempt = sqlx::query_scalar(
+            "INSERT INTO users (username, google_sub, email, given_name, family_name) \
+             VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        )
+        .bind(&username)
+        .bind(google_sub)
+        .bind(email)
+        .bind(given_name)
+        .bind(family_name)
+        .fetch_one(&mut *savepoint)
+        .await;
+        match attempt {
+            Ok(id) => {
+                savepoint.commit().await?;
+                break id;
+            }
+            Err(sqlx::Error::Database(e))
+                if e.is_unique_violation()
+                    && e.constraint() == Some("idx_users_username")
+                    && suffix < 50 =>
+            {
+                savepoint.rollback().await?;
+                suffix += 1;
+                username = format!("{base}{suffix}");
+            }
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+                savepoint.rollback().await?;
+                return Err(ApiError::Conflict(
+                    "an account for this Google email already exists".to_owned(),
+                ));
+            }
+            Err(e) => {
+                let _ = savepoint.rollback().await;
+                return Err(e.into());
+            }
+        }
+    };
+
+    sqlx::query("UPDATE invitations SET redeemed_at = now(), redeemed_by = $1 WHERE id = $2")
+        .bind(user_id)
+        .bind(invitation_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok((user_id, username, false))
 }
 
 /// Replaces a user's stored Argon2 hash. Used for password changes; never

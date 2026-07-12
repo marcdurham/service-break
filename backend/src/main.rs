@@ -16,6 +16,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8081".to_owned());
     let nominatim_url =
         std::env::var("NOMINATIM_URL").unwrap_or_else(|_| DEFAULT_NOMINATIM_URL.to_owned());
+    let google = backend::google_auth::GoogleConfig::from_env();
+    tracing::info!(google_sign_in = google.is_some(), "startup config");
 
     let pool = PgPoolOptions::new()
         .max_connections(8)
@@ -29,6 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool,
         http: http_client(),
         nominatim_url,
+        google,
     });
 
     tracing::info!(%bind_addr, "starting service-break backend");
