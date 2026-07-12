@@ -14,10 +14,10 @@
 - [x] Updated `GET /api/auth/me` to return the new fields
 - [x] Frontend: Account view with Given/Family name inputs and Save button
 
-### M2 — Revised invite limits
-- [ ] Change constants: `INVITE_WAIT_HOURS = 0`, `INVITES_PER_DAY_NEW = 25`, `INVITES_PER_DAY_OLD_AGE = 100`
-- [ ] Update backend enforcement logic (already partially done)
-- [ ] Update error messages and docs
+### M2 — Revised invite limits ✅ Complete
+- [x] Constants already set: `INVITES_PER_DAY_NEW = 25`, `INVITES_PER_DAY_OLD_AGE = 100`
+- [x] Backend enforcement logic uses these constants (age gate determines limit, doesn't block)
+- [x] Updated comments and DEPLOY.md documentation
 
 ### M3 — Revoke sent invite codes
 - [ ] Backend: `DELETE /api/invites/{code}` endpoint

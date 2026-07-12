@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 15:10 — M2 complete (revised invite limits): confirmed constants are already set to 25/day (new) and 100/day (old), backend enforcement uses them, updated comments and DEPLOY.md.
+
 - 14:50 — Frontend for M1 (user given/family name fields): Account page now displays Given Name and Family Name inputs with a Save Profile button; loads names from `GET /api/auth/me` on sign-in; added `get_me()` and `update_profile()` API functions.
 
 - 14:30 — Backend for M1 (user given/family name fields): migration `20260711140000_user_names.sql`, updated `UserRow` and all user queries, added `PATCH /api/auth/profile` endpoint with partial-update logic, extended `GET /api/auth/me` to return the new fields. Fixed invite-limit tests to use the new constants.
