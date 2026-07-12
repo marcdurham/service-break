@@ -592,8 +592,8 @@ fn new_invite_code() -> String {
 }
 
 /// Issues a fresh, unredeemed invitation code for `inviter_id`, enforcing
-/// the anti-abuse rules: accounts younger than 24 hours can't invite yet,
-/// and nobody sends more than 5 invitations per (rolling) day.
+/// the anti-abuse rules: new accounts get 25 invites/day, older accounts
+/// (24+ hours) get 100/day. Admins bypass the limit entirely.
 pub async fn create_invitation(
     pool: &PgPool,
     inviter_id: Uuid,

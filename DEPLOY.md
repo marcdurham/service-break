@@ -59,9 +59,9 @@ docker --context service-break-prod compose \
 ```
 
 Register the first account with that code, then invite everyone else from
-the app. Note that accounts must be 24 hours old before they can send
-invitations (and may send at most 5 per day); to let the first account
-invite immediately, backdate it:
+the app. New accounts can invite immediately (limit: 25/day); after 24 hours
+the limit rises to 100/day. To verify an old-account limit, backdate the
+first account:
 
 ```
   ... exec db psql -U service_break -d service_break \
