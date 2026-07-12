@@ -1315,3 +1315,26 @@ async fn revoke_rejects_unauthorized_user(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_redeemed_invite_fails(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let inviter_token = register(&app, &pool, "inviter-redeem").await;
+    // Create and redeem an invitation.
+    let code = seed_invite(&pool).await;
+    let res = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "redeemed-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, res).await.status(), StatusCode::CREATED);
+    // Try to revoke the now-redeemed invitation — should fail.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", code))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
