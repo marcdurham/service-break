@@ -52,7 +52,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that names with apostrophes and hyphens (O'Brien, Smith-Jones) are accepted by the profile update endpoint.
 
-### 13. Add clippy lints configuration for workspace
+### 13. ~~Add test for Unicode characters in profile names~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that names with accented characters (José, García) are accepted by the profile update endpoint.
+
+### 14. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
