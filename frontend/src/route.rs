@@ -17,6 +17,8 @@ pub enum Route {
     Invite,
     #[at("/account")]
     Account,
+    #[at("/register")]
+    Register,
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]

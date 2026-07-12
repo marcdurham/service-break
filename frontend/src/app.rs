@@ -16,6 +16,7 @@ use crate::components::invite_view::InviteView;
 use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
 use crate::components::onboarding::Onboarding;
+use crate::components::register_view::RegisterView;
 use crate::components::saved_view::SavedView;
 use crate::components::tab_bar::TabBar;
 use crate::route::Route;
@@ -511,6 +512,13 @@ pub fn app() -> Html {
                             auth={(*auth).clone()}
                             on_login={on_login}
                             on_logout={on_logout}
+                            on_toast={show_toast.clone()}
+                        />
+                    },
+                    Route::Register => html! {
+                        <RegisterView
+                            auth={(*auth).clone()}
+                            on_login={on_login}
                             on_toast={show_toast.clone()}
                         />
                     },

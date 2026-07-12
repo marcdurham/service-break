@@ -3,8 +3,8 @@
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
-    AuthSession, Credentials, Invitation, NewPlace, NewReview, PlaceDetail, PlaceSummary,
-    PlacesQuery,
+    encode_query_component, AuthSession, Credentials, Invitation, InviteNameUpdate,
+    InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery,
 };
 use uuid::Uuid;
 
@@ -137,20 +137,38 @@ async fn auth_request(url: &str, creds: &Credentials, fallback: &str) -> ApiResu
     res.json().await.map_err(err)
 }
 
-pub async fn create_invite() -> ApiResult<Invitation> {
-    let res = with_auth(Request::post("/api/invites")).send().await.map_err(err)?;
+pub async fn create_invite(name: &str) -> ApiResult<Invitation> {
+    let body = NewInvite { name: name.to_owned() };
+    let res = with_auth(Request::post("/api/invites"))
+        .json(&body)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
     if res.status() >= 400 {
         return Err(error_message(res, "could not create an invite code").await);
     }
     res.json().await.map_err(err)
 }
 
-pub async fn list_invites() -> ApiResult<Vec<Invitation>> {
+pub async fn list_invites() -> ApiResult<InvitesOverview> {
     let res = with_auth(Request::get("/api/invites")).send().await.map_err(err)?;
     if res.status() >= 400 {
         return Err(error_message(res, "could not load invite codes").await);
     }
     res.json().await.map_err(err)
+}
+
+/// Renames an invitation: yours-to-send while it's pending, or the one you
+/// joined with.
+pub async fn rename_invite(code: &str, name: &str) -> ApiResult<()> {
+    let url = format!("/api/invites/{}/name", encode_query_component(code));
+    let body = InviteNameUpdate { name: name.to_owned() };
+    let res = with_auth(Request::put(&url)).json(&body).map_err(err)?.send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not update the name").await);
+    }
+    Ok(())
 }
 
 /// Best-effort server-side session invalidation.

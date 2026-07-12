@@ -6,6 +6,28 @@ short description.
 
 ## 2026-07-11
 
+- 20:30 — Removed the completed invitation tasks (100-106, 116) from
+  TODO.md and documented the new invite rules in DEPLOY.md (7-day code
+  expiry, 24-hour wait and 5/day limit for senders, with a psql backdate
+  snippet for bootstrapping the first account).
+- 20:25 — Added a dedicated "Create an account" page at `/register`:
+  username, password + confirm-password fields, and the invite code —
+  pre-filled when the page is opened from an invitation link
+  (`/register?code=XYZ`, which shared invites now point at). The Account
+  page links to it when signed out; signed in, it gained an "Invite your
+  friends" button (the Invite tab left the tab bar), a friends &
+  invitations list with pending/expired/joined status, who invited you,
+  and an editable name for your own invitation.
+- 20:13 — Hardened invitations: codes now expire after 7 days, each user
+  may send at most 5 per day, accounts younger than 24 hours can't invite
+  yet, and codes are just the 8-character code (no `BREAK-` prefix).
+  Invitations gained a name field — set by the inviter, editable by the
+  invited user once registered (`PUT /api/invites/{code}/name`) — and
+  `GET /api/invites` now returns a full overview (who invited you, your
+  invitation's name, and each sent invite's pending/expired/joined status).
+  The Invite page says "Invite your friends", labels the code "One time
+  use code", takes an optional friend's name, and mints a fresh code after
+  every copy or share.
 - 20:12 — Reworked the top filter chips on the map and list screens:
   the six place-type chips (Shop, Store, Mall, Park, Public, Hall) are
   now tucked behind a single "Type" chip that expands them on tap, and

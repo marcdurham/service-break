@@ -153,7 +153,7 @@
       // this app carrying the invite code; returns true if it did. Falls
       // back to the clipboard otherwise.
       window.sbShareInvite = function (text, code) {
-        const url = location.origin + '/invite?code=' + encodeURIComponent(code);
+        const url = location.origin + '/register?code=' + encodeURIComponent(code);
         if (navigator.share) {
           navigator.share({ title: 'Service Break', text, url }).catch(() => {});
           return true;
