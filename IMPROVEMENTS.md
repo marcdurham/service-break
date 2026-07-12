@@ -56,7 +56,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that names with accented characters (José, García) are accepted by the profile update endpoint.
 
-### 14. Add clippy lints configuration for workspace
+### 14. ~~Add test for whitespace trimming in profile names~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that leading/trailing whitespace is properly handled when updating profile names.
+
+### 15. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
