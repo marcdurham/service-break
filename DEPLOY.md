@@ -68,6 +68,13 @@ first account:
   -c "UPDATE users SET created_at = now() - interval '1 day' WHERE username = 'your-first-user';"
 ```
 
+#### Revoking an invite code
+
+If a user needs to revoke a sent invitation (e.g., the friend no longer
+wants to join), they can do so from the Account page — pending invites
+show a "Revoke" button. The revoked code becomes invalid immediately and
+cannot be redeemed by anyone.
+
 ### Admin account — change the default password!
 
 On first startup the backend creates an `admin` account with the default
