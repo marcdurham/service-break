@@ -1299,3 +1299,19 @@ async fn revoked_invite_cannot_be_redeemed(pool: PgPool) {
     let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
     assert_eq!(overview.invites[0].status, InviteStatus::Expired);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_rejects_unauthorized_user(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create two users.
+    let _token_a = register(&app, &pool, "alice-revoke").await;
+    let token_b = register(&app, &pool, "bob-revoke").await;
+    // Alice issues an invite.
+    let code = seed_invite(&pool).await;
+    // Bob tries to revoke it — should fail with 404 (not found from his perspective).
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", code))
+        .insert_header(auth(&token_b))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
