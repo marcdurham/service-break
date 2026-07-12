@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    Amenity, Invitation, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement,
-    Review, SortBy,
+    Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceSummary,
+    PlaceType, PlacesQuery, Requirement, Review, SortBy, INVITES_PER_DAY, INVITE_EXPIRY_DAYS,
+    INVITE_WAIT_HOURS,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -295,13 +296,15 @@ pub async fn register_user(
     let mut tx = pool.begin().await?;
 
     let invitation_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL FOR UPDATE",
+        "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL \
+         AND created_at > now() - make_interval(days => $2) FOR UPDATE",
     )
     .bind(invite_code)
+    .bind(INVITE_EXPIRY_DAYS)
     .fetch_optional(&mut *tx)
     .await?;
     let invitation_id = invitation_id.ok_or_else(|| {
-        ApiError::BadRequest("that invite code is invalid or already used".to_owned())
+        ApiError::BadRequest("that invite code is invalid, expired, or already used".to_owned())
     })?;
 
     let user_id: Uuid = match sqlx::query_scalar(
@@ -329,17 +332,62 @@ pub async fn register_user(
     Ok(user_id)
 }
 
-/// Issues a fresh, unredeemed invitation code for `inviter_id`.
-pub async fn create_invitation(pool: &PgPool, inviter_id: Uuid) -> Result<String, ApiError> {
+/// An 8-character invite code — just the code, no prefix.
+fn new_invite_code() -> String {
+    Uuid::new_v4().simple().to_string()[..8].to_uppercase()
+}
+
+/// Issues a fresh, unredeemed invitation code for `inviter_id`, enforcing
+/// the anti-abuse rules: accounts younger than 24 hours can't invite yet,
+/// and nobody sends more than 5 invitations per (rolling) day.
+pub async fn create_invitation(
+    pool: &PgPool,
+    inviter_id: Uuid,
+    name: &str,
+) -> Result<Invitation, ApiError> {
+    let old_enough: Option<bool> = sqlx::query_scalar(
+        "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
+    )
+    .bind(inviter_id)
+    .bind(INVITE_WAIT_HOURS)
+    .fetch_optional(pool)
+    .await?;
+    if !old_enough.unwrap_or(false) {
+        return Err(ApiError::BadRequest(format!(
+            "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
+        )));
+    }
+
+    let sent_today: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM invitations \
+         WHERE inviter_id = $1 AND created_at > now() - interval '1 day'",
+    )
+    .bind(inviter_id)
+    .fetch_one(pool)
+    .await?;
+    if sent_today >= INVITES_PER_DAY {
+        return Err(ApiError::BadRequest(format!(
+            "invitation limit reached — you can send {INVITES_PER_DAY} per day"
+        )));
+    }
+
     for _ in 0..5 {
-        let code = format!("BREAK-{}", &Uuid::new_v4().simple().to_string()[..6].to_uppercase());
-        let res = sqlx::query("INSERT INTO invitations (code, inviter_id) VALUES ($1, $2)")
+        let code = new_invite_code();
+        let res = sqlx::query("INSERT INTO invitations (code, inviter_id, name) VALUES ($1, $2, $3)")
             .bind(&code)
             .bind(inviter_id)
+            .bind(name)
             .execute(pool)
             .await;
         match res {
-            Ok(_) => return Ok(code),
+            Ok(_) => {
+                return Ok(Invitation {
+                    code,
+                    name: name.to_owned(),
+                    status: InviteStatus::Pending,
+                    joined_username: None,
+                })
+            }
             Err(sqlx::Error::Database(e)) if e.is_unique_violation() => continue,
             Err(e) => return Err(e.into()),
         }
@@ -347,24 +395,83 @@ pub async fn create_invitation(pool: &PgPool, inviter_id: Uuid) -> Result<String
     Err(ApiError::Internal("could not generate a unique invite code".to_owned()))
 }
 
-/// This user's invitations, most recent first.
-pub async fn list_invitations(pool: &PgPool, inviter_id: Uuid) -> Result<Vec<Invitation>, ApiError> {
+/// Everything the account page shows about invitations: who invited this
+/// user, the (renameable) invitation they redeemed, and every invitation
+/// they've sent, most recent first.
+pub async fn invites_overview(pool: &PgPool, user_id: Uuid) -> Result<InvitesOverview, ApiError> {
     let rows = sqlx::query(
-        "SELECT code, redeemed_at IS NOT NULL AS redeemed FROM invitations \
-         WHERE inviter_id = $1 ORDER BY created_at DESC",
+        "SELECT i.code, i.name, i.redeemed_at IS NOT NULL AS redeemed, \
+         i.created_at <= now() - make_interval(days => $2) AS expired, \
+         u.username AS joined_username \
+         FROM invitations i LEFT JOIN users u ON u.id = i.redeemed_by \
+         WHERE i.inviter_id = $1 ORDER BY i.created_at DESC",
     )
-    .bind(inviter_id)
+    .bind(user_id)
+    .bind(INVITE_EXPIRY_DAYS)
     .fetch_all(pool)
     .await?;
-    rows.into_iter()
+    let invites = rows
+        .into_iter()
         .map(|r| {
+            let redeemed: bool = r.try_get("redeemed")?;
+            let expired: bool = r.try_get("expired")?;
             Ok(Invitation {
                 code: r.try_get("code")?,
-                redeemed: r.try_get("redeemed")?,
+                name: r.try_get("name")?,
+                status: if redeemed {
+                    InviteStatus::Joined
+                } else if expired {
+                    InviteStatus::Expired
+                } else {
+                    InviteStatus::Pending
+                },
+                joined_username: r.try_get("joined_username")?,
             })
         })
-        .collect::<Result<Vec<_>, sqlx::Error>>()
-        .map_err(ApiError::from)
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+    let mine = sqlx::query(
+        "SELECT i.code, i.name, u.username AS inviter \
+         FROM invitations i LEFT JOIN users u ON u.id = i.inviter_id \
+         WHERE i.redeemed_by = $1 ORDER BY i.redeemed_at LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    let (invited_by, my_invite_code, my_invite_name) = match mine {
+        Some(r) => (
+            r.try_get("inviter")?,
+            Some(r.try_get::<String, _>("code")?),
+            Some(r.try_get::<String, _>("name")?),
+        ),
+        None => (None, None, None),
+    };
+
+    Ok(InvitesOverview { invited_by, my_invite_code, my_invite_name, invites })
+}
+
+/// Renames an invitation. Allowed for the inviter while the code is still
+/// unredeemed, and for the user who redeemed it (so friends can fix the
+/// name they were invited under once they've registered).
+pub async fn rename_invitation(
+    pool: &PgPool,
+    user_id: Uuid,
+    code: &str,
+    name: &str,
+) -> Result<(), ApiError> {
+    let res = sqlx::query(
+        "UPDATE invitations SET name = $1 WHERE code = $2 \
+         AND (redeemed_by = $3 OR (inviter_id = $3 AND redeemed_at IS NULL))",
+    )
+    .bind(name)
+    .bind(code)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    Ok(())
 }
 
 /// Looks a user up by username, case-insensitively.

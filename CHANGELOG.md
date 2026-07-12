@@ -4,6 +4,19 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-11
+
+- 20:13 — Hardened invitations: codes now expire after 7 days, each user
+  may send at most 5 per day, accounts younger than 24 hours can't invite
+  yet, and codes are just the 8-character code (no `BREAK-` prefix).
+  Invitations gained a name field — set by the inviter, editable by the
+  invited user once registered (`PUT /api/invites/{code}/name`) — and
+  `GET /api/invites` now returns a full overview (who invited you, your
+  invitation's name, and each sent invite's pending/expired/joined status).
+  The Invite page says "Invite your friends", labels the code "One time
+  use code", takes an optional friend's name, and mints a fresh code after
+  every copy or share.
+
 ## 2026-07-10
 
 - 20:35 — Containerized the app: multi-stage Dockerfiles for the backend

@@ -11,7 +11,10 @@ use actix_web::web::Data;
 use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
-use shared::{AuthSession, Invitation, Parking, PlaceDetail, PlaceSummary, PlaceType, Requirement};
+use shared::{
+    AuthSession, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceSummary,
+    PlaceType, Requirement, INVITES_PER_DAY,
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -43,23 +46,44 @@ async fn seed_invite(pool: &PgPool) -> String {
     code
 }
 
-/// Registers `username` (via a freshly seeded invite) and returns their
-/// session token.
-async fn register<S, B>(app: &S, pool: &PgPool, username: &str) -> String
+/// Registers `username` with `invite_code` and returns their session
+/// token. The account is brand-new, so it can't send invitations yet.
+async fn register_fresh_with_code<S, B>(app: &S, username: &str, invite_code: &str) -> String
 where
     S: Service<actix_http::Request, Response = ServiceResponse<B>, Error = actix_web::Error>,
     B: MessageBody,
 {
-    let code = seed_invite(pool).await;
     let req = TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(json!({ "username": username, "password": TEST_PASSWORD, "invite_code": code }))
+        .set_json(json!({
+            "username": username,
+            "password": TEST_PASSWORD,
+            "invite_code": invite_code,
+        }))
         .to_request();
     let res = call_service(app, req).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let session: AuthSession = read_body_json(res).await;
     assert_eq!(session.username, username);
     session.token
+}
+
+/// Registers `username` (via a freshly seeded invite) and returns their
+/// session token. The account's created_at is backdated two days so tests
+/// can immediately send invitations (new accounts must wait 24 hours).
+async fn register<S, B>(app: &S, pool: &PgPool, username: &str) -> String
+where
+    S: Service<actix_http::Request, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    B: MessageBody,
+{
+    let code = seed_invite(pool).await;
+    let token = register_fresh_with_code(app, username, &code).await;
+    sqlx::query("UPDATE users SET created_at = now() - interval '2 days' WHERE username = $1")
+        .bind(username)
+        .execute(pool)
+        .await
+        .unwrap();
+    token
 }
 
 /// `Authorization: Bearer` header pair for [`TestRequest::insert_header`].
@@ -464,7 +488,24 @@ async fn registration_requires_a_valid_invite_code(pool: PgPool) {
         .set_json(json!({
             "username": "nobody-invited",
             "password": TEST_PASSWORD,
-            "invite_code": "BREAK-FAKE01",
+            "invite_code": "FAKE0001",
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // An expired (8-day-old) but otherwise valid, unredeemed code.
+    let stale = seed_invite(&pool).await;
+    sqlx::query("UPDATE invitations SET created_at = now() - interval '8 days' WHERE code = $1")
+        .bind(&stale)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "too-late",
+            "password": TEST_PASSWORD,
+            "invite_code": stale,
         }))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
@@ -489,43 +530,207 @@ async fn invited_users_can_issue_and_track_their_own_invites(pool: PgPool) {
     let app = app(pool.clone()).await;
     let token = register(&app, &pool, "scout-one").await;
 
-    // No invites yet.
+    // No invites yet; scout-one used an inviter-less bootstrap code.
     let req =
         TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::OK);
-    let invites: Vec<Invitation> = read_body_json(res).await;
-    assert!(invites.is_empty());
+    let overview: InvitesOverview = read_body_json(res).await;
+    assert!(overview.invites.is_empty());
+    assert_eq!(overview.invited_by, None);
+    assert!(overview.my_invite_code.is_some());
 
     // Issuing one requires being signed in.
-    let req = TestRequest::post().uri("/api/invites").to_request();
+    let req = TestRequest::post().uri("/api/invites").set_json(json!({})).to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
 
-    let req = TestRequest::post().uri("/api/invites").insert_header(auth(&token)).to_request();
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": "Bobby" }))
+        .to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let issued: Invitation = read_body_json(res).await;
-    assert!(!issued.redeemed);
+    assert_eq!(issued.status, InviteStatus::Pending);
+    assert_eq!(issued.name, "Bobby");
+    assert_eq!(issued.joined_username, None);
+    // Just the code — no prefix, short enough to read out loud.
+    assert!(!issued.code.contains('-'), "unexpected prefix in {}", issued.code);
+    assert_eq!(issued.code.len(), 8);
+    assert!(issued.code.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()));
 
     let req =
         TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
-    let invites: Vec<Invitation> = read_body_json(call_service(&app, req).await).await;
-    assert_eq!(invites, vec![issued.clone()]);
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites, vec![issued.clone()]);
 
     // A friend redeems it...
-    let req = TestRequest::post()
-        .uri("/api/auth/register")
-        .set_json(json!({
-            "username": "scout-two",
-            "password": TEST_PASSWORD,
-            "invite_code": issued.code,
-        }))
-        .to_request();
-    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    register_fresh_with_code(&app, "scout-two", &issued.code).await;
 
-    // ...and it now shows as redeemed for the inviter.
+    // ...and it now shows as joined for the inviter, with the friend's
+    // username and the name the invite was created under.
     let req =
         TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
-    let invites: Vec<Invitation> = read_body_json(call_service(&app, req).await).await;
-    assert_eq!(invites, vec![Invitation { code: issued.code, redeemed: true }]);
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(
+        overview.invites,
+        vec![Invitation {
+            code: issued.code,
+            name: "Bobby".to_owned(),
+            status: InviteStatus::Joined,
+            joined_username: Some("scout-two".to_owned()),
+        }]
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    // Registered just now — not backdated like the `register` helper does.
+    let token = register_fresh_with_code(&app, "newbie", &code).await;
+
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Once the account is a day old, inviting works.
+    sqlx::query("UPDATE users SET created_at = now() - interval '25 hours' WHERE username = $1")
+        .bind("newbie")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invitations_are_limited_to_five_per_day(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+
+    for _ in 0..INVITES_PER_DAY {
+        let req = TestRequest::post()
+            .uri("/api/invites")
+            .insert_header(auth(&token))
+            .set_json(json!({}))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Yesterday's invitations don't count against today.
+    sqlx::query(
+        "UPDATE invitations SET created_at = now() - interval '2 days' \
+         WHERE inviter_id IS NOT NULL",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invited_user_can_rename_their_invitation(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": "Bobby" }))
+        .to_request();
+    let issued: Invitation = read_body_json(call_service(&app, req).await).await;
+
+    // The inviter can rename a pending code.
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", issued.code))
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": "Robert" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    let friend = register_fresh_with_code(&app, "scout-two", &issued.code).await;
+
+    // The friend sees who invited them and the name on their invitation.
+    let req = TestRequest::get().uri("/api/invites").insert_header(auth(&friend)).to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invited_by, Some("scout-one".to_owned()));
+    assert_eq!(overview.my_invite_code, Some(issued.code.clone()));
+    assert_eq!(overview.my_invite_name, Some("Robert".to_owned()));
+
+    // Once registered, the friend can change that name...
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", issued.code))
+        .insert_header(auth(&friend))
+        .set_json(json!({ "name": "Bob" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // ...the inviter can no longer rename the redeemed code...
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", issued.code))
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": "Hijack" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    // ...and a stranger never could.
+    let stranger = register(&app, &pool, "scout-three").await;
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", issued.code))
+        .insert_header(auth(&stranger))
+        .set_json(json!({ "name": "Nope" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    // Both sides see the friend's chosen name.
+    let req = TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites[0].name, "Bob");
+    assert_eq!(overview.invites[0].joined_username, Some("scout-two".to_owned()));
+    let req = TestRequest::get().uri("/api/invites").insert_header(auth(&friend)).to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.my_invite_name, Some("Bob".to_owned()));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn pending_invites_show_expired_after_seven_days(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({}))
+        .to_request();
+    let issued: Invitation = read_body_json(call_service(&app, req).await).await;
+
+    sqlx::query("UPDATE invitations SET created_at = now() - interval '8 days' WHERE code = $1")
+        .bind(&issued.code)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let req = TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites[0].status, InviteStatus::Expired);
 }

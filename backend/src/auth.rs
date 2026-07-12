@@ -8,13 +8,16 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_web::dev::Payload;
-use actix_web::web::{self, Data, Json, ServiceConfig};
-use actix_web::{get, post, FromRequest, HttpRequest, HttpResponse};
+use actix_web::web::{self, Data, Json, Path, ServiceConfig};
+use actix_web::{get, post, put, FromRequest, HttpRequest, HttpResponse};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use serde_json::json;
-use shared::{validate_password, validate_username, AuthSession, Credentials};
+use shared::{
+    validate_invite_name, validate_password, validate_username, AuthSession, Credentials,
+    InviteNameUpdate, NewInvite,
+};
 use uuid::Uuid;
 
 use crate::db;
@@ -27,7 +30,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(logout)
         .service(me)
         .service(create_invite)
-        .service(list_invites);
+        .service(list_invites)
+        .service(rename_invite);
 }
 
 /// The logged-in user behind a request, extracted from the bearer token.
@@ -156,16 +160,38 @@ async fn me(user: AuthUser) -> HttpResponse {
     HttpResponse::Ok().json(json!({ "username": user.username }))
 }
 
-/// Issues a fresh invite code the signed-in user can hand to a friend.
+/// Issues a fresh invite code the signed-in user can hand to a friend,
+/// optionally labelled with the friend's name.
 #[post("/api/invites")]
-async fn create_invite(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
-    let code = db::create_invitation(&state.pool, user.id).await?;
-    Ok(HttpResponse::Created().json(json!({ "code": code, "redeemed": false })))
+async fn create_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<NewInvite>,
+) -> Result<HttpResponse, ApiError> {
+    let name = body.into_inner().name.trim().to_owned();
+    validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    let invite = db::create_invitation(&state.pool, user.id, &name).await?;
+    Ok(HttpResponse::Created().json(invite))
 }
 
-/// The signed-in user's invitations, most recent first.
+/// The signed-in user's invitations and friends, plus who invited them.
 #[get("/api/invites")]
 async fn list_invites(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
-    let invites = db::list_invitations(&state.pool, user.id).await?;
-    Ok(HttpResponse::Ok().json(invites))
+    let overview = db::invites_overview(&state.pool, user.id).await?;
+    Ok(HttpResponse::Ok().json(overview))
+}
+
+/// Renames an invitation: the inviter may rename a pending code, and the
+/// user who redeemed it may change the name they were invited under.
+#[put("/api/invites/{code}/name")]
+async fn rename_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    code: Path<String>,
+    body: Json<InviteNameUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let name = body.into_inner().name.trim().to_owned();
+    validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    db::rename_invitation(&state.pool, user.id, code.trim(), &name).await?;
+    Ok(HttpResponse::NoContent().finish())
 }

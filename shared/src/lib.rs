@@ -377,11 +377,82 @@ pub struct Credentials {
     pub invite_code: String,
 }
 
+/// Days before an unredeemed invitation code expires.
+pub const INVITE_EXPIRY_DAYS: i32 = 7;
+/// Most invitations a user may send per (rolling) day.
+pub const INVITES_PER_DAY: i64 = 5;
+/// Hours a new account must wait before it can send invitations.
+pub const INVITE_WAIT_HOURS: i32 = 24;
+/// Longest allowed invitation name.
+pub const INVITE_NAME_MAX: usize = 40;
+
+/// Validates the friendly name attached to an invitation.
+pub fn validate_invite_name(name: &str) -> Result<(), &'static str> {
+    if name.chars().count() > INVITE_NAME_MAX {
+        return Err("name must be 40 characters or fewer");
+    }
+    Ok(())
+}
+
+/// Where an invitation is in its life: waiting to be used, past its
+/// 7-day window, or redeemed by a friend who joined.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteStatus {
+    Pending,
+    Expired,
+    Joined,
+}
+
+impl InviteStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            InviteStatus::Pending => "Pending",
+            InviteStatus::Expired => "Expired",
+            InviteStatus::Joined => "Joined",
+        }
+    }
+}
+
 /// A code an existing user can hand to a friend so they can register.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Invitation {
     pub code: String,
-    pub redeemed: bool,
+    /// Friendly name the inviter gave this invitation (may be empty); the
+    /// invited user can change it once they've registered.
+    #[serde(default)]
+    pub name: String,
+    pub status: InviteStatus,
+    /// Username of the friend who joined with this code, once redeemed.
+    #[serde(default)]
+    pub joined_username: Option<String>,
+}
+
+/// Body for `POST /api/invites`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NewInvite {
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Body for `PUT /api/invites/{code}/name`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InviteNameUpdate {
+    pub name: String,
+}
+
+/// Everything the account page needs about invitations: who invited this
+/// user (and the editable name on that invitation), plus every invitation
+/// this user has sent, most recent first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvitesOverview {
+    /// Username of whoever invited this user, if their account still exists.
+    pub invited_by: Option<String>,
+    /// Code of the invitation this user redeemed to register, if any.
+    pub my_invite_code: Option<String>,
+    /// Current name on that invitation — the user may change it.
+    pub my_invite_name: Option<String>,
+    pub invites: Vec<Invitation>,
 }
 
 /// A logged-in session: the bearer token plus the display username.
@@ -438,6 +509,55 @@ pub fn encode_query_component(s: &str) -> String {
         }
     }
     out
+}
+
+/// Decodes a percent-encoded URL query component; `+` also means space.
+pub fn decode_query_component(s: &str) -> String {
+    fn hex(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    }
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                (Some(hi), Some(lo)) => {
+                    out.push(hi * 16 + lo);
+                    i += 3;
+                }
+                _ => {
+                    out.push(b'%');
+                    i += 1;
+                }
+            },
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The decoded value of `key` in a URL query string (a leading `?` is
+/// allowed), e.g. for reading the invite code out of a shared link.
+pub fn query_param(search: &str, key: &str) -> Option<String> {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| decode_query_component(v))
 }
 
 /// Query parameters for `GET /api/places`.
@@ -717,6 +837,46 @@ mod tests {
         assert!(validate_username("sam smith").is_err());
         assert!(validate_username("sam@home").is_err());
         assert!(validate_username("").is_err());
+    }
+
+    #[test]
+    fn query_param_finds_and_decodes_values() {
+        assert_eq!(query_param("?code=A1B2C3D4", "code"), Some("A1B2C3D4".to_owned()));
+        assert_eq!(query_param("a=1&code=X%20Y%26Z", "code"), Some("X Y&Z".to_owned()));
+        assert_eq!(query_param("?note=one+two", "note"), Some("one two".to_owned()));
+        assert_eq!(query_param("?code=A", "other"), None);
+        assert_eq!(query_param("", "code"), None);
+        // Malformed escapes pass through rather than panicking.
+        assert_eq!(query_param("?x=50%2", "x"), Some("50%2".to_owned()));
+        assert_eq!(query_param("?x=%GG", "x"), Some("%GG".to_owned()));
+    }
+
+    #[test]
+    fn decode_query_component_round_trips_encode() {
+        for s in ["camber coffee", "a&b=c?", "plain-text_1.0~", "naïve café"] {
+            assert_eq!(decode_query_component(&encode_query_component(s)), s);
+        }
+    }
+
+    #[test]
+    fn invite_status_serde_and_labels() {
+        for (status, json, label) in [
+            (InviteStatus::Pending, "\"pending\"", "Pending"),
+            (InviteStatus::Expired, "\"expired\"", "Expired"),
+            (InviteStatus::Joined, "\"joined\"", "Joined"),
+        ] {
+            assert_eq!(serde_json::to_string(&status).expect("serialize"), json);
+            let back: InviteStatus = serde_json::from_str(json).expect("deserialize");
+            assert_eq!(back, status);
+            assert_eq!(status.label(), label);
+        }
+    }
+
+    #[test]
+    fn validate_invite_name_limits_length() {
+        assert_eq!(validate_invite_name(""), Ok(()));
+        assert_eq!(validate_invite_name("Bob"), Ok(()));
+        assert!(validate_invite_name(&"x".repeat(INVITE_NAME_MAX + 1)).is_err());
     }
 
     #[test]

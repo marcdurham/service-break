@@ -508,6 +508,13 @@ button { cursor: pointer; }
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .invite-share-btn .mi { font-size: 20px; }
+.invite-name-input {
+  position: relative; width: 100%; box-sizing: border-box;
+  border: 1.5px solid #7a5d40; border-radius: 12px;
+  background: var(--dark2); color: var(--cream);
+  padding: 12px 14px; font-size: 14.5px; margin: 6px 0 14px;
+}
+.invite-name-input::placeholder { color: #a98d70; }
 
 /* ---------- account ---------- */
 
