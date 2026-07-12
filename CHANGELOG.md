@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-12
+
+- 13:45 — Added a show/hide password toggle to the login form on `/account`, using the same `password_field` helper as the change-password section.
+
 ## 2026-07-11
 
 - 22:45 — Added show/hide password toggles (eye button) to the Password and Confirm password fields on `/register`, matching the existing toggle on the Account page's change-password section.
