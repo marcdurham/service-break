@@ -191,6 +191,19 @@ pub async fn rename_invite(code: &str, name: &str) -> ApiResult<()> {
     Ok(())
 }
 
+/// Revokes (expires) a pending invitation. Only the inviter can revoke.
+pub async fn revoke_invite(code: &str) -> ApiResult<()> {
+    let url = format!("/api/invites/{}", encode_query_component(code));
+    let res = with_auth(Request::delete(&url))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not revoke the invitation").await);
+    }
+    Ok(())
+}
+
 /// Swaps the signed-in user's password. The current password is verified
 /// against the stored hash before the new one is accepted.
 pub async fn change_password(creds: &ChangePassword) -> ApiResult<()> {

@@ -19,9 +19,11 @@
 - [x] Backend enforcement logic uses these constants (age gate determines limit, doesn't block)
 - [x] Updated comments and DEPLOY.md documentation
 
-### M3 — Revoke sent invite codes
-- [ ] Backend: `DELETE /api/invites/{code}` endpoint
-- [ ] Frontend: Invite view with Revoke button for pending invites
+### M3 — Revoke sent invite codes ✅ Backend complete
+- [x] Migration `20260711150000_invitation_expired.sql` adds `is_expired` column to invitations
+- [x] Added `revoke_invitation` function in `db.rs`
+- [x] Added `DELETE /api/invites/{code}` endpoint in `auth.rs`
+- [ ] Frontend: Revoke button on pending invitations in Account view
 
 ### M4 — Share place URI
 - [ ] Frontend: Add "Share" button to detail view action row

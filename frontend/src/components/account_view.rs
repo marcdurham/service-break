@@ -15,7 +15,7 @@ pub struct AccountViewProps {
 }
 
 /// One row in the friends & invitations list.
-fn invite_row(inv: &Invitation) -> Html {
+fn invite_row(inv: &Invitation, on_revoke: Callback<String>) -> Html {
     let title = if !inv.name.is_empty() {
         inv.name.clone()
     } else if let Some(u) = &inv.joined_username {
@@ -32,13 +32,30 @@ fn invite_row(inv: &Invitation) -> Html {
         InviteStatus::Expired => "friend-status status-expired",
         InviteStatus::Joined => "friend-status status-joined",
     };
+    let code = inv.code.clone();
+    let on_revoke = on_revoke.clone();
+    let is_pending = inv.status == InviteStatus::Pending;
     html! {
-        <div class="friend-row" key={inv.code.clone()}>
+        <div class="friend-row" key={code.clone()}>
             <div>
                 <div class="friend-name">{title}</div>
                 <div class="friend-sub">{sub}</div>
             </div>
-            <span class={chip_class}>{inv.status.label()}</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+                if is_pending {
+                    <button
+                        class="revoke-btn"
+                        onclick={{
+                            let code = code.clone();
+                            Callback::from(move |_| on_revoke.emit(code.clone()))
+                        }}
+                        title="Revoke this invitation"
+                    >
+                        <span class="mi">{"cancel"}</span>
+                    </button>
+                }
+                <span class={chip_class}>{inv.status.label()}</span>
+            </div>
         </div>
     }
 }
@@ -88,6 +105,29 @@ pub fn account_view(props: &AccountViewProps) -> Html {
             }
         });
     }
+
+    let revoke_invite = {
+        let overview = overview.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |code: String| {
+            let overview = overview.clone();
+            let on_toast = on_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::revoke_invite(&code).await {
+                    Ok(()) => {
+                        on_toast.emit("Invitation revoked".to_owned());
+                        // Refresh the overview to update the list.
+                        if let Ok(o) = api::list_invites().await {
+                            overview.set(Some(o));
+                        }
+                    }
+                    Err(msg) => {
+                        on_toast.emit(msg);
+                    }
+                }
+            });
+        })
+    };
 
     let log_in = {
         let username = username.clone();
@@ -291,7 +331,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                                 <span class="friend-status status-joined">{"Friend"}</span>
                             </div>
                         }
-                        { for o.invites.iter().map(invite_row) }
+                        { for o.invites.iter().map(|inv| invite_row(inv, revoke_invite.clone())) }
                         if o.invites.is_empty() && o.invited_by.is_none() {
                             <div class="friend-row">
                                 <div class="friend-sub">

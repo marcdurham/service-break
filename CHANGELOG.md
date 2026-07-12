@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 15:30 — M3 backend complete (invite revocation): added `DELETE /api/invites/{code}` endpoint with migration for `is_expired` column on invitations table.
+
 - 15:10 — M2 complete (revised invite limits): confirmed constants are already set to 25/day (new) and 100/day (old), backend enforcement uses them, updated comments and DEPLOY.md.
 
 - 14:50 — Frontend for M1 (user given/family name fields): Account page now displays Given Name and Family Name inputs with a Save Profile button; loads names from `GET /api/auth/me` on sign-in; added `get_me()` and `update_profile()` API functions.
