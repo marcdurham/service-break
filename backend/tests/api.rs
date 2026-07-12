@@ -1634,3 +1634,45 @@ async fn update_profile_partial_given_name(pool: PgPool) {
     // family_name should be either null or empty string
     assert!(body["family_name"].is_null() || body["family_name"].as_str().is_none_or(|s| s.is_empty()));
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn rename_invite_authorization(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Alice creates an invite via the API (sets inviter_id).
+    let alice_token = register(&app, &pool, "rename-alice").await;
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&alice_token))
+        .set_json(json!({ "name": "Original" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let code_a: Invitation = read_body_json(res).await;
+
+    // Alice can rename her own pending invite.
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", code_a.code))
+        .insert_header(auth(&alice_token))
+        .set_json(json!({ "name": "RenamedByAlice" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Bob (non-inviter, non-redeemer) cannot rename it.
+    let bob_token = register(&app, &pool, "rename-bob").await;
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", code_a.code))
+        .insert_header(auth(&bob_token))
+        .set_json(json!({ "name": "Hacked" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    // Redeemer can rename it.
+    let code_b = seed_invite(&pool).await;
+    let redeemer_token = register_fresh_with_code(&app, "redeemer-user", &code_b).await;
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", code_b))
+        .insert_header(auth(&redeemer_token))
+        .set_json(json!({ "name": "MyInviteName" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+}
