@@ -4,6 +4,7 @@
 //! `Authorization: Bearer <token>`; handlers that change data take an
 //! [`AuthUser`] argument, which rejects requests without a valid session.
 
+use actix_web::delete;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -33,7 +34,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(update_profile)
         .service(create_invite)
         .service(list_invites)
-        .service(rename_invite);
+        .service(rename_invite)
+        .service(delete_invite);
 }
 
 /// The logged-in user behind a request, extracted from the bearer token.
@@ -287,6 +289,17 @@ async fn rename_invite(
     let name = body.into_inner().name.trim().to_owned();
     validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     db::rename_invitation(&state.pool, user.id, code.trim(), &name).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Revokes (expires) a pending invitation. Only the inviter can revoke.
+#[delete("/api/invites/{code}")]
+async fn delete_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    code: Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    db::revoke_invitation(&state.pool, user.id, code.trim()).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -732,6 +732,26 @@ pub async fn rename_invitation(
     Ok(())
 }
 
+/// Revokes (expires) an invitation. Only the inviter can revoke pending codes;
+/// redeemed invitations cannot be revoked.
+pub async fn revoke_invitation(
+    pool: &PgPool,
+    user_id: Uuid,
+    code: &str,
+) -> Result<(), ApiError> {
+    let res = sqlx::query(
+        "UPDATE invitations SET is_expired = true WHERE code = $1 AND inviter_id = $2 AND redeemed_at IS NULL",
+    )
+    .bind(code)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    Ok(())
+}
+
 /// Looks a user up by username, case-insensitively.
 pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
