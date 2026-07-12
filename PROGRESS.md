@@ -25,9 +25,9 @@
 - [x] Added `DELETE /api/invites/{code}` endpoint in `auth.rs`
 - [x] Frontend: Revoke button on pending invitations in Account view with toast notification
 
-### M4 — Share place URI
-- [ ] Frontend: Add "Share" button to detail view action row
-- [ ] Use `navigator.share()` or clipboard fallback
+### M4 — Share place URI ✅ Complete
+- [x] Added "Share" button in action row of Place Detail view
+- [x] Copies current URL to clipboard via Web Clipboard API with toast confirmation
 
 ## Next steps
 1. Complete M1 frontend (account view)

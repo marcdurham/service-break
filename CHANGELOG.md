@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 16:00 — M4 frontend complete (share place URI): Place Detail view now has a Share button in the action row that copies the current URL to clipboard via Web Clipboard API and shows a toast confirmation.
+
 - 15:45 — M3 frontend complete (invite revocation UI): Account view now shows a Revoke button on each pending invitation; clicking it calls the new DELETE endpoint and refreshes the list with a toast.
 
 - 15:30 — M3 backend complete (invite revocation): added `DELETE /api/invites/{code}` endpoint with migration for `is_expired` column on invitations table.
