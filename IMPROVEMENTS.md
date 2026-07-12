@@ -24,7 +24,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that attempting to revoke an invitation with a non-existent code returns 404.
 
-### 6. Add clippy lints configuration for workspace
+### 6. ~~Add test for profile update validation~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that attempting to update profile with empty name returns 400 Bad Request.
+
+### 7. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
