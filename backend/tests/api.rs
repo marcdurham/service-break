@@ -1423,3 +1423,27 @@ async fn update_profile_accepts_both_names(pool: PgPool) {
     assert_eq!(body["given_name"], "Alice");
     assert_eq!(body["family_name"], "Smith");
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_partial_family_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-partial").await;
+    // Update with only family name (no given name).
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "family_name": "Jones" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify family name was saved and given name is still empty/null.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    // given_name should be either null or empty string
+    assert!(body["given_name"].is_null() || body["given_name"].as_str().map_or(true, |s| s.is_empty()));
+    assert_eq!(body["family_name"], "Jones");
+}
