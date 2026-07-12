@@ -1400,3 +1400,26 @@ async fn update_profile_accepts_valid_name(pool: PgPool) {
     let body: serde_json::Value = read_body_json(res).await;
     assert_eq!(body["given_name"], "Alice");
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_both_names(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-both").await;
+    // Update with both given and family names.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Alice", "family_name": "Smith" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify both names were saved.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["given_name"], "Alice");
+    assert_eq!(body["family_name"], "Smith");
+}
