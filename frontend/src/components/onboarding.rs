@@ -17,23 +17,24 @@ pub fn onboarding(props: &OnboardingProps) -> Html {
             <div class="onb-blob-b"></div>
             <div class="onb-body">
                 <div class="onb-logo">
-                    <div class="onb-logo-badge"><span class="mi">{"wc"}</span></div>
+                    <div class="onb-logo-badge"><span class="mi">{"coffee"}</span></div>
                     <div>
                         <div class="onb-app-name">{"Service Break"}</div>
-                        <div class="onb-tagline">{"find a clean place"}</div>
+                        <div class="onb-tagline">{"find places for refreshment"}</div>
                     </div>
                 </div>
-                <h1 class="onb-h1">{"Every good trip needs a clean break."}</h1>
+                <h1 class="onb-h1">{"Good places to take breaks"}</h1>
                 <p class="onb-p">
-                    {"Real ratings for bathrooms at shops, stores, malls, parks \
-                      & more — sorted by what's closest to you."}
+                    {"Places with coffee, food, bathrooms, places to sit at \
+                      shops, stores, malls, parks & more — sorted by what's \
+                      closest to you."}
                 </p>
             </div>
             <div class="onb-foot">
                 <div class="onb-features">
                     <div class="onb-feature">
                         <span class="mi">{"mop"}</span>
-                        <div class="onb-feature-text">{"Cleanliness you can trust"}</div>
+                        <div class="onb-feature-text">{"Cleanliness ratings"}</div>
                     </div>
                     <div class="onb-feature">
                         <span class="mi">{"near_me"}</span>

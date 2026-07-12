@@ -8,13 +8,16 @@ use std::future::Future;
 use std::pin::Pin;
 
 use actix_web::dev::Payload;
-use actix_web::web::{self, Data, Json, ServiceConfig};
-use actix_web::{get, post, FromRequest, HttpRequest, HttpResponse};
+use actix_web::web::{self, Data, Json, Path, ServiceConfig};
+use actix_web::{get, post, put, FromRequest, HttpRequest, HttpResponse};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use serde_json::json;
-use shared::{validate_password, validate_username, AuthSession, Credentials};
+use shared::{
+    validate_invite_name, validate_password, validate_username, AuthSession, Credentials,
+    InviteNameUpdate, NewInvite,
+};
 use uuid::Uuid;
 
 use crate::db;
@@ -22,7 +25,13 @@ use crate::error::ApiError;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(register).service(login).service(logout).service(me);
+    cfg.service(register)
+        .service(login)
+        .service(logout)
+        .service(me)
+        .service(create_invite)
+        .service(list_invites)
+        .service(rename_invite);
 }
 
 /// The logged-in user behind a request, extracted from the bearer token.
@@ -30,6 +39,29 @@ pub fn configure(cfg: &mut ServiceConfig) {
 pub struct AuthUser {
     pub id: Uuid,
     pub username: String,
+    pub is_admin: bool,
+}
+
+/// Extractor for admin-only endpoints: like [`AuthUser`], but rejects
+/// non-admin accounts with 403.
+#[derive(Debug, Clone)]
+pub struct AdminUser(pub AuthUser);
+
+impl FromRequest for AdminUser {
+    type Error = ApiError;
+    type Future = Pin<Box<dyn Future<Output = Result<AdminUser, ApiError>>>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        let user = AuthUser::from_request(req, payload);
+        Box::pin(async move {
+            let user = user.await?;
+            if user.is_admin {
+                Ok(AdminUser(user))
+            } else {
+                Err(ApiError::Forbidden("that needs an admin account".to_owned()))
+            }
+        })
+    }
 }
 
 fn bearer_token(req: &HttpRequest) -> Option<String> {
@@ -60,7 +92,10 @@ impl FromRequest for AuthUser {
     }
 }
 
-fn hash_password(password: &str) -> Result<String, ApiError> {
+/// Argon2-hashes a password into a PHC string, as stored in `users`.
+/// Public because the `hash-password` helper binary (used by
+/// `scripts/change-password.sh`) and the admin importer reuse it.
+pub fn hash_password(password: &str) -> Result<String, ApiError> {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
         .hash_password(password.as_bytes(), &salt)
@@ -80,7 +115,7 @@ fn new_token() -> String {
 }
 
 /// Runs a CPU-heavy closure off the async workers.
-async fn run_blocking<T: Send + 'static>(
+pub(crate) async fn run_blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
 ) -> Result<T, ApiError> {
     web::block(f)
@@ -92,10 +127,11 @@ async fn start_session(
     pool: &sqlx::PgPool,
     user_id: Uuid,
     username: String,
+    is_admin: bool,
 ) -> Result<AuthSession, ApiError> {
     let token = new_token();
     db::create_session(pool, &token, user_id).await?;
-    Ok(AuthSession { token, username })
+    Ok(AuthSession { token, username, is_admin })
 }
 
 #[post("/api/auth/register")]
@@ -107,11 +143,15 @@ async fn register(
     let username = creds.username.trim().to_owned();
     validate_username(&username).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     validate_password(&creds.password).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    let invite_code = creds.invite_code.trim().to_owned();
+    if invite_code.is_empty() {
+        return Err(ApiError::BadRequest("an invite code is required to register".to_owned()));
+    }
 
     let password = creds.password;
     let hash = run_blocking(move || hash_password(&password)).await?;
-    let user_id = db::create_user(&state.pool, &username, &hash).await?;
-    let session = start_session(&state.pool, user_id, username).await?;
+    let user_id = db::register_user(&state.pool, &username, &hash, &invite_code).await?;
+    let session = start_session(&state.pool, user_id, username, false).await?;
     Ok(HttpResponse::Created().json(session))
 }
 
@@ -129,7 +169,7 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
     if !ok {
         return Err(bad());
     }
-    let session = start_session(&state.pool, user.id, user.username).await?;
+    let session = start_session(&state.pool, user.id, user.username, user.is_admin).await?;
     Ok(HttpResponse::Ok().json(session))
 }
 
@@ -144,5 +184,57 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
 async fn me(user: AuthUser) -> HttpResponse {
-    HttpResponse::Ok().json(json!({ "username": user.username }))
+    HttpResponse::Ok().json(json!({ "username": user.username, "is_admin": user.is_admin }))
+}
+
+/// Issues a fresh invite code the signed-in user can hand to a friend,
+/// optionally labelled with the friend's name.
+#[post("/api/invites")]
+async fn create_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<NewInvite>,
+) -> Result<HttpResponse, ApiError> {
+    let name = body.into_inner().name.trim().to_owned();
+    validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    let invite = db::create_invitation(&state.pool, user.id, &name).await?;
+    Ok(HttpResponse::Created().json(invite))
+}
+
+/// The signed-in user's invitations and friends, plus who invited them.
+#[get("/api/invites")]
+async fn list_invites(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
+    let overview = db::invites_overview(&state.pool, user.id).await?;
+    Ok(HttpResponse::Ok().json(overview))
+}
+
+/// Renames an invitation: the inviter may rename a pending code, and the
+/// user who redeemed it may change the name they were invited under.
+#[put("/api/invites/{code}/name")]
+async fn rename_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    code: Path<String>,
+    body: Json<InviteNameUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let name = body.into_inner().name.trim().to_owned();
+    validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    db::rename_invitation(&state.pool, user.id, code.trim(), &name).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The hash produced here (and by the `hash-password` binary that
+    /// `scripts/change-password.sh` calls) must verify with the same code
+    /// the login endpoint uses.
+    #[test]
+    fn hash_password_round_trips_through_verify() {
+        let hash = hash_password("I brake for coffee").expect("hash");
+        assert!(hash.starts_with("$argon2"));
+        assert!(verify_password("I brake for coffee", &hash));
+        assert!(!verify_password("i brake for tea", &hash));
+    }
 }

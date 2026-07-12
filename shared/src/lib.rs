@@ -178,6 +178,15 @@ pub enum Amenity {
 }
 
 impl Amenity {
+    /// The offerings surfaced as top-level filter chips on the map and
+    /// list screens, in display order.
+    pub const FEATURED: [Amenity; 4] = [
+        Amenity::Restrooms,
+        Amenity::Coffee,
+        Amenity::Food,
+        Amenity::Seating,
+    ];
+
     pub const ALL: [Amenity; 6] = [
         Amenity::Restrooms,
         Amenity::Coffee,
@@ -233,6 +242,69 @@ impl FromStr for Amenity {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Amenity::ALL.into_iter().find(|a| a.as_str() == s).ok_or(())
+    }
+}
+
+/// A rateable aspect of a place. Bathroom cleanliness is required on every
+/// review; the other aspects are optional 1-5 scores for places that offer
+/// them (see [`Amenity`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Aspect {
+    Cleanliness,
+    Coffee,
+    Food,
+}
+
+impl Aspect {
+    pub const ALL: [Aspect; 3] = [Aspect::Cleanliness, Aspect::Coffee, Aspect::Food];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "cleanliness",
+            Aspect::Coffee => "coffee",
+            Aspect::Food => "food",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "Cleanliness",
+            Aspect::Coffee => "Coffee",
+            Aspect::Food => "Food",
+        }
+    }
+
+    /// Material Symbols icon name used in the UI.
+    pub fn icon(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "mop",
+            Aspect::Coffee => "local_cafe",
+            Aspect::Food => "restaurant",
+        }
+    }
+
+    /// Accent color for the aspect's row in the ratings breakdown.
+    pub fn color(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "#6f8256",
+            Aspect::Coffee => "#6f4e37",
+            Aspect::Food => "#c08a4a",
+        }
+    }
+}
+
+impl fmt::Display for Aspect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Aspect {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Aspect::ALL.into_iter().find(|a| a.as_str() == s).ok_or(())
     }
 }
 
@@ -309,6 +381,12 @@ pub struct PlaceSummary {
     #[serde(default)]
     pub amenities: Vec<Amenity>,
     pub clean_avg: Option<f64>,
+    /// Average of the reviews' optional coffee scores, when any exist.
+    #[serde(default)]
+    pub coffee_avg: Option<f64>,
+    /// Average of the reviews' optional food scores, when any exist.
+    #[serde(default)]
+    pub food_avg: Option<f64>,
     pub review_count: i64,
     pub distance_mi: Option<f64>,
 }
@@ -327,6 +405,10 @@ pub struct Review {
     pub id: Uuid,
     pub author: String,
     pub clean: i16,
+    #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
     pub text: String,
     pub created_at: String,
     pub time_ago: String,
@@ -344,6 +426,10 @@ pub struct NewPlace {
     #[serde(default)]
     pub address: Option<String>,
     pub clean: i16,
+    #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
     pub door_ft: i32,
     #[serde(default)]
     pub door_note: String,
@@ -363,14 +449,167 @@ pub struct NewReview {
     pub device_id: String,
     pub clean: i16,
     #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
+    #[serde(default)]
     pub text: String,
 }
 
+/// Full set of editable place fields, sent to `PUT /api/places/{id}` by a
+/// logged-in user. Coordinates resolve like on create — explicit lat/lng
+/// win, otherwise a *changed* address is parsed as "lat, lng" or geocoded;
+/// an unchanged address keeps the stored coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdatePlace {
+    pub name: String,
+    pub place_type: PlaceType,
+    #[serde(default)]
+    pub lat: Option<f64>,
+    #[serde(default)]
+    pub lng: Option<f64>,
+    #[serde(default)]
+    pub address: Option<String>,
+    pub door_ft: i32,
+    #[serde(default)]
+    pub door_note: String,
+    pub parking: Parking,
+    #[serde(default)]
+    pub purchase_required: Requirement,
+    #[serde(default)]
+    pub code_required: Requirement,
+    #[serde(default)]
+    pub amenities: Vec<Amenity>,
+    #[serde(default)]
+    pub hours: Option<String>,
+}
+
+/// One audited change to a place, from `GET /api/places/{id}/edits`: which
+/// field changed, its old and new value, who changed it and when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaceEdit {
+    pub field: String,
+    pub old_value: String,
+    pub new_value: String,
+    pub author: String,
+    pub created_at: String,
+    pub time_ago: String,
+}
+
+/// Human-readable label for a field name recorded in the place edit log.
+pub fn edit_field_label(field: &str) -> &str {
+    match field {
+        "name" => "Name",
+        "place_type" => "Type",
+        "location" => "Location",
+        "address" => "Address",
+        "door_ft" => "Bathroom distance (ft)",
+        "door_note" => "Bathroom directions",
+        "parking" => "Parking",
+        "purchase_required" => "Purchase required",
+        "code_required" => "Code required",
+        "amenities" => "Amenities",
+        "hours" => "Hours",
+        other => other,
+    }
+}
+
+/// How an audited value reads in the history UI; blanks become "(empty)".
+pub fn edit_value_display(value: &str) -> &str {
+    if value.trim().is_empty() {
+        "(empty)"
+    } else {
+        value
+    }
+}
+
 /// Username + password sent to `POST /api/auth/register` and `/login`.
+/// `invite_code` is required for registration (ignored, and safe to omit,
+/// on login).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub invite_code: String,
+}
+
+/// Days before an unredeemed invitation code expires.
+pub const INVITE_EXPIRY_DAYS: i32 = 7;
+/// Most invitations a user may send per (rolling) day.
+pub const INVITES_PER_DAY: i64 = 5;
+/// Hours a new account must wait before it can send invitations.
+pub const INVITE_WAIT_HOURS: i32 = 24;
+/// Longest allowed invitation name.
+pub const INVITE_NAME_MAX: usize = 40;
+
+/// Validates the friendly name attached to an invitation.
+pub fn validate_invite_name(name: &str) -> Result<(), &'static str> {
+    if name.chars().count() > INVITE_NAME_MAX {
+        return Err("name must be 40 characters or fewer");
+    }
+    Ok(())
+}
+
+/// Where an invitation is in its life: waiting to be used, past its
+/// 7-day window, or redeemed by a friend who joined.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteStatus {
+    Pending,
+    Expired,
+    Joined,
+}
+
+impl InviteStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            InviteStatus::Pending => "Pending",
+            InviteStatus::Expired => "Expired",
+            InviteStatus::Joined => "Joined",
+        }
+    }
+}
+
+/// A code an existing user can hand to a friend so they can register.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Invitation {
+    pub code: String,
+    /// Friendly name the inviter gave this invitation (may be empty); the
+    /// invited user can change it once they've registered.
+    #[serde(default)]
+    pub name: String,
+    pub status: InviteStatus,
+    /// Username of the friend who joined with this code, once redeemed.
+    #[serde(default)]
+    pub joined_username: Option<String>,
+}
+
+/// Body for `POST /api/invites`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NewInvite {
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Body for `PUT /api/invites/{code}/name`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InviteNameUpdate {
+    pub name: String,
+}
+
+/// Everything the account page needs about invitations: who invited this
+/// user (and the editable name on that invitation), plus every invitation
+/// this user has sent, most recent first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvitesOverview {
+    /// Username of whoever invited this user, if their account still exists.
+    pub invited_by: Option<String>,
+    /// Code of the invitation this user redeemed to register, if any.
+    pub my_invite_code: Option<String>,
+    /// Current name on that invitation — the user may change it.
+    pub my_invite_name: Option<String>,
+    pub invites: Vec<Invitation>,
 }
 
 /// A logged-in session: the bearer token plus the display username.
@@ -378,6 +617,27 @@ pub struct Credentials {
 pub struct AuthSession {
     pub token: String,
     pub username: String,
+    /// Admins get the admin page (backup export / import). Defaults so
+    /// sessions stored before the field existed still deserialize.
+    #[serde(default)]
+    pub is_admin: bool,
+}
+
+/// What `POST /api/admin/import` did: how many rows each table now holds,
+/// plus the newly generated passwords for accounts that were recreated
+/// (password hashes are never exported, so imported accounts get fresh
+/// random passwords — shown once, here).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImportSummary {
+    pub users: usize,
+    pub invitations: usize,
+    pub places: usize,
+    pub reviews: usize,
+    pub saved_places: usize,
+    /// username → newly generated password. Accounts that already existed
+    /// (matched by username — notably the importing admin) keep their
+    /// current password and don't appear here.
+    pub new_passwords: std::collections::BTreeMap<String, String>,
 }
 
 pub const USERNAME_MIN: usize = 3;
@@ -429,6 +689,55 @@ pub fn encode_query_component(s: &str) -> String {
     out
 }
 
+/// Decodes a percent-encoded URL query component; `+` also means space.
+pub fn decode_query_component(s: &str) -> String {
+    fn hex(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    }
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                (Some(hi), Some(lo)) => {
+                    out.push(hi * 16 + lo);
+                    i += 3;
+                }
+                _ => {
+                    out.push(b'%');
+                    i += 1;
+                }
+            },
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The decoded value of `key` in a URL query string (a leading `?` is
+/// allowed), e.g. for reading the invite code out of a shared link.
+pub fn query_param(search: &str, key: &str) -> Option<String> {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| decode_query_component(v))
+}
+
 /// Query parameters for `GET /api/places`.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PlacesQuery {
@@ -444,6 +753,10 @@ pub struct PlacesQuery {
     /// Comma-separated list of [`PlaceType`] strings.
     #[serde(default)]
     pub types: Option<String>,
+    /// Comma-separated list of [`Amenity`] strings; matches places
+    /// offering at least one of them.
+    #[serde(default)]
+    pub amenities: Option<String>,
     #[serde(default)]
     pub clean_min: Option<f64>,
     #[serde(default)]
@@ -457,6 +770,15 @@ pub struct PlacesQuery {
 impl PlacesQuery {
     pub fn parsed_types(&self) -> Vec<PlaceType> {
         self.types
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect()
+    }
+
+    pub fn parsed_amenities(&self) -> Vec<Amenity> {
+        self.amenities
             .as_deref()
             .unwrap_or("")
             .split(',')
@@ -481,6 +803,9 @@ impl PlacesQuery {
         }
         if let Some(t) = self.types.as_deref().filter(|t| !t.is_empty()) {
             parts.push(format!("types={t}"));
+        }
+        if let Some(a) = self.amenities.as_deref().filter(|a| !a.is_empty()) {
+            parts.push(format!("amenities={a}"));
         }
         if let Some(v) = self.clean_min {
             parts.push(format!("clean_min={v}"));
@@ -628,6 +953,18 @@ mod tests {
     }
 
     #[test]
+    fn aspect_serde_round_trip() {
+        for a in Aspect::ALL {
+            let json = serde_json::to_string(&a).expect("serialize");
+            assert_eq!(json, format!("\"{}\"", a.as_str()));
+            let back: Aspect = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, a);
+            assert_eq!(a.as_str().parse::<Aspect>(), Ok(a));
+        }
+        assert!("vibes".parse::<Aspect>().is_err());
+    }
+
+    #[test]
     fn requirement_round_trip_and_defaults_to_unknown() {
         for r in Requirement::ALL {
             assert_eq!(r.as_str().parse::<Requirement>(), Ok(r));
@@ -644,6 +981,7 @@ mod tests {
             lng: Some(-122.3),
             radius_mi: Some(5.0),
             types: Some("shop,park".to_owned()),
+            amenities: Some("coffee,seating".to_owned()),
             clean_min: Some(4.0),
             no_purchase: Some(true),
             has_parking: None,
@@ -651,9 +989,11 @@ mod tests {
         };
         let qs = q.to_query_string();
         assert!(qs.contains("types=shop,park"));
+        assert!(qs.contains("amenities=coffee,seating"));
         assert!(qs.contains("sort=cleanliness"));
         assert!(!qs.contains("has_parking"));
         assert_eq!(q.parsed_types(), vec![PlaceType::Shop, PlaceType::Park]);
+        assert_eq!(q.parsed_amenities(), vec![Amenity::Coffee, Amenity::Seating]);
     }
 
     #[test]
@@ -688,9 +1028,42 @@ mod tests {
     }
 
     #[test]
+    fn parsed_amenities_skips_unknown_entries_and_defaults_empty() {
+        let q = PlacesQuery {
+            amenities: Some("coffee,sauna,food".to_owned()),
+            ..PlacesQuery::default()
+        };
+        assert_eq!(q.parsed_amenities(), vec![Amenity::Coffee, Amenity::Food]);
+        assert!(PlacesQuery::default().parsed_amenities().is_empty());
+    }
+
+    #[test]
+    fn featured_amenities_are_a_subset_of_all() {
+        for a in Amenity::FEATURED {
+            assert!(Amenity::ALL.contains(&a));
+        }
+    }
+
+    #[test]
     fn door_short_labels() {
         assert_eq!(door_short(0), "At entrance");
         assert_eq!(door_short(40), "40 ft");
+    }
+
+    #[test]
+    fn edit_field_labels_are_humanized() {
+        assert_eq!(edit_field_label("name"), "Name");
+        assert_eq!(edit_field_label("door_ft"), "Bathroom distance (ft)");
+        assert_eq!(edit_field_label("purchase_required"), "Purchase required");
+        // Unknown fields pass through so old logs never break the UI.
+        assert_eq!(edit_field_label("mystery"), "mystery");
+    }
+
+    #[test]
+    fn edit_value_display_marks_blanks() {
+        assert_eq!(edit_value_display("street"), "street");
+        assert_eq!(edit_value_display(""), "(empty)");
+        assert_eq!(edit_value_display("   "), "(empty)");
     }
 
     #[test]
@@ -706,6 +1079,46 @@ mod tests {
         assert!(validate_username("sam smith").is_err());
         assert!(validate_username("sam@home").is_err());
         assert!(validate_username("").is_err());
+    }
+
+    #[test]
+    fn query_param_finds_and_decodes_values() {
+        assert_eq!(query_param("?code=A1B2C3D4", "code"), Some("A1B2C3D4".to_owned()));
+        assert_eq!(query_param("a=1&code=X%20Y%26Z", "code"), Some("X Y&Z".to_owned()));
+        assert_eq!(query_param("?note=one+two", "note"), Some("one two".to_owned()));
+        assert_eq!(query_param("?code=A", "other"), None);
+        assert_eq!(query_param("", "code"), None);
+        // Malformed escapes pass through rather than panicking.
+        assert_eq!(query_param("?x=50%2", "x"), Some("50%2".to_owned()));
+        assert_eq!(query_param("?x=%GG", "x"), Some("%GG".to_owned()));
+    }
+
+    #[test]
+    fn decode_query_component_round_trips_encode() {
+        for s in ["camber coffee", "a&b=c?", "plain-text_1.0~", "naïve café"] {
+            assert_eq!(decode_query_component(&encode_query_component(s)), s);
+        }
+    }
+
+    #[test]
+    fn invite_status_serde_and_labels() {
+        for (status, json, label) in [
+            (InviteStatus::Pending, "\"pending\"", "Pending"),
+            (InviteStatus::Expired, "\"expired\"", "Expired"),
+            (InviteStatus::Joined, "\"joined\"", "Joined"),
+        ] {
+            assert_eq!(serde_json::to_string(&status).expect("serialize"), json);
+            let back: InviteStatus = serde_json::from_str(json).expect("deserialize");
+            assert_eq!(back, status);
+            assert_eq!(status.label(), label);
+        }
+    }
+
+    #[test]
+    fn validate_invite_name_limits_length() {
+        assert_eq!(validate_invite_name(""), Ok(()));
+        assert_eq!(validate_invite_name("Bob"), Ok(()));
+        assert!(validate_invite_name(&"x".repeat(INVITE_NAME_MAX + 1)).is_err());
     }
 
     #[test]
@@ -780,6 +1193,8 @@ mod tests {
                 code_required: Requirement::Yes,
                 amenities: vec![Amenity::Coffee, Amenity::Seating],
                 clean_avg: Some(4.8),
+                coffee_avg: Some(4.5),
+                food_avg: None,
                 review_count: 2,
                 distance_mi: Some(0.2),
             },

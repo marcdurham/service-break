@@ -15,13 +15,12 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
         (Route::List, "List", "format_list_bulleted"),
         (Route::Add, "Add", "add"),
         (Route::Saved, "Saved", "bookmark"),
-        (Route::Invite, "Invite", "group_add"),
         (Route::Account, "Account", "person"),
     ];
     html! {
         <div class="tabbar">
             // Only visible when the bar renders as a nav rail on wide screens.
-            <div class="rail-logo"><span class="mi">{"wc"}</span></div>
+            <div class="rail-logo"><span class="mi">{"coffee"}</span></div>
             { for tabs.into_iter().map(|(r, label, icon)| {
                 let on = props.route == r;
                 let onclick = {

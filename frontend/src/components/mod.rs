@@ -1,12 +1,15 @@
 pub mod account_view;
 pub mod add_form;
+pub mod admin_view;
 pub mod detail_view;
+pub mod edit_view;
 pub mod filters_sheet;
 pub mod invite_view;
 pub mod list_view;
 pub mod location_picker;
 pub mod map_view;
 pub mod onboarding;
+pub mod register_view;
 pub mod saved_view;
 pub mod tab_bar;
 pub mod ui;

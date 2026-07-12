@@ -2,7 +2,7 @@ use actix_web::web::{Data, Json, Path, Query, ServiceConfig};
 use actix_web::{delete, get, post, put, HttpResponse};
 use serde::Deserialize;
 use serde_json::json;
-use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery};
+use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery, UpdatePlace};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -12,11 +12,16 @@ use crate::geocode;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
+    // Backup imports (admin) can be far larger than the 2 MB default.
+    cfg.app_data(actix_web::web::JsonConfig::default().limit(32 * 1024 * 1024));
     crate::auth::configure(cfg);
+    crate::admin::configure(cfg);
     cfg.service(health)
         .service(list_places)
         .service(create_place)
         .service(get_place)
+        .service(update_place)
+        .service(list_place_edits)
         .service(create_review)
         .service(list_saved)
         .service(save_place)
@@ -39,6 +44,19 @@ impl OriginQuery {
 #[get("/api/health")]
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(json!({ "status": "ok" }))
+}
+
+/// Rejects aspect scores outside 1-5. `clean` is required; `coffee` and
+/// `food` are optional but must be in range when present.
+fn validate_scores(clean: i16, coffee: Option<i16>, food: Option<i16>) -> Result<(), ApiError> {
+    for (name, score) in [("cleanliness", Some(clean)), ("coffee", coffee), ("food", food)] {
+        if let Some(s) = score {
+            if !(1..=5).contains(&s) {
+                return Err(ApiError::BadRequest(format!("{name} must be between 1 and 5")));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[get("/api/places")]
@@ -70,11 +88,7 @@ async fn create_place(
     if new.name.trim().is_empty() {
         return Err(ApiError::BadRequest("place name is required".to_owned()));
     }
-    if !(1..=5).contains(&new.clean) {
-        return Err(ApiError::BadRequest(
-            "cleanliness must be between 1 and 5".to_owned(),
-        ));
-    }
+    validate_scores(new.clean, new.coffee, new.food)?;
     let address = new.address.clone().unwrap_or_default().trim().to_owned();
 
     // Resolve coordinates: explicit lat/lng > "lat, lng" typed in the address
@@ -115,10 +129,90 @@ async fn create_place(
         user_id: user.id,
     };
     let id = db::insert_place(&state.pool, &place).await?;
-    db::insert_review(&state.pool, id, &new.device_id, user.id, new.clean, new.comment.trim())
-        .await?;
+    let review = db::InsertReview {
+        place_id: id,
+        device_id: &new.device_id,
+        user_id: user.id,
+        clean: new.clean,
+        coffee: new.coffee,
+        food: new.food,
+        text: new.comment.trim(),
+    };
+    db::insert_review(&state.pool, &review).await?;
     let detail = db::get_place(&state.pool, id, None).await?;
     Ok(HttpResponse::Created().json(detail))
+}
+
+/// Edits a place (any logged-in user). Every changed field is written to
+/// the `place_edits` audit log — what changed, when, and by whom.
+#[put("/api/places/{id}")]
+async fn update_place(
+    state: Data<AppState>,
+    user: AuthUser,
+    id: Path<Uuid>,
+    body: Json<UpdatePlace>,
+) -> Result<HttpResponse, ApiError> {
+    let up = body.into_inner();
+    if up.name.trim().is_empty() {
+        return Err(ApiError::BadRequest("place name is required".to_owned()));
+    }
+    let current = db::get_place(&state.pool, *id, None).await?;
+    let address = up.address.clone().unwrap_or_default().trim().to_owned();
+
+    // Resolve coordinates like on create — explicit lat/lng > an unchanged
+    // address keeps the stored coordinates (no needless geocoding) > "lat,
+    // lng" typed into the address > geocoding the new address.
+    let (lat, lng, resolved_address) = match (up.lat, up.lng) {
+        (Some(lat), Some(lng)) => (lat, lng, address),
+        _ if address == current.summary.address => {
+            (current.summary.lat, current.summary.lng, address)
+        }
+        _ => {
+            if let Some((lat, lng)) = parse_latlng(&address) {
+                (lat, lng, address)
+            } else if !address.is_empty() {
+                let hit = geocode::geocode(&state.http, &state.nominatim_url, &address)
+                    .await?
+                    .ok_or_else(|| {
+                        ApiError::BadRequest(format!("could not find address {address:?}"))
+                    })?;
+                (hit.lat, hit.lng, address)
+            } else {
+                return Err(ApiError::BadRequest(
+                    "provide coordinates or an address".to_owned(),
+                ));
+            }
+        }
+    };
+
+    let fields = db::UpdateFields {
+        name: up.name.trim().to_owned(),
+        place_type: up.place_type,
+        lat,
+        lng,
+        address: resolved_address,
+        door_ft: up.door_ft.max(0),
+        door_note: up.door_note.trim().to_owned(),
+        parking: up.parking,
+        purchase_required: up.purchase_required,
+        code_required: up.code_required,
+        amenities: up.amenities.clone(),
+        hours: up.hours.map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()),
+    };
+    db::update_place(&state.pool, *id, user.id, &fields).await?;
+    let detail = db::get_place(&state.pool, *id, None).await?;
+    Ok(HttpResponse::Ok().json(detail))
+}
+
+/// A place's edit history — who changed which field, from and to what,
+/// and when. Public, like all reads.
+#[get("/api/places/{id}/edits")]
+async fn list_place_edits(
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let edits = db::list_place_edits(&state.pool, *id).await?;
+    Ok(HttpResponse::Ok().json(edits))
 }
 
 #[post("/api/places/{id}/reviews")]
@@ -128,13 +222,17 @@ async fn create_review(
     id: Path<Uuid>,
     body: Json<NewReview>,
 ) -> Result<HttpResponse, ApiError> {
-    if !(1..=5).contains(&body.clean) {
-        return Err(ApiError::BadRequest(
-            "cleanliness must be between 1 and 5".to_owned(),
-        ));
-    }
-    db::insert_review(&state.pool, *id, &body.device_id, user.id, body.clean, body.text.trim())
-        .await?;
+    validate_scores(body.clean, body.coffee, body.food)?;
+    let review = db::InsertReview {
+        place_id: *id,
+        device_id: &body.device_id,
+        user_id: user.id,
+        clean: body.clean,
+        coffee: body.coffee,
+        food: body.food,
+        text: body.text.trim(),
+    };
+    db::insert_review(&state.pool, &review).await?;
     let detail = db::get_place(&state.pool, *id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }

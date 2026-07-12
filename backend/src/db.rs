@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    Amenity, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement, Review,
-    SortBy,
+    Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
+    PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, INVITES_PER_DAY,
+    INVITE_EXPIRY_DAYS, INVITE_WAIT_HOURS,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -35,7 +36,8 @@ fn push_distance_expr(qb: &mut QueryBuilder<'_, Postgres>, lat: f64, lng: f64) {
 
 const SUMMARY_COLS: &str = "p.id, p.name, p.place_type, p.lat, p.lng, p.address, p.door_ft, \
      p.parking, p.purchase_required, p.code_required, p.amenities, \
-     avg(r.clean)::float8 AS clean_avg, count(r.id) AS review_count, ";
+     avg(r.clean)::float8 AS clean_avg, avg(r.coffee)::float8 AS coffee_avg, \
+     avg(r.food)::float8 AS food_avg, count(r.id) AS review_count, ";
 
 fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
     let place_type: String = row.try_get("place_type")?;
@@ -64,6 +66,8 @@ fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
         })?,
         amenities: amenities.iter().filter_map(|a| a.parse().ok()).collect(),
         clean_avg: row.try_get("clean_avg")?,
+        coffee_avg: row.try_get("coffee_avg")?,
+        food_avg: row.try_get("food_avg")?,
         review_count: row.try_get("review_count")?,
         distance_mi: row.try_get("distance_mi")?,
     })
@@ -108,6 +112,12 @@ fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
             sep.push_bind(t.as_str());
         }
         qb.push(")");
+    }
+    let amenities = q.parsed_amenities();
+    if !amenities.is_empty() {
+        // Overlap (`&&`): the place offers at least one requested amenity.
+        let amenities: Vec<String> = amenities.iter().map(|a| a.to_string()).collect();
+        qb.push(" AND p.amenities && ").push_bind(amenities);
     }
     if q.no_purchase == Some(true) {
         qb.push(" AND p.purchase_required = 'no' AND p.code_required = 'no'");
@@ -180,7 +190,7 @@ pub async fn get_place(
 
 async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiError> {
     let rows = sqlx::query(
-        "SELECT r.id, r.device_id, r.clean, r.text, r.created_at, u.username \
+        "SELECT r.id, r.device_id, r.clean, r.coffee, r.food, r.text, r.created_at, u.username \
          FROM reviews r LEFT JOIN users u ON u.id = r.user_id \
          WHERE r.place_id = $1 ORDER BY r.created_at DESC",
     )
@@ -199,6 +209,8 @@ async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiE
                 // to the anonymous scout name derived from the device id.
                 author: username.unwrap_or_else(|| shared::scout_name(&device_id)),
                 clean: row.try_get("clean")?,
+                coffee: row.try_get("coffee")?,
+                food: row.try_get("food")?,
                 text: row.try_get("text")?,
                 created_at: created_at.to_rfc3339(),
                 time_ago: time_ago(created_at, now),
@@ -248,14 +260,163 @@ pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiErr
     Ok(id)
 }
 
-pub async fn insert_review(
+pub struct InsertReview<'a> {
+    pub place_id: Uuid,
+    pub device_id: &'a str,
+    pub user_id: Uuid,
+    pub clean: i16,
+    pub coffee: Option<i16>,
+    pub food: Option<i16>,
+    pub text: &'a str,
+}
+
+pub async fn insert_review(pool: &PgPool, r: &InsertReview<'_>) -> Result<Uuid, ApiError> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM places WHERE id = $1)")
+        .bind(r.place_id)
+        .fetch_one(pool)
+        .await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO reviews (place_id, device_id, user_id, clean, coffee, food, text) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+    )
+    .bind(r.place_id)
+    .bind(r.device_id)
+    .bind(r.user_id)
+    .bind(r.clean)
+    .bind(r.coffee)
+    .bind(r.food)
+    .bind(r.text)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+/// The resolved editable fields of a place, applied by [`update_place`].
+pub struct UpdateFields {
+    pub name: String,
+    pub place_type: PlaceType,
+    pub lat: f64,
+    pub lng: f64,
+    pub address: String,
+    pub door_ft: i32,
+    pub door_note: String,
+    pub parking: Parking,
+    pub purchase_required: Requirement,
+    pub code_required: Requirement,
+    pub amenities: Vec<Amenity>,
+    pub hours: Option<String>,
+}
+
+/// Sorted, comma-joined amenity list — a stable text form for the audit log
+/// that doesn't flag a reordered multi-select as a change.
+fn amenities_text<S: AsRef<str>>(amenities: &[S]) -> String {
+    let mut v: Vec<&str> = amenities.iter().map(AsRef::as_ref).collect();
+    v.sort_unstable();
+    v.join(",")
+}
+
+/// Applies an edit to a place and records one `place_edits` audit row per
+/// changed field — what changed (old and new value), when, and by whom.
+/// Returns how many fields actually changed; a no-op edit writes nothing.
+pub async fn update_place(
     pool: &PgPool,
-    place_id: Uuid,
-    device_id: &str,
+    id: Uuid,
     user_id: Uuid,
-    clean: i16,
-    text: &str,
-) -> Result<Uuid, ApiError> {
+    f: &UpdateFields,
+) -> Result<usize, ApiError> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
+        "SELECT name, place_type, lat, lng, address, door_ft, door_note, parking, \
+         purchase_required, code_required, amenities, hours \
+         FROM places WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+
+    let old_lat: f64 = row.try_get("lat")?;
+    let old_lng: f64 = row.try_get("lng")?;
+    let old_amenities: Vec<String> = row.try_get("amenities")?;
+    let old_hours: Option<String> = row.try_get("hours")?;
+    let new_amenities: Vec<&str> = f.amenities.iter().map(|a| a.as_str()).collect();
+
+    let mut changes: Vec<(&'static str, String, String)> = Vec::new();
+    let mut diff = |field: &'static str, old: String, new: String| {
+        if old != new {
+            changes.push((field, old, new));
+        }
+    };
+    diff("name", row.try_get("name")?, f.name.clone());
+    diff("place_type", row.try_get("place_type")?, f.place_type.to_string());
+    if (old_lat - f.lat).abs() > 1e-9 || (old_lng - f.lng).abs() > 1e-9 {
+        diff(
+            "location",
+            shared::fmt_latlng(old_lat, old_lng),
+            shared::fmt_latlng(f.lat, f.lng),
+        );
+    }
+    diff("address", row.try_get("address")?, f.address.clone());
+    diff("door_ft", row.try_get::<i32, _>("door_ft")?.to_string(), f.door_ft.to_string());
+    diff("door_note", row.try_get("door_note")?, f.door_note.clone());
+    diff("parking", row.try_get("parking")?, f.parking.to_string());
+    diff(
+        "purchase_required",
+        row.try_get("purchase_required")?,
+        f.purchase_required.to_string(),
+    );
+    diff("code_required", row.try_get("code_required")?, f.code_required.to_string());
+    diff("amenities", amenities_text(&old_amenities), amenities_text(&new_amenities));
+    diff("hours", old_hours.unwrap_or_default(), f.hours.clone().unwrap_or_default());
+
+    if changes.is_empty() {
+        return Ok(0);
+    }
+
+    sqlx::query(
+        "UPDATE places SET name = $1, place_type = $2, lat = $3, lng = $4, address = $5, \
+         door_ft = $6, door_note = $7, parking = $8, purchase_required = $9, \
+         code_required = $10, amenities = $11, hours = $12 WHERE id = $13",
+    )
+    .bind(&f.name)
+    .bind(f.place_type.as_str())
+    .bind(f.lat)
+    .bind(f.lng)
+    .bind(&f.address)
+    .bind(f.door_ft)
+    .bind(&f.door_note)
+    .bind(f.parking.as_str())
+    .bind(f.purchase_required.as_str())
+    .bind(f.code_required.as_str())
+    .bind(&new_amenities)
+    .bind(&f.hours)
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+
+    for (field, old_value, new_value) in &changes {
+        sqlx::query(
+            "INSERT INTO place_edits (place_id, user_id, field, old_value, new_value) \
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(field)
+        .bind(old_value)
+        .bind(new_value)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(changes.len())
+}
+
+/// A place's edit history, most recent first.
+pub async fn list_place_edits(pool: &PgPool, place_id: Uuid) -> Result<Vec<PlaceEdit>, ApiError> {
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM places WHERE id = $1)")
         .bind(place_id)
         .fetch_one(pool)
@@ -263,51 +424,235 @@ pub async fn insert_review(
     if !exists {
         return Err(ApiError::NotFound);
     }
-    let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO reviews (place_id, device_id, user_id, clean, text) \
-         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    let rows = sqlx::query(
+        "SELECT e.field, e.old_value, e.new_value, e.created_at, u.username \
+         FROM place_edits e LEFT JOIN users u ON u.id = e.user_id \
+         WHERE e.place_id = $1 ORDER BY e.created_at DESC, e.field",
     )
     .bind(place_id)
-    .bind(device_id)
-    .bind(user_id)
-    .bind(clean)
-    .bind(text)
-    .fetch_one(pool)
+    .fetch_all(pool)
     .await?;
-    Ok(id)
+    let now = Utc::now();
+    rows.iter()
+        .map(|row| {
+            let username: Option<String> = row.try_get("username")?;
+            let created_at: DateTime<Utc> = row.try_get("created_at")?;
+            Ok(PlaceEdit {
+                field: row.try_get("field")?,
+                old_value: row.try_get("old_value")?,
+                new_value: row.try_get("new_value")?,
+                // Edits always come from an account; NULL only remains
+                // where the account was deleted afterwards.
+                author: username.unwrap_or_else(|| "(deleted account)".to_owned()),
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            })
+        })
+        .collect()
 }
 
 pub struct UserRow {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
+    pub is_admin: bool,
 }
 
-pub async fn create_user(
+/// Atomically redeems `invite_code` and creates the account it admits.
+/// Rolls back (leaving the invitation unredeemed) if the code is invalid,
+/// already used, or the username is taken.
+pub async fn register_user(
     pool: &PgPool,
     username: &str,
     password_hash: &str,
+    invite_code: &str,
 ) -> Result<Uuid, ApiError> {
-    let res = sqlx::query_scalar(
+    let mut tx = pool.begin().await?;
+
+    let invitation_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL \
+         AND created_at > now() - make_interval(days => $2) FOR UPDATE",
+    )
+    .bind(invite_code)
+    .bind(INVITE_EXPIRY_DAYS)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let invitation_id = invitation_id.ok_or_else(|| {
+        ApiError::BadRequest("that invite code is invalid, expired, or already used".to_owned())
+    })?;
+
+    let user_id: Uuid = match sqlx::query_scalar(
         "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
     )
     .bind(username)
     .bind(password_hash)
-    .fetch_one(pool)
-    .await;
-    match res {
-        Ok(id) => Ok(id),
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(id) => id,
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-            Err(ApiError::Conflict("that username is taken".to_owned()))
+            return Err(ApiError::Conflict("that username is taken".to_owned()));
         }
-        Err(e) => Err(e.into()),
+        Err(e) => return Err(e.into()),
+    };
+
+    sqlx::query("UPDATE invitations SET redeemed_at = now(), redeemed_by = $1 WHERE id = $2")
+        .bind(user_id)
+        .bind(invitation_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(user_id)
+}
+
+/// An 8-character invite code — just the code, no prefix.
+fn new_invite_code() -> String {
+    Uuid::new_v4().simple().to_string()[..8].to_uppercase()
+}
+
+/// Issues a fresh, unredeemed invitation code for `inviter_id`, enforcing
+/// the anti-abuse rules: accounts younger than 24 hours can't invite yet,
+/// and nobody sends more than 5 invitations per (rolling) day.
+pub async fn create_invitation(
+    pool: &PgPool,
+    inviter_id: Uuid,
+    name: &str,
+) -> Result<Invitation, ApiError> {
+    let old_enough: Option<bool> = sqlx::query_scalar(
+        "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
+    )
+    .bind(inviter_id)
+    .bind(INVITE_WAIT_HOURS)
+    .fetch_optional(pool)
+    .await?;
+    if !old_enough.unwrap_or(false) {
+        return Err(ApiError::BadRequest(format!(
+            "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
+        )));
     }
+
+    let sent_today: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM invitations \
+         WHERE inviter_id = $1 AND created_at > now() - interval '1 day'",
+    )
+    .bind(inviter_id)
+    .fetch_one(pool)
+    .await?;
+    if sent_today >= INVITES_PER_DAY {
+        return Err(ApiError::BadRequest(format!(
+            "invitation limit reached — you can send {INVITES_PER_DAY} per day"
+        )));
+    }
+
+    for _ in 0..5 {
+        let code = new_invite_code();
+        let res = sqlx::query("INSERT INTO invitations (code, inviter_id, name) VALUES ($1, $2, $3)")
+            .bind(&code)
+            .bind(inviter_id)
+            .bind(name)
+            .execute(pool)
+            .await;
+        match res {
+            Ok(_) => {
+                return Ok(Invitation {
+                    code,
+                    name: name.to_owned(),
+                    status: InviteStatus::Pending,
+                    joined_username: None,
+                })
+            }
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(ApiError::Internal("could not generate a unique invite code".to_owned()))
+}
+
+/// Everything the account page shows about invitations: who invited this
+/// user, the (renameable) invitation they redeemed, and every invitation
+/// they've sent, most recent first.
+pub async fn invites_overview(pool: &PgPool, user_id: Uuid) -> Result<InvitesOverview, ApiError> {
+    let rows = sqlx::query(
+        "SELECT i.code, i.name, i.redeemed_at IS NOT NULL AS redeemed, \
+         i.created_at <= now() - make_interval(days => $2) AS expired, \
+         u.username AS joined_username \
+         FROM invitations i LEFT JOIN users u ON u.id = i.redeemed_by \
+         WHERE i.inviter_id = $1 ORDER BY i.created_at DESC",
+    )
+    .bind(user_id)
+    .bind(INVITE_EXPIRY_DAYS)
+    .fetch_all(pool)
+    .await?;
+    let invites = rows
+        .into_iter()
+        .map(|r| {
+            let redeemed: bool = r.try_get("redeemed")?;
+            let expired: bool = r.try_get("expired")?;
+            Ok(Invitation {
+                code: r.try_get("code")?,
+                name: r.try_get("name")?,
+                status: if redeemed {
+                    InviteStatus::Joined
+                } else if expired {
+                    InviteStatus::Expired
+                } else {
+                    InviteStatus::Pending
+                },
+                joined_username: r.try_get("joined_username")?,
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+    let mine = sqlx::query(
+        "SELECT i.code, i.name, u.username AS inviter \
+         FROM invitations i LEFT JOIN users u ON u.id = i.inviter_id \
+         WHERE i.redeemed_by = $1 ORDER BY i.redeemed_at LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    let (invited_by, my_invite_code, my_invite_name) = match mine {
+        Some(r) => (
+            r.try_get("inviter")?,
+            Some(r.try_get::<String, _>("code")?),
+            Some(r.try_get::<String, _>("name")?),
+        ),
+        None => (None, None, None),
+    };
+
+    Ok(InvitesOverview { invited_by, my_invite_code, my_invite_name, invites })
+}
+
+/// Renames an invitation. Allowed for the inviter while the code is still
+/// unredeemed, and for the user who redeemed it (so friends can fix the
+/// name they were invited under once they've registered).
+pub async fn rename_invitation(
+    pool: &PgPool,
+    user_id: Uuid,
+    code: &str,
+    name: &str,
+) -> Result<(), ApiError> {
+    let res = sqlx::query(
+        "UPDATE invitations SET name = $1 WHERE code = $2 \
+         AND (redeemed_by = $3 OR (inviter_id = $3 AND redeemed_at IS NULL))",
+    )
+    .bind(name)
+    .bind(code)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    Ok(())
 }
 
 /// Looks a user up by username, case-insensitively.
 pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash FROM users WHERE lower(username) = lower($1)",
+        "SELECT id, username, password_hash, is_admin FROM users \
+         WHERE lower(username) = lower($1)",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -317,6 +662,7 @@ pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>,
             id: r.try_get("id")?,
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
+            is_admin: r.try_get("is_admin")?,
         })
     })
     .transpose()
@@ -349,7 +695,7 @@ pub async fn session_user(
     token: &str,
 ) -> Result<Option<crate::auth::AuthUser>, ApiError> {
     let row = sqlx::query(
-        "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id \
+        "SELECT u.id, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.token = $1 AND s.expires_at > now()",
     )
     .bind(token)
@@ -359,6 +705,7 @@ pub async fn session_user(
         Ok(crate::auth::AuthUser {
             id: r.try_get("id")?,
             username: r.try_get("username")?,
+            is_admin: r.try_get("is_admin")?,
         })
     })
     .transpose()
@@ -413,6 +760,13 @@ pub async fn list_saved(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn amenities_text_is_order_insensitive() {
+        assert_eq!(amenities_text(&["coffee", "restrooms"]), "coffee,restrooms");
+        assert_eq!(amenities_text(&["restrooms", "coffee"]), "coffee,restrooms");
+        assert_eq!(amenities_text::<&str>(&[]), "");
+    }
 
     #[test]
     fn like_pattern_escapes_wildcards() {

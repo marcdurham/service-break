@@ -1,0 +1,384 @@
+//! Admin-only operations: the auto-created `admin` account, plus full-data
+//! export (backup) and import (restore).
+//!
+//! The export is one JSON document covering every table except `sessions`
+//! — and it deliberately omits password hashes. On import, accounts that
+//! don't exist yet are recreated with freshly generated random passwords,
+//! returned once in the [`ImportSummary`]; accounts whose username already
+//! exists (the importing admin in particular) keep their id and password.
+
+use std::collections::{BTreeMap, HashMap};
+
+use actix_web::web::{Data, Json, ServiceConfig};
+use actix_web::{get, post, HttpResponse};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use shared::ImportSummary;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::auth::{hash_password, run_blocking, AdminUser};
+use crate::error::ApiError;
+use crate::AppState;
+
+pub const ADMIN_USERNAME: &str = "admin";
+/// Documented in README.md and DEPLOY.md — change it right after the first
+/// start with `scripts/change-password.sh`.
+pub const DEFAULT_ADMIN_PASSWORD: &str = "I brake for coffee";
+
+/// Bumped whenever the export layout changes incompatibly.
+pub const EXPORT_FORMAT_VERSION: u32 = 1;
+
+pub fn configure(cfg: &mut ServiceConfig) {
+    cfg.service(export_data).service(import_data);
+}
+
+/// Creates the `admin` account with [`DEFAULT_ADMIN_PASSWORD`] if no user
+/// of that name exists yet. Runs at startup; idempotent.
+pub async fn ensure_admin(pool: &PgPool) -> Result<(), ApiError> {
+    let existing: Option<bool> =
+        sqlx::query_scalar("SELECT is_admin FROM users WHERE lower(username) = $1")
+            .bind(ADMIN_USERNAME)
+            .fetch_optional(pool)
+            .await?;
+    match existing {
+        Some(true) => {}
+        Some(false) => tracing::warn!(
+            "a user named {ADMIN_USERNAME:?} exists but is not an admin; grant it manually \
+             with: UPDATE users SET is_admin = TRUE WHERE username = '{ADMIN_USERNAME}'"
+        ),
+        None => {
+            let hash = hash_password(DEFAULT_ADMIN_PASSWORD)?;
+            sqlx::query(
+                "INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, TRUE)",
+            )
+            .bind(ADMIN_USERNAME)
+            .bind(hash)
+            .execute(pool)
+            .await?;
+            tracing::info!("created the admin account with the default password — change it!");
+        }
+    }
+    Ok(())
+}
+
+/// Everything worth backing up, as one JSON document. `sessions` are
+/// excluded (tokens are secrets and worthless after a re-deploy), and
+/// users carry no password hash.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportData {
+    pub format_version: u32,
+    pub exported_at: DateTime<Utc>,
+    pub users: Vec<ExportUser>,
+    pub invitations: Vec<ExportInvitation>,
+    pub places: Vec<ExportPlace>,
+    pub reviews: Vec<ExportReview>,
+    pub saved_places: Vec<ExportSavedPlace>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExportUser {
+    pub id: Uuid,
+    pub username: String,
+    pub is_admin: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExportInvitation {
+    pub id: Uuid,
+    pub code: String,
+    pub inviter_id: Option<Uuid>,
+    pub redeemed_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub redeemed_at: Option<DateTime<Utc>>,
+}
+
+/// Raw column values (place_type etc. stay strings) so a backup round-trips
+/// bit-for-bit even if enum variants evolve.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExportPlace {
+    pub id: Uuid,
+    pub name: String,
+    pub place_type: String,
+    pub lat: f64,
+    pub lng: f64,
+    pub address: String,
+    pub door_ft: i32,
+    pub door_note: String,
+    pub parking: String,
+    pub purchase_required: String,
+    pub code_required: String,
+    pub hours: Option<String>,
+    pub amenities: Vec<String>,
+    pub device_id: String,
+    pub user_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExportReview {
+    pub id: Uuid,
+    pub place_id: Uuid,
+    pub device_id: String,
+    pub user_id: Option<Uuid>,
+    pub clean: i16,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ExportSavedPlace {
+    pub device_id: String,
+    pub place_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+/// `GET /api/admin/export` — the whole database as one downloadable JSON
+/// file (no password hashes, no sessions).
+#[get("/api/admin/export")]
+async fn export_data(state: Data<AppState>, _admin: AdminUser) -> Result<HttpResponse, ApiError> {
+    let data = collect_export(&state.pool).await?;
+    Ok(HttpResponse::Ok()
+        .insert_header((
+            "Content-Disposition",
+            "attachment; filename=\"service-break-backup.json\"",
+        ))
+        .json(data))
+}
+
+async fn collect_export(pool: &PgPool) -> Result<ExportData, ApiError> {
+    let users = sqlx::query_as::<_, ExportUser>(
+        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let invitations = sqlx::query_as::<_, ExportInvitation>(
+        "SELECT id, code, inviter_id, redeemed_by, created_at, redeemed_at FROM invitations \
+         ORDER BY created_at, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let places = sqlx::query_as::<_, ExportPlace>(
+        "SELECT id, name, place_type, lat, lng, address, door_ft, door_note, parking, \
+         purchase_required, code_required, hours, amenities, device_id, user_id, created_at \
+         FROM places ORDER BY created_at, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let reviews = sqlx::query_as::<_, ExportReview>(
+        "SELECT id, place_id, device_id, user_id, clean, text, created_at FROM reviews \
+         ORDER BY created_at, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let saved_places = sqlx::query_as::<_, ExportSavedPlace>(
+        "SELECT device_id, place_id, created_at FROM saved_places ORDER BY created_at",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(ExportData {
+        format_version: EXPORT_FORMAT_VERSION,
+        exported_at: Utc::now(),
+        users,
+        invitations,
+        places,
+        reviews,
+        saved_places,
+    })
+}
+
+/// `POST /api/admin/import` — replaces the database contents with a backup
+/// produced by the export endpoint. See [`run_import`].
+#[post("/api/admin/import")]
+async fn import_data(
+    state: Data<AppState>,
+    admin: AdminUser,
+    body: Json<ExportData>,
+) -> Result<HttpResponse, ApiError> {
+    let summary = run_import(&state.pool, admin.0.id, body.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(summary))
+}
+
+/// Restores a backup: content tables (places, reviews, saved places,
+/// invitations) are replaced wholesale, ids preserved so deep links keep
+/// working. Accounts are matched by username — matches keep their id and
+/// password; the rest are recreated under their exported id with a fresh
+/// random password. The caller's own account is never deleted, so the
+/// session performing the import survives.
+async fn run_import(
+    pool: &PgPool,
+    caller_id: Uuid,
+    data: ExportData,
+) -> Result<ImportSummary, ApiError> {
+    if data.format_version != EXPORT_FORMAT_VERSION {
+        return Err(ApiError::BadRequest(format!(
+            "unsupported backup format version {} (this server expects {EXPORT_FORMAT_VERSION})",
+            data.format_version
+        )));
+    }
+
+    let existing: HashMap<String, Uuid> =
+        sqlx::query_as::<_, (Uuid, String)>("SELECT id, lower(username) FROM users")
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .map(|(id, name)| (name, id))
+            .collect();
+
+    // Fresh passwords for accounts being recreated, hashed off the async
+    // workers (Argon2 is CPU-heavy).
+    let to_create: Vec<ExportUser> = data
+        .users
+        .iter()
+        .filter(|u| !existing.contains_key(&u.username.to_lowercase()))
+        .cloned()
+        .collect();
+    let passwords: Vec<String> = to_create.iter().map(|_| generate_password()).collect();
+    let hashes: Vec<String> = {
+        let passwords = passwords.clone();
+        run_blocking(move || passwords.iter().map(|p| hash_password(p)).collect()).await?
+    };
+
+    // Exported user id -> id in this database.
+    let id_map: HashMap<Uuid, Uuid> = data
+        .users
+        .iter()
+        .map(|u| {
+            let actual = existing.get(&u.username.to_lowercase()).copied().unwrap_or(u.id);
+            (u.id, actual)
+        })
+        .collect();
+    let map_user = |id: Option<Uuid>| id.and_then(|id| id_map.get(&id).copied());
+
+    let exported_names: Vec<String> =
+        data.users.iter().map(|u| u.username.to_lowercase()).collect();
+
+    let mut tx = pool.begin().await?;
+
+    for table in ["saved_places", "reviews", "places", "invitations"] {
+        sqlx::query(&format!("DELETE FROM {table}")).execute(&mut *tx).await?;
+    }
+    // Accounts not in the backup go too — except the caller's, which the
+    // running session depends on.
+    sqlx::query("DELETE FROM users WHERE id <> $1 AND lower(username) <> ALL($2)")
+        .bind(caller_id)
+        .bind(&exported_names)
+        .execute(&mut *tx)
+        .await?;
+
+    for (u, hash) in to_create.iter().zip(&hashes) {
+        sqlx::query(
+            "INSERT INTO users (id, username, password_hash, is_admin, created_at) \
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(u.id)
+        .bind(&u.username)
+        .bind(hash)
+        .bind(u.is_admin)
+        .bind(u.created_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    // Kept accounts follow the backup's admin flag (never demoting the
+    // caller out from under their own import).
+    for u in &data.users {
+        if let Some(&id) = existing.get(&u.username.to_lowercase()) {
+            if id != caller_id {
+                sqlx::query("UPDATE users SET is_admin = $1 WHERE id = $2")
+                    .bind(u.is_admin)
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+    }
+
+    for p in &data.places {
+        sqlx::query(
+            "INSERT INTO places (id, name, place_type, lat, lng, address, door_ft, door_note, \
+             parking, purchase_required, code_required, hours, amenities, device_id, user_id, \
+             created_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
+        )
+        .bind(p.id)
+        .bind(&p.name)
+        .bind(&p.place_type)
+        .bind(p.lat)
+        .bind(p.lng)
+        .bind(&p.address)
+        .bind(p.door_ft)
+        .bind(&p.door_note)
+        .bind(&p.parking)
+        .bind(&p.purchase_required)
+        .bind(&p.code_required)
+        .bind(&p.hours)
+        .bind(&p.amenities)
+        .bind(&p.device_id)
+        .bind(map_user(p.user_id))
+        .bind(p.created_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    for r in &data.reviews {
+        sqlx::query(
+            "INSERT INTO reviews (id, place_id, device_id, user_id, clean, text, created_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        )
+        .bind(r.id)
+        .bind(r.place_id)
+        .bind(&r.device_id)
+        .bind(map_user(r.user_id))
+        .bind(r.clean)
+        .bind(&r.text)
+        .bind(r.created_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    for s in &data.saved_places {
+        sqlx::query(
+            "INSERT INTO saved_places (device_id, place_id, created_at) VALUES ($1, $2, $3)",
+        )
+        .bind(&s.device_id)
+        .bind(s.place_id)
+        .bind(s.created_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    for i in &data.invitations {
+        sqlx::query(
+            "INSERT INTO invitations (id, code, inviter_id, redeemed_by, created_at, redeemed_at) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(i.id)
+        .bind(&i.code)
+        .bind(map_user(i.inviter_id))
+        .bind(map_user(i.redeemed_by))
+        .bind(i.created_at)
+        .bind(i.redeemed_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    let new_passwords: BTreeMap<String, String> =
+        to_create.into_iter().map(|u| u.username).zip(passwords).collect();
+
+    Ok(ImportSummary {
+        users: data.users.len(),
+        invitations: data.invitations.len(),
+        places: data.places.len(),
+        reviews: data.reviews.len(),
+        saved_places: data.saved_places.len(),
+        new_passwords,
+    })
+}
+
+/// 16 hex chars (64 random bits) — enough entropy for a handed-out
+/// password the user is expected to change anyway.
+fn generate_password() -> String {
+    let mut p = Uuid::new_v4().simple().to_string();
+    p.truncate(16);
+    p
+}

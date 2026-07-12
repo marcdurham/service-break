@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use gloo_storage::{LocalStorage, Storage};
-use shared::{AuthSession, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{Amenity, AuthSession, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -10,12 +10,14 @@ use yew_router::prelude::*;
 
 use crate::components::account_view::AccountView;
 use crate::components::add_form::AddForm;
+use crate::components::admin_view::AdminView;
 use crate::components::detail_view::DetailView;
 use crate::components::filters_sheet::FiltersSheet;
 use crate::components::invite_view::InviteView;
 use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
 use crate::components::onboarding::Onboarding;
+use crate::components::register_view::RegisterView;
 use crate::components::saved_view::SavedView;
 use crate::components::tab_bar::TabBar;
 use crate::route::Route;
@@ -27,6 +29,9 @@ pub const FALLBACK_CENTER: (f64, f64) = (47.6097, -122.3422);
 #[derive(Debug, Clone, PartialEq)]
 pub struct Filters {
     pub types: HashSet<PlaceType>,
+    /// Offerings the user is interested in; all of [`Amenity::FEATURED`]
+    /// by default, which means "don't filter by what's offered".
+    pub amenities: HashSet<Amenity>,
     pub clean_only: bool,
     pub no_purchase: bool,
     pub has_parking: bool,
@@ -37,6 +42,7 @@ impl Default for Filters {
     fn default() -> Self {
         Filters {
             types: HashSet::new(),
+            amenities: Amenity::FEATURED.into_iter().collect(),
             clean_only: false,
             no_purchase: false,
             has_parking: false,
@@ -53,12 +59,18 @@ impl Filters {
     pub fn to_query(&self, origin: Option<(f64, f64)>) -> PlacesQuery {
         let mut types: Vec<&str> = self.types.iter().map(|t| t.as_str()).collect();
         types.sort_unstable();
+        // Every featured chip on (the default) means "show everything",
+        // so only a proper, non-empty subset narrows the query.
+        let all_featured = self.amenities.len() == Amenity::FEATURED.len();
+        let mut amenities: Vec<&str> = self.amenities.iter().map(|a| a.as_str()).collect();
+        amenities.sort_unstable();
         PlacesQuery {
             q: None,
             lat: origin.map(|(lat, _)| lat),
             lng: origin.map(|(_, lng)| lng),
             radius_mi: Some(f64::from(self.radius_mi)),
             types: (!types.is_empty()).then(|| types.join(",")),
+            amenities: (!amenities.is_empty() && !all_featured).then(|| amenities.join(",")),
             clean_min: self.clean_only.then_some(4.0),
             no_purchase: self.no_purchase.then_some(true),
             has_parking: self.has_parking.then_some(true),
@@ -379,6 +391,17 @@ pub fn app() -> Html {
         })
     };
 
+    let on_toggle_amenity = {
+        let filters = filters.clone();
+        Callback::from(move |a: Amenity| {
+            let mut f = (*filters).clone();
+            if !f.amenities.remove(&a) {
+                f.amenities.insert(a);
+            }
+            filters.set(f);
+        })
+    };
+
     let on_filters_change = {
         let filters = filters.clone();
         Callback::from(move |f: Filters| filters.set(f))
@@ -452,9 +475,11 @@ pub fn app() -> Html {
                         <ListView
                             places={(*places).clone()}
                             active_types={active_types(&filters)}
+                            active_amenities={active_amenities(&filters)}
                             on_open={open_detail.clone()}
                             on_open_filters={open_filters.clone()}
                             on_toggle_type={on_toggle_type.clone()}
+                            on_toggle_amenity={on_toggle_amenity.clone()}
                             on_reset_filters={on_reset_filters.clone()}
                         />
                     },
@@ -481,7 +506,7 @@ pub fn app() -> Html {
                         />
                     },
                     Route::Invite => html! {
-                        <InviteView device_id={(*device).clone()} on_toast={show_toast.clone()} />
+                        <InviteView auth={(*auth).clone()} on_toast={show_toast.clone()} />
                     },
                     Route::Account => html! {
                         <AccountView
@@ -491,6 +516,16 @@ pub fn app() -> Html {
                             on_toast={show_toast.clone()}
                         />
                     },
+                    Route::Register => html! {
+                        <RegisterView
+                            auth={(*auth).clone()}
+                            on_login={on_login}
+                            on_toast={show_toast.clone()}
+                        />
+                    },
+                    Route::Admin => html! {
+                        <AdminView auth={(*auth).clone()} on_toast={show_toast.clone()} />
+                    },
                     _ => html! {
                         <MapView
                             places={(*places).clone()}
@@ -499,10 +534,12 @@ pub fn app() -> Html {
                             focus={*map_focus}
                             filters_active={filters.is_active()}
                             active_types={active_types(&filters)}
+                            active_amenities={active_amenities(&filters)}
                             on_select={on_select}
                             on_open={open_detail.clone()}
                             on_open_filters={open_filters.clone()}
                             on_toggle_type={on_toggle_type.clone()}
+                            on_toggle_amenity={on_toggle_amenity.clone()}
                             on_recenter={on_recenter}
                         />
                     },
@@ -551,5 +588,11 @@ pub fn app() -> Html {
 fn active_types(filters: &Filters) -> Vec<PlaceType> {
     let mut v: Vec<PlaceType> = filters.types.iter().copied().collect();
     v.sort_unstable_by_key(|t| t.as_str());
+    v
+}
+
+fn active_amenities(filters: &Filters) -> Vec<Amenity> {
+    let mut v: Vec<Amenity> = filters.amenities.iter().copied().collect();
+    v.sort_unstable_by_key(|a| a.as_str());
     v
 }

@@ -4,8 +4,99 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-11
+
+- 20:40 — Renamed the admin-flag migration `20260711120000` →
+  `20260711130000` to avoid a version collision with a same-numbered
+  migration that landed on main.
+- 20:33 — Added `scripts/change-password.sh <user> [password]` (TODO 117
+  done): prompts with hidden input when the password is omitted, hashes it
+  locally via the new `hash-password` backend binary (same Argon2 code the
+  server uses), and applies the UPDATE to the running docker Postgres —
+  also revoking the user's sessions. Works against production by setting
+  `COMPOSE="docker --context service-break-prod compose …"`; documented in
+  DEPLOY.md.
+- 20:24 — Added the admin page to the frontend (TODO 120 done): signing in
+  as an admin shows an Admin button on the Account page leading to
+  `/admin`, where one button downloads the full backup as a JSON file and
+  a paste-area imports one back — restored accounts' newly generated
+  passwords are listed once after the import. Documented the admin
+  account, its default password, and the export → re-deploy → restore
+  flow in README.md and DEPLOY.md.
+- 20:13 — Added admin accounts to the backend: an `is_admin` flag on users
+  (migration `20260711130000`), an `admin` account auto-created at startup
+  with the documented default password ("I brake for coffee" — change it!),
+  and admin-only `GET /api/admin/export` / `POST /api/admin/import`
+  endpoints. Export is one JSON document of all data minus sessions and
+  password hashes; import restores it wholesale (ids preserved), recreating
+  missing accounts with freshly generated random passwords that are
+  returned once in the response. Sessions/`/me` now carry `is_admin`.
+- 20:30 — Removed the completed invitation tasks (100-106, 116) from
+  TODO.md and documented the new invite rules in DEPLOY.md (7-day code
+  expiry, 24-hour wait and 5/day limit for senders, with a psql backdate
+  snippet for bootstrapping the first account).
+- 20:25 — Added a dedicated "Create an account" page at `/register`:
+  username, password + confirm-password fields, and the invite code —
+  pre-filled when the page is opened from an invitation link
+  (`/register?code=XYZ`, which shared invites now point at). The Account
+  page links to it when signed out; signed in, it gained an "Invite your
+  friends" button (the Invite tab left the tab bar), a friends &
+  invitations list with pending/expired/joined status, who invited you,
+  and an editable name for your own invitation.
+- 20:13 — Hardened invitations: codes now expire after 7 days, each user
+  may send at most 5 per day, accounts younger than 24 hours can't invite
+  yet, and codes are just the 8-character code (no `BREAK-` prefix).
+  Invitations gained a name field — set by the inviter, editable by the
+  invited user once registered (`PUT /api/invites/{code}/name`) — and
+  `GET /api/invites` now returns a full overview (who invited you, your
+  invitation's name, and each sent invite's pending/expired/joined status).
+  The Invite page says "Invite your friends", labels the code "One time
+  use code", takes an optional friend's name, and mints a fresh code after
+  every copy or share.
+- 20:12 — Reworked the top filter chips on the map and list screens:
+  the six place-type chips (Shop, Store, Mall, Park, Public, Hall) are
+  now tucked behind a single "Type" chip that expands them on tap, and
+  the top level instead shows what places offer — Restroom, Coffee,
+  Food, Seating — all selected by default. Deselecting chips narrows to
+  places offering at least one of the remaining selections, via a new
+  `amenities` parameter on `GET /api/places` (`&&` overlap on the
+  existing `places.amenities` column; no schema change). Covered by a
+  new `#[sqlx::test]` and shared-crate unit tests (TODO 113).
+- 19:30 — Refreshed the onboarding (main entry) copy: tagline is now
+  "find places for refreshment", headline "Good places to take breaks",
+  intro "Places with coffee, food, bathrooms, places to sit at shops,
+  stores, malls, parks & more", and the feature bullet reads
+  "Cleanliness ratings" (TODO 112).
+- 19:25 — Changed the app's main logo glyph from `wc` to `coffee`
+  (onboarding badge, desktop nav-rail logo) and redrew the PWA icon
+  (icon.svg + regenerated icon-192/512.png) as a steaming coffee cup
+  in the same palette (TODO 107).
+- 20:18 — Places are now editable by any logged-in user, with a full audit
+  trail: `PUT /api/places/{id}` diffs the submitted fields against the
+  stored row and writes one row per changed field to the new `place_edits`
+  table (field, old/new value, editor, timestamp);
+  `GET /api/places/{id}/edits` serves the history. The place detail page
+  gained an Edit button (opens a prefilled full-screen editor; asks
+  logged-out users to sign in) and a public "Change history" section. An
+  unchanged address keeps the stored coordinates without re-geocoding;
+  a no-op save writes no audit rows.
+- 20:08 — Ratings are now aspect-specific: reviews keep the required
+  bathroom-cleanliness score and can optionally score Coffee and Food
+  (1-5, new nullable `coffee`/`food` columns on reviews). Place summaries
+  expose per-aspect averages (`coffee_avg`/`food_avg`); the detail page's
+  breakdown shows a bar per rated aspect, review cards show aspect chips,
+  and the add-place form and review composer grew optional Coffee/Food
+  pickers (tap the selected score again to clear it).
+
 ## 2026-07-10
 
+- 20:35 — Containerized the app: multi-stage Dockerfiles for the backend
+  (Rust build → slim Debian runtime) and frontend (Trunk wasm build →
+  nginx serving the SPA and proxying `/api`), wired into
+  docker-compose.yml behind an `app` profile so plain
+  `docker compose up -d` still starts only Postgres;
+  `docker compose --profile app up --build` runs the full stack on
+  http://127.0.0.1:8080.
 - 16:53 — Added an Account page (sign in / create account / sign out) and
   a sixth tab for it; the Add form, review composer and save button now
   ask logged-out users to sign in and route them to the Account page.

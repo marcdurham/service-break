@@ -2,7 +2,11 @@
 
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
-use shared::{AuthSession, Credentials, NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery};
+use shared::{
+    encode_query_component, AuthSession, Credentials, ImportSummary, Invitation,
+    InviteNameUpdate, InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit,
+    PlaceSummary, PlacesQuery, UpdatePlace,
+};
 use uuid::Uuid;
 
 pub type ApiResult<T> = Result<T, String>;
@@ -75,6 +79,25 @@ pub async fn create_place(new: &NewPlace) -> ApiResult<PlaceDetail> {
     res.json().await.map_err(err)
 }
 
+pub async fn update_place(place_id: Uuid, update: &UpdatePlace) -> ApiResult<PlaceDetail> {
+    let res = with_auth(Request::put(&format!("/api/places/{place_id}")))
+        .json(update)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not save changes").await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// The audit log of edits to a place, most recent first.
+pub async fn fetch_place_edits(place_id: Uuid) -> ApiResult<Vec<PlaceEdit>> {
+    let url = format!("/api/places/{place_id}/edits");
+    Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)
+}
+
 pub async fn create_review(place_id: Uuid, review: &NewReview) -> ApiResult<PlaceDetail> {
     let res = with_auth(Request::post(&format!("/api/places/{place_id}/reviews")))
         .json(review)
@@ -134,6 +157,40 @@ async fn auth_request(url: &str, creds: &Credentials, fallback: &str) -> ApiResu
     res.json().await.map_err(err)
 }
 
+pub async fn create_invite(name: &str) -> ApiResult<Invitation> {
+    let body = NewInvite { name: name.to_owned() };
+    let res = with_auth(Request::post("/api/invites"))
+        .json(&body)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not create an invite code").await);
+    }
+    res.json().await.map_err(err)
+}
+
+pub async fn list_invites() -> ApiResult<InvitesOverview> {
+    let res = with_auth(Request::get("/api/invites")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load invite codes").await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// Renames an invitation: yours-to-send while it's pending, or the one you
+/// joined with.
+pub async fn rename_invite(code: &str, name: &str) -> ApiResult<()> {
+    let url = format!("/api/invites/{}/name", encode_query_component(code));
+    let body = InviteNameUpdate { name: name.to_owned() };
+    let res = with_auth(Request::put(&url)).json(&body).map_err(err)?.send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not update the name").await);
+    }
+    Ok(())
+}
+
 /// Best-effort server-side session invalidation.
 pub async fn logout() {
     let _ = with_auth(Request::post("/api/auth/logout")).send().await;
@@ -145,4 +202,29 @@ pub async fn logout() {
 pub async fn session_is_valid() -> ApiResult<bool> {
     let res = with_auth(Request::get("/api/auth/me")).send().await.map_err(err)?;
     Ok(res.status() < 400)
+}
+
+/// Downloads the full-data backup (admin only) as raw JSON text, kept
+/// opaque so it can be saved to a file untouched.
+pub async fn export_backup() -> ApiResult<String> {
+    let res = with_auth(Request::get("/api/admin/export")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not export data").await);
+    }
+    res.text().await.map_err(err)
+}
+
+/// Restores a backup (admin only) from the raw JSON text of an export.
+pub async fn import_backup(backup_json: &str) -> ApiResult<ImportSummary> {
+    let res = with_auth(Request::post("/api/admin/import"))
+        .header("Content-Type", "application/json")
+        .body(backup_json.to_owned())
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not import data").await);
+    }
+    res.json().await.map_err(err)
 }

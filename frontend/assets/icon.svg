@@ -1,13 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="120" fill="#3a2418"/>
   <rect x="96" y="96" width="320" height="320" rx="90" fill="#c9a26a"/>
-  <!-- simplified "wc" restroom glyph: two figures -->
+  <!-- simplified "coffee" glyph: steaming cup on a saucer -->
   <g fill="#3a2418">
-    <circle cx="196" cy="180" r="34"/>
-    <rect x="168" y="224" width="56" height="110" rx="24"/>
-    <rect x="168" y="300" width="22" height="76" rx="11"/>
-    <rect x="202" y="300" width="22" height="76" rx="11"/>
-    <circle cx="316" cy="180" r="34"/>
-    <path d="M316 224c-30 0-40 22-46 52l-14 58h34v42a11 11 0 0 0 22 0v-42h8v42a11 11 0 0 0 22 0v-42h34l-14-58c-6-30-16-52-46-52z"/>
+    <path d="M156 214h176v78c0 40-32 72-72 72h-32c-40 0-72-32-72-72z"/>
+    <path d="M332 226h18c30 0 52 22 52 50s-22 50-52 50h-22v-30h22c14 0 22-9 22-20s-8-20-22-20h-18z"/>
+    <rect x="146" y="378" width="220" height="26" rx="13"/>
+  </g>
+  <g fill="none" stroke="#3a2418" stroke-width="18" stroke-linecap="round">
+    <path d="M204 128c-10 12 10 22 0 44"/>
+    <path d="M256 118c-10 14 10 26 0 52"/>
+    <path d="M308 128c-10 12 10 22 0 44"/>
   </g>
 </svg>
