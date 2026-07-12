@@ -28,7 +28,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that attempting to update profile with empty name returns 400 Bad Request.
 
-### 7. Add clippy lints configuration for workspace
+### 7. ~~Add test for profile update name length validation~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that attempting to update profile with a name exceeding 40 characters returns 400 Bad Request.
+
+### 8. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
