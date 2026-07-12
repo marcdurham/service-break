@@ -6,6 +6,7 @@ pub mod db;
 pub mod error;
 pub mod geocode;
 pub mod handlers;
+pub mod maps_link;
 pub mod util;
 
 use sqlx::PgPool;

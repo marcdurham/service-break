@@ -722,6 +722,14 @@ pub struct GeocodeResult {
     pub display_name: String,
 }
 
+/// A place name and coordinates resolved from a pasted Google Maps link.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MapsLinkResult {
+    pub name: String,
+    pub lat: f64,
+    pub lng: f64,
+}
+
 /// Percent-encodes a string for use as a URL query value.
 pub fn encode_query_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

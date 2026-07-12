@@ -1,5 +1,5 @@
 use serde::Serialize;
-use shared::{Amenity, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{Amenity, MapsLinkResult, PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -37,6 +37,19 @@ pub struct MapViewProps {
     pub on_toggle_type: Callback<PlaceType>,
     pub on_toggle_amenity: Callback<Amenity>,
     pub on_recenter: Callback<()>,
+    /// Fired when the search box resolves a pasted Google Maps link to a
+    /// place, so the app can open the "Add a place" page prefilled.
+    pub on_maps_link: Callback<MapsLinkResult>,
+    pub on_toast: Callback<String>,
+}
+
+/// Whether `q` looks like a link to a Google Maps place (a `maps.app.goo.gl`
+/// short link, an older `goo.gl/maps` short link, or a full
+/// `google.com/maps` URL) rather than a place-search query.
+fn looks_like_google_maps_link(q: &str) -> bool {
+    let q = q.trim();
+    (q.starts_with("http://") || q.starts_with("https://"))
+        && (q.contains("maps.app.goo.gl") || q.contains("goo.gl/maps") || q.contains("google.com/maps"))
 }
 
 #[function_component(MapView)]
@@ -51,12 +64,38 @@ pub fn map_view(props: &MapViewProps) -> Html {
         let results = results.clone();
         let search_gen = search_gen.clone();
         let origin = props.origin;
+        let query_handle = query.clone();
+        let on_maps_link = props.on_maps_link.clone();
+        let on_toast = props.on_toast.clone();
         use_effect_with((*query).clone(), move |query| {
             *search_gen.borrow_mut() += 1;
             let generation = *search_gen.borrow();
             let query = query.trim().to_owned();
             if query.is_empty() {
                 results.set(None);
+                return;
+            }
+            if looks_like_google_maps_link(&query) {
+                results.set(None);
+                let query_handle = query_handle.clone();
+                let on_maps_link = on_maps_link.clone();
+                let on_toast = on_toast.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    match api::resolve_maps_link(&query).await {
+                        Ok(place) => {
+                            if *search_gen.borrow() == generation {
+                                query_handle.set(String::new());
+                                results.set(None);
+                                on_maps_link.emit(place);
+                            }
+                        }
+                        Err(msg) => {
+                            if *search_gen.borrow() == generation {
+                                on_toast.emit(msg);
+                            }
+                        }
+                    }
+                });
                 return;
             }
             wasm_bindgen_futures::spawn_local(async move {

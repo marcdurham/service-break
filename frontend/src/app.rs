@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use gloo_storage::{LocalStorage, Storage};
-use shared::{Amenity, AuthSession, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{Amenity, AuthSession, MapsLinkResult, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -117,6 +117,9 @@ pub fn app() -> Html {
     let filters = use_state(Filters::default);
     let saved_ids = use_state(HashSet::<Uuid>::new);
     let saved_places = use_state(Vec::<PlaceSummary>::new);
+    // Name/location resolved from a pasted Google Maps link, handed to the
+    // Add page for one-time prefill; see `on_maps_link` below.
+    let prefill = use_state(|| None::<MapsLinkResult>);
     let toast = use_state(|| None::<String>);
     let refresh = use_state(|| 0u32);
     let auth = use_state(api::stored_auth);
@@ -319,6 +322,31 @@ pub fn app() -> Html {
         })
     };
 
+    // A pasted Google Maps link resolved to a place: send the user to the
+    // Add page with the name and location prefilled (signing in first if
+    // needed, same as any other add-a-place action).
+    let on_maps_link = {
+        let navigator = navigator.clone();
+        let background = background.clone();
+        let prefill = prefill.clone();
+        let auth = auth.clone();
+        let require_login = require_login.clone();
+        Callback::from(move |m: MapsLinkResult| {
+            if auth.is_none() {
+                require_login.emit("Sign in to add a place from a link".to_owned());
+                return;
+            }
+            prefill.set(Some(m));
+            background.set(Route::Add);
+            navigator.push(&Route::Add);
+        })
+    };
+
+    let on_prefill_used = {
+        let prefill = prefill.clone();
+        Callback::from(move |()| prefill.set(None))
+    };
+
     let on_login = {
         let auth = auth.clone();
         let show_toast = show_toast.clone();
@@ -502,6 +530,8 @@ pub fn app() -> Html {
                             origin={*origin}
                             user_location={*user_location}
                             logged_in={auth.is_some()}
+                            prefill={(*prefill).clone()}
+                            on_prefill_used={on_prefill_used.clone()}
                             on_created={on_created}
                             on_sign_in={{
                                 let require_login = require_login.clone();
@@ -561,6 +591,8 @@ pub fn app() -> Html {
                             on_toggle_type={on_toggle_type.clone()}
                             on_toggle_amenity={on_toggle_amenity.clone()}
                             on_recenter={on_recenter}
+                            on_maps_link={on_maps_link}
+                            on_toast={show_toast.clone()}
                         />
                     },
                 }

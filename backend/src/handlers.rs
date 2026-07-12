@@ -9,6 +9,7 @@ use crate::auth::AuthUser;
 use crate::db;
 use crate::error::ApiError;
 use crate::geocode;
+use crate::maps_link;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
@@ -27,7 +28,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(list_saved)
         .service(save_place)
         .service(unsave_place)
-        .service(geocode_query);
+        .service(geocode_query)
+        .service(maps_link_query);
 }
 
 #[derive(Debug, Deserialize)]
@@ -301,4 +303,24 @@ async fn geocode_query(
         .await?
         .ok_or(ApiError::NotFound)?;
     Ok(HttpResponse::Ok().json(hit))
+}
+
+#[derive(Debug, Deserialize)]
+struct MapsLinkParams {
+    url: String,
+}
+
+/// Resolves a pasted Google Maps link (e.g. a `maps.app.goo.gl` short link)
+/// to a place name and coordinates, for prefilling the "Add a place" form.
+#[get("/api/maps-link")]
+async fn maps_link_query(
+    state: Data<AppState>,
+    params: Query<MapsLinkParams>,
+) -> Result<HttpResponse, ApiError> {
+    let url = params.url.trim();
+    if url.is_empty() {
+        return Err(ApiError::BadRequest("url is required".to_owned()));
+    }
+    let (name, lat, lng) = maps_link::resolve(&state.http, url).await?;
+    Ok(HttpResponse::Ok().json(shared::MapsLinkResult { name, lat, lng }))
 }
