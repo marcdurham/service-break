@@ -628,6 +628,12 @@ pub struct AuthSession {
     /// sessions stored before the field existed still deserialize.
     #[serde(default)]
     pub is_admin: bool,
+    /// User's given name, if set. Defaults empty for legacy sessions.
+    #[serde(default)]
+    pub given_name: String,
+    /// User's family name, if set. Defaults empty for legacy sessions.
+    #[serde(default)]
+    pub family_name: String,
 }
 
 /// A user summary for the admin users list — id, name, role and join date;

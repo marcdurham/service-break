@@ -132,7 +132,13 @@ async fn start_session(
 ) -> Result<AuthSession, ApiError> {
     let token = new_token();
     db::create_session(pool, &token, user_id).await?;
-    Ok(AuthSession { token, username, is_admin })
+    Ok(AuthSession {
+        token,
+        username,
+        is_admin,
+        given_name: String::new(),
+        family_name: String::new(),
+    })
 }
 
 #[post("/api/auth/register")]
@@ -184,8 +190,20 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
-async fn me(user: AuthUser) -> HttpResponse {
-    HttpResponse::Ok().json(json!({ "username": user.username, "is_admin": user.is_admin }))
+async fn me(state: Data<AppState>, user: AuthUser) -> HttpResponse {
+    let (given, family) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT given_name, family_name FROM users WHERE id = $1",
+    )
+    .bind(user.id)
+    .fetch_one(&state.pool)
+    .await
+    .ok();
+    HttpResponse::Ok().json(json!({
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "given_name": given,
+        "family_name": family,
+    }))
 }
 
 /// Swaps the signed-in user's password. The current password is verified
