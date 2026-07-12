@@ -1670,7 +1670,7 @@ async fn rename_invite_authorization(pool: PgPool) {
     let code_b = seed_invite(&pool).await;
     let redeemer_token = register_fresh_with_code(&app, "redeemer-user", &code_b).await;
     let req = TestRequest::put()
-        .uri(&format!("/api/invites/{}/name", code_b))
+        .uri(&format!("/api/invites/{code_b}/name"))
         .insert_header(auth(&redeemer_token))
         .set_json(json!({ "name": "MyInviteName" }))
         .to_request();
