@@ -8,13 +8,13 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`, `backend/src/db.rs`  
 **Acceptance:** New test `revoked_invite_cannot_be_redeemed` verifies that a revoked invitation returns 400 when someone tries to register with it, and the invitation status changes to Expired.
 
-### 2. Add integration test for share feature
-**Files:** `frontend/tests/`, `shared/src/lib.rs`  
-**Acceptance:** Test verifies that the Share button in detail view copies URL to clipboard and shows toast message.
-
-### 3. Update DEPLOY.md with new invite limits documentation
+### 2. ~~Update DEPLOY.md with invite revocation documentation~~ ✅
 **Files:** `DEPLOY.md`  
-**Acceptance:** Documentation reflects current behavior: 25 invites/day for new accounts, 100/day after 24 hours, 7-day expiry.
+**Acceptance:** Documentation includes section on revoking sent invitations.
+
+### 3. Add clippy lints configuration for workspace
+**Files:** `Cargo.toml` (workspace root)  
+**Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`.
 
 ## Done
 
