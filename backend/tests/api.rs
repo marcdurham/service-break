@@ -1582,3 +1582,31 @@ async fn invite_name_too_long_rejected(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn duplicate_username_rejected(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Register first user.
+    let code_a = seed_invite(&pool).await;
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "unique-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code_a,
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    // Try to register same username with a different invite code.
+    let code_b = seed_invite(&pool).await;
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "unique-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code_b,
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CONFLICT);
+}
