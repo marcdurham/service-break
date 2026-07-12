@@ -115,6 +115,25 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
             on_toast.emit("Changes saved".to_owned());
         })
     };
+    let delete_place = {
+        let id = p.id;
+        let on_close = props.on_close.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            let on_toast = on_toast.clone();
+            let on_close = on_close.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::delete_place(id).await {
+                    Ok(()) => {
+                        on_toast.emit("Place removed".to_owned());
+                        on_close.emit(());
+                    }
+                    Err(msg) => on_toast.emit(msg),
+                }
+            });
+        })
+    };
+
     let share_place = {
         let on_toast = props.on_toast.clone();
         Callback::from(move |_| {
@@ -237,6 +256,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         </button>
                         <button class="rate-btn" onclick={share_place}>
                             <span class="mi">{"share"}</span>{"Share"}
+                        </button>
+                        <button class="rate-btn delete-btn" onclick={delete_place}>
+                            <span class="mi">{"delete_forever"}</span>{"Delete"}
                         </button>
                     </div>
 

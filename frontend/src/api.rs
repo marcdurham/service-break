@@ -79,6 +79,17 @@ pub async fn create_place(new: &NewPlace) -> ApiResult<PlaceDetail> {
     res.json().await.map_err(err)
 }
 
+pub async fn delete_place(place_id: Uuid) -> ApiResult<()> {
+    let res = with_auth(Request::delete(&format!("/api/places/{place_id}")))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not delete place").await);
+    }
+    Ok(())
+}
+
 pub async fn update_place(place_id: Uuid, update: &UpdatePlace) -> ApiResult<PlaceDetail> {
     let res = with_auth(Request::put(&format!("/api/places/{place_id}")))
         .json(update)

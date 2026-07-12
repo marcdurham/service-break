@@ -130,7 +130,7 @@ fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
 pub async fn list_places(pool: &PgPool, q: &PlacesQuery) -> Result<Vec<PlaceSummary>, ApiError> {
     let mut qb = QueryBuilder::new("");
     push_summary_select(&mut qb, q);
-    qb.push(" WHERE TRUE");
+    qb.push(" WHERE p.deleted_at IS NULL AND TRUE");
     push_filters(&mut qb, q);
     qb.push(" GROUP BY p.id");
 
@@ -170,6 +170,7 @@ pub async fn get_place(
     let mut qb = QueryBuilder::new("");
     push_summary_select(&mut qb, &q);
     qb.push(" WHERE p.id = ").push_bind(id);
+    qb.push(" AND p.deleted_at IS NULL");
     qb.push(" GROUP BY p.id");
     let row = qb.build().fetch_optional(pool).await?.ok_or(ApiError::NotFound)?;
     let summary = summary_from_row(&row)?;
@@ -847,6 +848,31 @@ pub async fn unsave_place(pool: &PgPool, device_id: &str, place_id: Uuid) -> Res
     Ok(())
 }
 
+/// Soft-deletes a place: marks `deleted_at` and `deleted_by`. The place
+/// remains queryable by id (so the detail page can still render after the
+/// delete), but drops out of list/saved results.
+pub async fn delete_place(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<(), ApiError> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM places WHERE id = $1 AND deleted_at IS NULL)")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    sqlx::query(
+        "UPDATE places SET deleted_at = now(), deleted_by = $2 WHERE id = $1",
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// All accounts — admin-only. Ids are returned as strings so the frontend
 /// doesn't have to pull in uuid for a read-only listing.
 pub async fn list_users(pool: &PgPool) -> Result<Vec<UserSummary>, ApiError> {
@@ -883,6 +909,7 @@ pub async fn list_saved(
     push_summary_select(&mut qb, &q);
     qb.push(" JOIN saved_places s ON s.place_id = p.id AND s.device_id = ")
         .push_bind(device_id);
+    qb.push(" WHERE p.deleted_at IS NULL");
     qb.push(" GROUP BY p.id, s.created_at ORDER BY s.created_at DESC");
     let rows = qb.build().fetch_all(pool).await?;
     rows.iter().map(summary_from_row).collect()

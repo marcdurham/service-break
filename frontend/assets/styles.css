@@ -645,6 +645,7 @@ button { cursor: pointer; }
   display: flex; align-items: center; gap: 7px;
 }
 .rate-btn .mi { font-size: 20px; }
+.delete-btn { border-color: #d46a6a; color: #b83a3a; }
 
 .breakdown {
   background: #fff; border-radius: 18px; padding: 6px 16px; margin-top: 18px;
