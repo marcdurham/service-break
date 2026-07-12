@@ -78,6 +78,16 @@ pub fn account_view(props: &AccountViewProps) -> Html {
     let family_name = use_state(String::new);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
+    // Change-password form state.
+    let cur_pw = use_state(String::new);
+    let new_pw = use_state(String::new);
+    let confirm_pw = use_state(String::new);
+    let pw_busy = use_state(|| false);
+    let show_login_pw = use_state(|| false);
+    let show_cur = use_state(|| false);
+    let show_new = use_state(|| false);
+    let show_confirm = use_state(|| false);
+
     // Load the invitations overview and profile whenever we're signed in.
     {
         let overview = overview.clone();
@@ -367,20 +377,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                 />
 
                 <div class="field-label">{"Password"}</div>
-                <input
-                    class="input"
-                    type="password"
-                    placeholder="At least 8 characters"
-                    value={(*password).clone()}
-                    oninput={{
-                        let password = password.clone();
-                        Callback::from(move |e: InputEvent| {
-                            if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
-                                password.set(el.value());
-                            }
-                        })
-                    }}
-                />
+                {password_field(password.clone(), *show_login_pw, Callback::from(move |_| show_login_pw.set(!*show_login_pw)))}
 
                 <button class="submit-btn" onclick={log_in} disabled={*busy}>
                     <span class="mi">{"login"}</span>
