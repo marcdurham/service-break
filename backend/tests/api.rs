@@ -1338,3 +1338,16 @@ async fn revoke_redeemed_invite_fails(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_nonexistent_invite_returns_404(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "alice-nonexist").await;
+    // Try to revoke a code that doesn't exist.
+    let fake_code = format!("nonexistent-{}", uuid::Uuid::new_v4());
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", fake_code))
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
