@@ -1540,11 +1540,10 @@ async fn admin_invites_bypass_daily_limit(pool: PgPool) {
 
     // Send more than the daily limit (25).
     for i in 0..30 {
-        let code = format!("ADMIN-TEST-{}", i);
         let req = TestRequest::post()
             .uri("/api/invites")
             .insert_header(auth(&token))
-            .set_json(json!({ "name": format!("Test invite {}", i) }))
+            .set_json(json!({ "name": format!("Test invite {i}") }))
             .to_request();
         assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
     }
