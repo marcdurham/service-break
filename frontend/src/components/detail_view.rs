@@ -1,4 +1,4 @@
-use shared::{NewReview, PlaceDetail, PlaceSummary};
+use shared::{Aspect, NewReview, PlaceDetail, PlaceSummary};
 use uuid::Uuid;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
@@ -28,6 +28,8 @@ pub struct DetailViewProps {
 pub fn detail_view(props: &DetailViewProps) -> Html {
     let composing = use_state(|| false);
     let clean_pick = use_state(|| 5i16);
+    let coffee_pick = use_state(|| None::<i16>);
+    let food_pick = use_state(|| None::<i16>);
     let text = use_state(String::new);
 
     let p = &props.detail.summary;
@@ -70,6 +72,8 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let send_review = {
         let composing = composing.clone();
         let clean_pick = clean_pick.clone();
+        let coffee_pick = coffee_pick.clone();
+        let food_pick = food_pick.clone();
         let text = text.clone();
         let device = props.device_id.clone();
         let id = p.id;
@@ -79,9 +83,13 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
             let review = NewReview {
                 device_id: device.clone(),
                 clean: *clean_pick,
+                coffee: *coffee_pick,
+                food: *food_pick,
                 text: (*text).trim().to_owned(),
             };
             let composing = composing.clone();
+            let coffee_pick = coffee_pick.clone();
+            let food_pick = food_pick.clone();
             let text = text.clone();
             let on_updated = on_updated.clone();
             let on_toast = on_toast.clone();
@@ -89,6 +97,8 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                 match api::create_review(id, &review).await {
                     Ok(detail) => {
                         composing.set(false);
+                        coffee_pick.set(None);
+                        food_pick.set(None);
                         text.set(String::new());
                         on_updated.emit(detail);
                         on_toast.emit("Review added — thanks, scout!".to_owned());
@@ -100,7 +110,6 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     };
 
     let rating = p.clean_avg.unwrap_or(0.0);
-    let clean_pct = (rating / 5.0 * 100.0).clamp(0.0, 100.0);
     let access = ui::access_label(p.purchase_required, p.code_required);
     let access_class = ui::access_class(p.purchase_required, p.code_required);
 
@@ -150,16 +159,32 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     </div>
 
                     <div class="breakdown">
-                        <div class="brow">
-                            <span class="mi" style="color:#6f8256">{"mop"}</span>
-                            <div class="brow-main">
-                                <div class="brow-title">{"Cleanliness"}</div>
-                                <div class="bbar">
-                                    <div class="bbar-fill" style={format!("width:{clean_pct}%")}></div>
+                        // One bar per rated aspect: cleanliness always shows
+                        // (it's the app's core rating); coffee and food only
+                        // once at least one review has scored them.
+                        { for Aspect::ALL.into_iter().filter_map(|a| {
+                            let avg = match a {
+                                Aspect::Cleanliness => p.clean_avg,
+                                Aspect::Coffee => p.coffee_avg,
+                                Aspect::Food => p.food_avg,
+                            };
+                            if a != Aspect::Cleanliness && avg.is_none() {
+                                return None;
+                            }
+                            let pct = (avg.unwrap_or(0.0) / 5.0 * 100.0).clamp(0.0, 100.0);
+                            Some(html! {
+                                <div class="brow" key={a.as_str()}>
+                                    <span class="mi" style={format!("color:{}", a.color())}>{a.icon()}</span>
+                                    <div class="brow-main">
+                                        <div class="brow-title">{a.label()}</div>
+                                        <div class="bbar">
+                                            <div class="bbar-fill" style={format!("width:{pct}%")}></div>
+                                        </div>
+                                    </div>
+                                    <span class="brow-val">{ui::clean_label(avg)}</span>
                                 </div>
-                            </div>
-                            <span class="brow-val">{ui::clean_label(p.clean_avg)}</span>
-                        </div>
+                            })
+                        }) }
                         <div class="brow">
                             <span class="mi" style="color:#b09a82">{"directions_walk"}</span>
                             <div class="brow-main">
@@ -218,6 +243,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
 
                     if *composing {
                         <div class="composer">
+                            <div class="field-label">{"Bathroom cleanliness"}</div>
                             <div class="clean-row">
                                 { for (1..=5i16).map(|n| {
                                     let on = n <= *clean_pick;
@@ -234,6 +260,16 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                                     }
                                 }) }
                             </div>
+                            <div class="field-label">{"Coffee "}<span class="lite">{"· optional"}</span></div>
+                            { ui::aspect_score_picker(*coffee_pick, &{
+                                let coffee_pick = coffee_pick.clone();
+                                Callback::from(move |v| coffee_pick.set(v))
+                            }) }
+                            <div class="field-label">{"Food "}<span class="lite">{"· optional"}</span></div>
+                            { ui::aspect_score_picker(*food_pick, &{
+                                let food_pick = food_pick.clone();
+                                Callback::from(move |v| food_pick.set(v))
+                            }) }
                             <textarea
                                 class="textarea"
                                 placeholder="How was it?"
@@ -270,6 +306,22 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                                     </div>
                                     { ui::stars(f64::from(r.clean)) }
                                 </div>
+                                if r.coffee.is_some() || r.food.is_some() {
+                                    <div class="tag-row">
+                                        if let Some(score) = r.coffee {
+                                            <span class="tag tag-amenity">
+                                                <span class="mi">{Aspect::Coffee.icon()}</span>
+                                                {format!("Coffee {score}/5")}
+                                            </span>
+                                        }
+                                        if let Some(score) = r.food {
+                                            <span class="tag tag-amenity">
+                                                <span class="mi">{Aspect::Food.icon()}</span>
+                                                {format!("Food {score}/5")}
+                                            </span>
+                                        }
+                                    </div>
+                                }
                                 if !r.text.is_empty() {
                                     <div class="review-text">{&r.text}</div>
                                 }

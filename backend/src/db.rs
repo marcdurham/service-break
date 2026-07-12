@@ -35,7 +35,8 @@ fn push_distance_expr(qb: &mut QueryBuilder<'_, Postgres>, lat: f64, lng: f64) {
 
 const SUMMARY_COLS: &str = "p.id, p.name, p.place_type, p.lat, p.lng, p.address, p.door_ft, \
      p.parking, p.purchase_required, p.code_required, p.amenities, \
-     avg(r.clean)::float8 AS clean_avg, count(r.id) AS review_count, ";
+     avg(r.clean)::float8 AS clean_avg, avg(r.coffee)::float8 AS coffee_avg, \
+     avg(r.food)::float8 AS food_avg, count(r.id) AS review_count, ";
 
 fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
     let place_type: String = row.try_get("place_type")?;
@@ -64,6 +65,8 @@ fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
         })?,
         amenities: amenities.iter().filter_map(|a| a.parse().ok()).collect(),
         clean_avg: row.try_get("clean_avg")?,
+        coffee_avg: row.try_get("coffee_avg")?,
+        food_avg: row.try_get("food_avg")?,
         review_count: row.try_get("review_count")?,
         distance_mi: row.try_get("distance_mi")?,
     })
@@ -180,7 +183,7 @@ pub async fn get_place(
 
 async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiError> {
     let rows = sqlx::query(
-        "SELECT r.id, r.device_id, r.clean, r.text, r.created_at, u.username \
+        "SELECT r.id, r.device_id, r.clean, r.coffee, r.food, r.text, r.created_at, u.username \
          FROM reviews r LEFT JOIN users u ON u.id = r.user_id \
          WHERE r.place_id = $1 ORDER BY r.created_at DESC",
     )
@@ -199,6 +202,8 @@ async fn list_reviews(pool: &PgPool, place_id: Uuid) -> Result<Vec<Review>, ApiE
                 // to the anonymous scout name derived from the device id.
                 author: username.unwrap_or_else(|| shared::scout_name(&device_id)),
                 clean: row.try_get("clean")?,
+                coffee: row.try_get("coffee")?,
+                food: row.try_get("food")?,
                 text: row.try_get("text")?,
                 created_at: created_at.to_rfc3339(),
                 time_ago: time_ago(created_at, now),
@@ -248,30 +253,35 @@ pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiErr
     Ok(id)
 }
 
-pub async fn insert_review(
-    pool: &PgPool,
-    place_id: Uuid,
-    device_id: &str,
-    user_id: Uuid,
-    clean: i16,
-    text: &str,
-) -> Result<Uuid, ApiError> {
+pub struct InsertReview<'a> {
+    pub place_id: Uuid,
+    pub device_id: &'a str,
+    pub user_id: Uuid,
+    pub clean: i16,
+    pub coffee: Option<i16>,
+    pub food: Option<i16>,
+    pub text: &'a str,
+}
+
+pub async fn insert_review(pool: &PgPool, r: &InsertReview<'_>) -> Result<Uuid, ApiError> {
     let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM places WHERE id = $1)")
-        .bind(place_id)
+        .bind(r.place_id)
         .fetch_one(pool)
         .await?;
     if !exists {
         return Err(ApiError::NotFound);
     }
     let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO reviews (place_id, device_id, user_id, clean, text) \
-         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        "INSERT INTO reviews (place_id, device_id, user_id, clean, coffee, food, text) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
     )
-    .bind(place_id)
-    .bind(device_id)
-    .bind(user_id)
-    .bind(clean)
-    .bind(text)
+    .bind(r.place_id)
+    .bind(r.device_id)
+    .bind(r.user_id)
+    .bind(r.clean)
+    .bind(r.coffee)
+    .bind(r.food)
+    .bind(r.text)
     .fetch_one(pool)
     .await?;
     Ok(id)

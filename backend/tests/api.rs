@@ -76,6 +76,7 @@ fn new_place_json(name: &str) -> serde_json::Value {
         "lng": -122.3402,
         "address": "214 Maple Ave",
         "clean": 5,
+        "coffee": 4,
         "door_ft": 15,
         "door_note": "Right past the counter",
         "parking": "street",
@@ -102,8 +103,14 @@ async fn create_place_then_list_returns_it(pool: PgPool) {
     assert_eq!(created.summary.name, "Camber Coffee");
     assert_eq!(created.summary.review_count, 1);
     assert_eq!(created.summary.clean_avg, Some(5.0));
+    // The optional aspect scores from the first review flow into the
+    // per-aspect averages; unrated aspects stay unrated.
+    assert_eq!(created.summary.coffee_avg, Some(4.0));
+    assert_eq!(created.summary.food_avg, None);
     assert_eq!(created.reviews.len(), 1);
     assert_eq!(created.reviews[0].text, "Spotless.");
+    assert_eq!(created.reviews[0].coffee, Some(4));
+    assert_eq!(created.reviews[0].food, None);
     // The review is attributed to the logged-in account, not the device.
     assert_eq!(created.reviews[0].author, "scout-one");
 
@@ -235,22 +242,42 @@ async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
     let req = TestRequest::post()
         .uri(&format!("/api/places/{id}/reviews"))
         .insert_header(auth(&other))
-        .set_json(json!({ "device_id": "other-device", "clean": 3, "text": "Okay." }))
+        .set_json(json!({
+            "device_id": "other-device",
+            "clean": 3,
+            "coffee": 2,
+            "food": 4,
+            "text": "Okay.",
+        }))
         .to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let detail: PlaceDetail = read_body_json(res).await;
     assert_eq!(detail.summary.review_count, 2);
     assert_eq!(detail.summary.clean_avg, Some(4.0));
+    // Aspect averages only count the reviews that rated the aspect: coffee
+    // was rated 4 (creation) and 2; food only once, a 4.
+    assert_eq!(detail.summary.coffee_avg, Some(3.0));
+    assert_eq!(detail.summary.food_avg, Some(4.0));
     assert_eq!(detail.reviews.len(), 2);
     assert_eq!(detail.reviews[0].author, "scout-two");
+    assert_eq!(detail.reviews[0].coffee, Some(2));
+    assert_eq!(detail.reviews[0].food, Some(4));
 
-    let req = TestRequest::post()
-        .uri(&format!("/api/places/{id}/reviews"))
-        .insert_header(auth(&other))
-        .set_json(json!({ "device_id": "other-device", "clean": 9, "text": "" }))
-        .to_request();
-    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    // Out-of-range scores are rejected, for the required cleanliness score
+    // and the optional aspect scores alike.
+    for body in [
+        json!({ "device_id": "other-device", "clean": 9, "text": "" }),
+        json!({ "device_id": "other-device", "clean": 4, "coffee": 0, "text": "" }),
+        json!({ "device_id": "other-device", "clean": 4, "food": 6, "text": "" }),
+    ] {
+        let req = TestRequest::post()
+            .uri(&format!("/api/places/{id}/reviews"))
+            .insert_header(auth(&other))
+            .set_json(body)
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]

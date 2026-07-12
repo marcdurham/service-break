@@ -25,6 +25,31 @@ pub fn stars(rating: f64) -> Html {
     }
 }
 
+/// Row of five faces for optionally scoring an aspect (1-5). Tapping the
+/// currently-selected score again clears it back to "not rated".
+pub fn aspect_score_picker(value: Option<i16>, on_change: &Callback<Option<i16>>) -> Html {
+    html! {
+        <div class="clean-row">
+            { for (1..=5i16).map(|n| {
+                let on = value.is_some_and(|v| n <= v);
+                let onclick = {
+                    let on_change = on_change.clone();
+                    Callback::from(move |_| {
+                        on_change.emit(if value == Some(n) { None } else { Some(n) })
+                    })
+                };
+                html! {
+                    <button class={if on { "clean-pick on" } else { "clean-pick" }} {onclick}>
+                        <span class="mi">
+                            {if on { "sentiment_very_satisfied" } else { "sentiment_neutral" }}
+                        </span>
+                    </button>
+                }
+            }) }
+        </div>
+    }
+}
+
 pub fn clean_label(clean_avg: Option<f64>) -> String {
     match clean_avg {
         Some(c) => format!("{c:.1}"),

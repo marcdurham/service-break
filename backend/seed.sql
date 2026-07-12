@@ -11,13 +11,13 @@ INSERT INTO places (id, name, place_type, lat, lng, address, door_ft, door_note,
 ('00000000-0000-0000-0000-000000000007', 'Wildflour Bakery',     'shop',  47.6097, -122.3228, '55 Birch Ln',          10, 'Immediately right of the entrance',               'street', 'yes', 'yes', '{restrooms,coffee,food,seating}','Open · closes 6:00 PM',  'seed'),
 ('00000000-0000-0000-0000-000000000008', 'Northgate Market',     'store', 47.6210, -122.3550, '900 North Gate Blvd',  70, 'Near the pharmacy counter',                       'easy',   'no',  'no',  '{restrooms,groceries,parking}', 'Open · closes 11:00 PM', 'seed');
 
-INSERT INTO reviews (place_id, device_id, clean, text, created_at) VALUES
-('00000000-0000-0000-0000-000000000001', 'PriyaM99', 5, 'Spotless. Single room, key on a wooden spoon by the register. Worth the visit.', now() - interval '2 days'),
-('00000000-0000-0000-0000-000000000001', 'DevR4321', 4, 'Clean and quick. Small line at peak but the code is on the receipt.',           now() - interval '7 days'),
-('00000000-0000-0000-0000-000000000002', 'SamK7710', 4, 'No purchase needed, family restroom is big and clean. Long walk from the door though.', now() - interval '4 days'),
-('00000000-0000-0000-0000-000000000003', 'LenaT550', 5, 'Cozy and clean. They give you the code at the counter, no purchase required.',  now() - interval '6 days'),
-('00000000-0000-0000-0000-000000000004', 'MarcoB12', 3, 'It is a gas station bathroom. Functional, key at the register. Bring your own wipes.', now() - interval '3 days'),
-('00000000-0000-0000-0000-000000000005', 'NadiaF88', 4, 'Surprisingly well kept for a public park. Baby changing table too.',            now() - interval '1 day'),
-('00000000-0000-0000-0000-000000000006', 'OwenP333', 3, 'Free and central. Cleaned a few times a day, hit or miss depending on time.',   now() - interval '5 days'),
-('00000000-0000-0000-0000-000000000007', 'TaraW202', 5, 'Cleanest bathroom on this whole app. Fresh flowers, always stocked.',           now() - interval '2 days'),
-('00000000-0000-0000-0000-000000000008', 'IrisH505', 4, 'Reliable and clean, no purchase needed. Lot parking is easy.',                  now() - interval '7 days');
+INSERT INTO reviews (place_id, device_id, clean, coffee, food, text, created_at) VALUES
+('00000000-0000-0000-0000-000000000001', 'PriyaM99', 5, 5,    NULL, 'Spotless. Single room, key on a wooden spoon by the register. Worth the visit.', now() - interval '2 days'),
+('00000000-0000-0000-0000-000000000001', 'DevR4321', 4, 4,    NULL, 'Clean and quick. Small line at peak but the code is on the receipt.',           now() - interval '7 days'),
+('00000000-0000-0000-0000-000000000002', 'SamK7710', 4, NULL, NULL, 'No purchase needed, family restroom is big and clean. Long walk from the door though.', now() - interval '4 days'),
+('00000000-0000-0000-0000-000000000003', 'LenaT550', 5, 4,    NULL, 'Cozy and clean. They give you the code at the counter, no purchase required.',  now() - interval '6 days'),
+('00000000-0000-0000-0000-000000000004', 'MarcoB12', 3, NULL, 2,    'It is a gas station bathroom. Functional, key at the register. Bring your own wipes.', now() - interval '3 days'),
+('00000000-0000-0000-0000-000000000005', 'NadiaF88', 4, NULL, NULL, 'Surprisingly well kept for a public park. Baby changing table too.',            now() - interval '1 day'),
+('00000000-0000-0000-0000-000000000006', 'OwenP333', 3, NULL, NULL, 'Free and central. Cleaned a few times a day, hit or miss depending on time.',   now() - interval '5 days'),
+('00000000-0000-0000-0000-000000000007', 'TaraW202', 5, 5,    5,    'Cleanest bathroom on this whole app. Fresh flowers, always stocked.',           now() - interval '2 days'),
+('00000000-0000-0000-0000-000000000008', 'IrisH505', 4, NULL, NULL, 'Reliable and clean, no purchase needed. Lot parking is easy.',                  now() - interval '7 days');

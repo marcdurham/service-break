@@ -4,6 +4,16 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-11
+
+- 20:08 — Ratings are now aspect-specific: reviews keep the required
+  bathroom-cleanliness score and can optionally score Coffee and Food
+  (1-5, new nullable `coffee`/`food` columns on reviews). Place summaries
+  expose per-aspect averages (`coffee_avg`/`food_avg`); the detail page's
+  breakdown shows a bar per rated aspect, review cards show aspect chips,
+  and the add-place form and review composer grew optional Coffee/Food
+  pickers (tap the selected score again to clear it).
+
 ## 2026-07-10
 
 - 20:35 — Containerized the app: multi-stage Dockerfiles for the backend

@@ -41,6 +41,19 @@ async fn health() -> HttpResponse {
     HttpResponse::Ok().json(json!({ "status": "ok" }))
 }
 
+/// Rejects aspect scores outside 1-5. `clean` is required; `coffee` and
+/// `food` are optional but must be in range when present.
+fn validate_scores(clean: i16, coffee: Option<i16>, food: Option<i16>) -> Result<(), ApiError> {
+    for (name, score) in [("cleanliness", Some(clean)), ("coffee", coffee), ("food", food)] {
+        if let Some(s) = score {
+            if !(1..=5).contains(&s) {
+                return Err(ApiError::BadRequest(format!("{name} must be between 1 and 5")));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[get("/api/places")]
 async fn list_places(
     state: Data<AppState>,
@@ -70,11 +83,7 @@ async fn create_place(
     if new.name.trim().is_empty() {
         return Err(ApiError::BadRequest("place name is required".to_owned()));
     }
-    if !(1..=5).contains(&new.clean) {
-        return Err(ApiError::BadRequest(
-            "cleanliness must be between 1 and 5".to_owned(),
-        ));
-    }
+    validate_scores(new.clean, new.coffee, new.food)?;
     let address = new.address.clone().unwrap_or_default().trim().to_owned();
 
     // Resolve coordinates: explicit lat/lng > "lat, lng" typed in the address
@@ -115,8 +124,16 @@ async fn create_place(
         user_id: user.id,
     };
     let id = db::insert_place(&state.pool, &place).await?;
-    db::insert_review(&state.pool, id, &new.device_id, user.id, new.clean, new.comment.trim())
-        .await?;
+    let review = db::InsertReview {
+        place_id: id,
+        device_id: &new.device_id,
+        user_id: user.id,
+        clean: new.clean,
+        coffee: new.coffee,
+        food: new.food,
+        text: new.comment.trim(),
+    };
+    db::insert_review(&state.pool, &review).await?;
     let detail = db::get_place(&state.pool, id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
@@ -128,13 +145,17 @@ async fn create_review(
     id: Path<Uuid>,
     body: Json<NewReview>,
 ) -> Result<HttpResponse, ApiError> {
-    if !(1..=5).contains(&body.clean) {
-        return Err(ApiError::BadRequest(
-            "cleanliness must be between 1 and 5".to_owned(),
-        ));
-    }
-    db::insert_review(&state.pool, *id, &body.device_id, user.id, body.clean, body.text.trim())
-        .await?;
+    validate_scores(body.clean, body.coffee, body.food)?;
+    let review = db::InsertReview {
+        place_id: *id,
+        device_id: &body.device_id,
+        user_id: user.id,
+        clean: body.clean,
+        coffee: body.coffee,
+        food: body.food,
+        text: body.text.trim(),
+    };
+    db::insert_review(&state.pool, &review).await?;
     let detail = db::get_place(&state.pool, *id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
