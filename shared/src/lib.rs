@@ -447,6 +447,73 @@ pub struct NewReview {
     pub text: String,
 }
 
+/// Full set of editable place fields, sent to `PUT /api/places/{id}` by a
+/// logged-in user. Coordinates resolve like on create — explicit lat/lng
+/// win, otherwise a *changed* address is parsed as "lat, lng" or geocoded;
+/// an unchanged address keeps the stored coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdatePlace {
+    pub name: String,
+    pub place_type: PlaceType,
+    #[serde(default)]
+    pub lat: Option<f64>,
+    #[serde(default)]
+    pub lng: Option<f64>,
+    #[serde(default)]
+    pub address: Option<String>,
+    pub door_ft: i32,
+    #[serde(default)]
+    pub door_note: String,
+    pub parking: Parking,
+    #[serde(default)]
+    pub purchase_required: Requirement,
+    #[serde(default)]
+    pub code_required: Requirement,
+    #[serde(default)]
+    pub amenities: Vec<Amenity>,
+    #[serde(default)]
+    pub hours: Option<String>,
+}
+
+/// One audited change to a place, from `GET /api/places/{id}/edits`: which
+/// field changed, its old and new value, who changed it and when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaceEdit {
+    pub field: String,
+    pub old_value: String,
+    pub new_value: String,
+    pub author: String,
+    pub created_at: String,
+    pub time_ago: String,
+}
+
+/// Human-readable label for a field name recorded in the place edit log.
+pub fn edit_field_label(field: &str) -> &str {
+    match field {
+        "name" => "Name",
+        "place_type" => "Type",
+        "location" => "Location",
+        "address" => "Address",
+        "door_ft" => "Bathroom distance (ft)",
+        "door_note" => "Bathroom directions",
+        "parking" => "Parking",
+        "purchase_required" => "Purchase required",
+        "code_required" => "Code required",
+        "amenities" => "Amenities",
+        "hours" => "Hours",
+        other => other,
+    }
+}
+
+/// How an audited value reads in the history UI; blanks become "(empty)".
+pub fn edit_value_display(value: &str) -> &str {
+    if value.trim().is_empty() {
+        "(empty)"
+    } else {
+        value
+    }
+}
+
 /// Username + password sent to `POST /api/auth/register` and `/login`.
 /// `invite_code` is required for registration (ignored, and safe to omit,
 /// on login).
@@ -795,6 +862,22 @@ mod tests {
     fn door_short_labels() {
         assert_eq!(door_short(0), "At entrance");
         assert_eq!(door_short(40), "40 ft");
+    }
+
+    #[test]
+    fn edit_field_labels_are_humanized() {
+        assert_eq!(edit_field_label("name"), "Name");
+        assert_eq!(edit_field_label("door_ft"), "Bathroom distance (ft)");
+        assert_eq!(edit_field_label("purchase_required"), "Purchase required");
+        // Unknown fields pass through so old logs never break the UI.
+        assert_eq!(edit_field_label("mystery"), "mystery");
+    }
+
+    #[test]
+    fn edit_value_display_marks_blanks() {
+        assert_eq!(edit_value_display("street"), "street");
+        assert_eq!(edit_value_display(""), "(empty)");
+        assert_eq!(edit_value_display("   "), "(empty)");
     }
 
     #[test]

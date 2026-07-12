@@ -2,7 +2,7 @@ use actix_web::web::{Data, Json, Path, Query, ServiceConfig};
 use actix_web::{delete, get, post, put, HttpResponse};
 use serde::Deserialize;
 use serde_json::json;
-use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery};
+use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery, UpdatePlace};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -17,6 +17,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(list_places)
         .service(create_place)
         .service(get_place)
+        .service(update_place)
+        .service(list_place_edits)
         .service(create_review)
         .service(list_saved)
         .service(save_place)
@@ -136,6 +138,78 @@ async fn create_place(
     db::insert_review(&state.pool, &review).await?;
     let detail = db::get_place(&state.pool, id, None).await?;
     Ok(HttpResponse::Created().json(detail))
+}
+
+/// Edits a place (any logged-in user). Every changed field is written to
+/// the `place_edits` audit log — what changed, when, and by whom.
+#[put("/api/places/{id}")]
+async fn update_place(
+    state: Data<AppState>,
+    user: AuthUser,
+    id: Path<Uuid>,
+    body: Json<UpdatePlace>,
+) -> Result<HttpResponse, ApiError> {
+    let up = body.into_inner();
+    if up.name.trim().is_empty() {
+        return Err(ApiError::BadRequest("place name is required".to_owned()));
+    }
+    let current = db::get_place(&state.pool, *id, None).await?;
+    let address = up.address.clone().unwrap_or_default().trim().to_owned();
+
+    // Resolve coordinates like on create — explicit lat/lng > an unchanged
+    // address keeps the stored coordinates (no needless geocoding) > "lat,
+    // lng" typed into the address > geocoding the new address.
+    let (lat, lng, resolved_address) = match (up.lat, up.lng) {
+        (Some(lat), Some(lng)) => (lat, lng, address),
+        _ if address == current.summary.address => {
+            (current.summary.lat, current.summary.lng, address)
+        }
+        _ => {
+            if let Some((lat, lng)) = parse_latlng(&address) {
+                (lat, lng, address)
+            } else if !address.is_empty() {
+                let hit = geocode::geocode(&state.http, &state.nominatim_url, &address)
+                    .await?
+                    .ok_or_else(|| {
+                        ApiError::BadRequest(format!("could not find address {address:?}"))
+                    })?;
+                (hit.lat, hit.lng, address)
+            } else {
+                return Err(ApiError::BadRequest(
+                    "provide coordinates or an address".to_owned(),
+                ));
+            }
+        }
+    };
+
+    let fields = db::UpdateFields {
+        name: up.name.trim().to_owned(),
+        place_type: up.place_type,
+        lat,
+        lng,
+        address: resolved_address,
+        door_ft: up.door_ft.max(0),
+        door_note: up.door_note.trim().to_owned(),
+        parking: up.parking,
+        purchase_required: up.purchase_required,
+        code_required: up.code_required,
+        amenities: up.amenities.clone(),
+        hours: up.hours.map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()),
+    };
+    db::update_place(&state.pool, *id, user.id, &fields).await?;
+    let detail = db::get_place(&state.pool, *id, None).await?;
+    Ok(HttpResponse::Ok().json(detail))
+}
+
+/// A place's edit history — who changed which field, from and to what,
+/// and when. Public, like all reads.
+#[get("/api/places/{id}/edits")]
+async fn list_place_edits(
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let edits = db::list_place_edits(&state.pool, *id).await?;
+    Ok(HttpResponse::Ok().json(edits))
 }
 
 #[post("/api/places/{id}/reviews")]

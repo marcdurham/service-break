@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    Amenity, Invitation, Parking, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery, Requirement,
-    Review, SortBy,
+    Amenity, Invitation, Parking, PlaceDetail, PlaceEdit, PlaceSummary, PlaceType, PlacesQuery,
+    Requirement, Review, SortBy,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -287,6 +287,163 @@ pub async fn insert_review(pool: &PgPool, r: &InsertReview<'_>) -> Result<Uuid, 
     Ok(id)
 }
 
+/// The resolved editable fields of a place, applied by [`update_place`].
+pub struct UpdateFields {
+    pub name: String,
+    pub place_type: PlaceType,
+    pub lat: f64,
+    pub lng: f64,
+    pub address: String,
+    pub door_ft: i32,
+    pub door_note: String,
+    pub parking: Parking,
+    pub purchase_required: Requirement,
+    pub code_required: Requirement,
+    pub amenities: Vec<Amenity>,
+    pub hours: Option<String>,
+}
+
+/// Sorted, comma-joined amenity list — a stable text form for the audit log
+/// that doesn't flag a reordered multi-select as a change.
+fn amenities_text<S: AsRef<str>>(amenities: &[S]) -> String {
+    let mut v: Vec<&str> = amenities.iter().map(AsRef::as_ref).collect();
+    v.sort_unstable();
+    v.join(",")
+}
+
+/// Applies an edit to a place and records one `place_edits` audit row per
+/// changed field — what changed (old and new value), when, and by whom.
+/// Returns how many fields actually changed; a no-op edit writes nothing.
+pub async fn update_place(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+    f: &UpdateFields,
+) -> Result<usize, ApiError> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
+        "SELECT name, place_type, lat, lng, address, door_ft, door_note, parking, \
+         purchase_required, code_required, amenities, hours \
+         FROM places WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+
+    let old_lat: f64 = row.try_get("lat")?;
+    let old_lng: f64 = row.try_get("lng")?;
+    let old_amenities: Vec<String> = row.try_get("amenities")?;
+    let old_hours: Option<String> = row.try_get("hours")?;
+    let new_amenities: Vec<&str> = f.amenities.iter().map(|a| a.as_str()).collect();
+
+    let mut changes: Vec<(&'static str, String, String)> = Vec::new();
+    let mut diff = |field: &'static str, old: String, new: String| {
+        if old != new {
+            changes.push((field, old, new));
+        }
+    };
+    diff("name", row.try_get("name")?, f.name.clone());
+    diff("place_type", row.try_get("place_type")?, f.place_type.to_string());
+    if (old_lat - f.lat).abs() > 1e-9 || (old_lng - f.lng).abs() > 1e-9 {
+        diff(
+            "location",
+            shared::fmt_latlng(old_lat, old_lng),
+            shared::fmt_latlng(f.lat, f.lng),
+        );
+    }
+    diff("address", row.try_get("address")?, f.address.clone());
+    diff("door_ft", row.try_get::<i32, _>("door_ft")?.to_string(), f.door_ft.to_string());
+    diff("door_note", row.try_get("door_note")?, f.door_note.clone());
+    diff("parking", row.try_get("parking")?, f.parking.to_string());
+    diff(
+        "purchase_required",
+        row.try_get("purchase_required")?,
+        f.purchase_required.to_string(),
+    );
+    diff("code_required", row.try_get("code_required")?, f.code_required.to_string());
+    diff("amenities", amenities_text(&old_amenities), amenities_text(&new_amenities));
+    diff("hours", old_hours.unwrap_or_default(), f.hours.clone().unwrap_or_default());
+
+    if changes.is_empty() {
+        return Ok(0);
+    }
+
+    sqlx::query(
+        "UPDATE places SET name = $1, place_type = $2, lat = $3, lng = $4, address = $5, \
+         door_ft = $6, door_note = $7, parking = $8, purchase_required = $9, \
+         code_required = $10, amenities = $11, hours = $12 WHERE id = $13",
+    )
+    .bind(&f.name)
+    .bind(f.place_type.as_str())
+    .bind(f.lat)
+    .bind(f.lng)
+    .bind(&f.address)
+    .bind(f.door_ft)
+    .bind(&f.door_note)
+    .bind(f.parking.as_str())
+    .bind(f.purchase_required.as_str())
+    .bind(f.code_required.as_str())
+    .bind(&new_amenities)
+    .bind(&f.hours)
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+
+    for (field, old_value, new_value) in &changes {
+        sqlx::query(
+            "INSERT INTO place_edits (place_id, user_id, field, old_value, new_value) \
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(field)
+        .bind(old_value)
+        .bind(new_value)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(changes.len())
+}
+
+/// A place's edit history, most recent first.
+pub async fn list_place_edits(pool: &PgPool, place_id: Uuid) -> Result<Vec<PlaceEdit>, ApiError> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM places WHERE id = $1)")
+        .bind(place_id)
+        .fetch_one(pool)
+        .await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    let rows = sqlx::query(
+        "SELECT e.field, e.old_value, e.new_value, e.created_at, u.username \
+         FROM place_edits e LEFT JOIN users u ON u.id = e.user_id \
+         WHERE e.place_id = $1 ORDER BY e.created_at DESC, e.field",
+    )
+    .bind(place_id)
+    .fetch_all(pool)
+    .await?;
+    let now = Utc::now();
+    rows.iter()
+        .map(|row| {
+            let username: Option<String> = row.try_get("username")?;
+            let created_at: DateTime<Utc> = row.try_get("created_at")?;
+            Ok(PlaceEdit {
+                field: row.try_get("field")?,
+                old_value: row.try_get("old_value")?,
+                new_value: row.try_get("new_value")?,
+                // Edits always come from an account; NULL only remains
+                // where the account was deleted afterwards.
+                author: username.unwrap_or_else(|| "(deleted account)".to_owned()),
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            })
+        })
+        .collect()
+}
+
 pub struct UserRow {
     pub id: Uuid,
     pub username: String,
@@ -486,6 +643,13 @@ pub async fn list_saved(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn amenities_text_is_order_insensitive() {
+        assert_eq!(amenities_text(&["coffee", "restrooms"]), "coffee,restrooms");
+        assert_eq!(amenities_text(&["restrooms", "coffee"]), "coffee,restrooms");
+        assert_eq!(amenities_text::<&str>(&[]), "");
+    }
 
     #[test]
     fn like_pattern_escapes_wildcards() {

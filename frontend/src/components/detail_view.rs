@@ -1,9 +1,10 @@
-use shared::{Aspect, NewReview, PlaceDetail, PlaceSummary};
+use shared::{Aspect, NewReview, PlaceDetail, PlaceEdit, PlaceSummary};
 use uuid::Uuid;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
 use crate::api;
+use crate::components::edit_view::EditView;
 use crate::components::ui;
 
 const AVATAR_COLORS: [&str; 4] = ["#c05f38", "#6f8256", "#9b6a7d", "#4f7a86"];
@@ -31,9 +32,26 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let coffee_pick = use_state(|| None::<i16>);
     let food_pick = use_state(|| None::<i16>);
     let text = use_state(String::new);
+    let editing = use_state(|| false);
+    let edits = use_state(Vec::<PlaceEdit>::new);
+    // Bumped after each save so the change history below refetches.
+    let edits_refresh = use_state(|| 0u32);
 
     let p = &props.detail.summary;
     let d = &props.detail;
+
+    // The audited edit history for this place — what changed, when, by whom.
+    {
+        let edits = edits.clone();
+        use_effect_with((p.id, *edits_refresh), move |(id, _)| {
+            let id = *id;
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(list) = api::fetch_place_edits(id).await {
+                    edits.set(list);
+                }
+            });
+        });
+    }
 
     let close = {
         let cb = props.on_close.clone();
@@ -68,6 +86,34 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let cancel_composer = {
         let composing = composing.clone();
         Callback::from(move |_| composing.set(false))
+    };
+    let open_editor = {
+        let editing = editing.clone();
+        let logged_in = props.logged_in;
+        let require_login = props.on_require_login.clone();
+        Callback::from(move |_| {
+            if logged_in {
+                editing.set(true);
+            } else {
+                require_login.emit(());
+            }
+        })
+    };
+    let close_editor = {
+        let editing = editing.clone();
+        Callback::from(move |()| editing.set(false))
+    };
+    let on_saved = {
+        let editing = editing.clone();
+        let edits_refresh = edits_refresh.clone();
+        let on_updated = props.on_updated.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |detail: PlaceDetail| {
+            editing.set(false);
+            edits_refresh.set(edits_refresh.wrapping_add(1));
+            on_updated.emit(detail);
+            on_toast.emit("Changes saved".to_owned());
+        })
     };
     let send_review = {
         let composing = composing.clone();
@@ -155,6 +201,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         </button>
                         <button class="rate-btn" onclick={open_composer.clone()}>
                             <span class="mi">{"rate_review"}</span>{"Rate"}
+                        </button>
+                        <button class="rate-btn" onclick={open_editor}>
+                            <span class="mi">{"edit"}</span>{"Edit"}
                         </button>
                     </div>
 
@@ -328,8 +377,40 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                             </div>
                         }) }
                     </div>
+
+                    if !edits.is_empty() {
+                        <div class="reviews-head" style="margin-top:0">
+                            <div class="reviews-title">{"Change history"}</div>
+                        </div>
+                        <div class="cards" style="padding-bottom:24px">
+                            { for edits.iter().map(|e| html! {
+                                <div class="review-card">
+                                    <div class="review-name">
+                                        {format!(
+                                            "{}: {} → {}",
+                                            shared::edit_field_label(&e.field),
+                                            shared::edit_value_display(&e.old_value),
+                                            shared::edit_value_display(&e.new_value),
+                                        )}
+                                    </div>
+                                    <div class="review-time">
+                                        {format!("by {} · {}", e.author, e.time_ago)}
+                                    </div>
+                                </div>
+                            }) }
+                        </div>
+                    }
                 </div>
             </div>
+
+            if *editing {
+                <EditView
+                    detail={props.detail.clone()}
+                    on_close={close_editor}
+                    on_saved={on_saved}
+                    on_toast={props.on_toast.clone()}
+                />
+            }
         </div>
     }
 }

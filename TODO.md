@@ -1,5 +1,4 @@
 # TODO
-- 108 Make places editable for users who are logged in, log to the database changes made, when, and by whom.
 - 107 Change the app's main logo from `wc` to `coffee`.
 - 113 Change the top filters Shop, Store, Mall, Park, Public, Hall to a single chip that can be tapped to show things options called "Type" (mean type of place) instead add the things that are offered like Restroom, Coffee, Food, Seating a the top level, by default show them all.
 - 120 Add an admin account, with the default password of "I brake for coffee", which will be in the documenation, that has an admin menu which includes a way to back-up all data and download it as a single JSON file, but not passwords, store newly generated passwords.  Also include a way to import all data on that same page so that the data can quickly be exported, the app re-deployed and the data can quickly be restored.
