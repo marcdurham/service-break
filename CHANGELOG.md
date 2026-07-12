@@ -6,6 +6,9 @@ short description.
 
 ## 2026-07-11
 
+- 20:40 — Renamed the admin-flag migration `20260711120000` →
+  `20260711130000` to avoid a version collision with a same-numbered
+  migration that landed on main.
 - 20:33 — Added `scripts/change-password.sh <user> [password]` (TODO 117
   done): prompts with hidden input when the password is omitted, hashes it
   locally via the new `hash-password` backend binary (same Argon2 code the
@@ -21,7 +24,7 @@ short description.
   account, its default password, and the export → re-deploy → restore
   flow in README.md and DEPLOY.md.
 - 20:13 — Added admin accounts to the backend: an `is_admin` flag on users
-  (migration `20260711120000`), an `admin` account auto-created at startup
+  (migration `20260711130000`), an `admin` account auto-created at startup
   with the documented default password ("I brake for coffee" — change it!),
   and admin-only `GET /api/admin/export` / `POST /api/admin/import`
   endpoints. Export is one JSON document of all data minus sessions and
