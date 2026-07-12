@@ -15,8 +15,8 @@ use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt
 use argon2::Argon2;
 use serde_json::json;
 use shared::{
-    validate_invite_name, validate_password, validate_username, AuthSession, Credentials,
-    InviteNameUpdate, NewInvite,
+    validate_invite_name, validate_password, validate_username, AuthSession, ChangePassword,
+    Credentials, InviteNameUpdate, NewInvite,
 };
 use uuid::Uuid;
 
@@ -29,6 +29,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(login)
         .service(logout)
         .service(me)
+        .service(change_password)
         .service(create_invite)
         .service(list_invites)
         .service(rename_invite);
@@ -185,6 +186,36 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 #[get("/api/auth/me")]
 async fn me(user: AuthUser) -> HttpResponse {
     HttpResponse::Ok().json(json!({ "username": user.username, "is_admin": user.is_admin }))
+}
+
+/// Swaps the signed-in user's password. The current password is verified
+/// against the stored Argon2 hash before the new one (which must satisfy
+/// the same rules as registration) is hashed and persisted.
+#[put("/api/auth/password")]
+async fn change_password(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<ChangePassword>,
+) -> Result<HttpResponse, ApiError> {
+    let creds = body.into_inner();
+    validate_password(&creds.new_password).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+
+    // Find the current hash so we can verify with `verify_password`.
+    let user_row = db::find_user_by_id(&state.pool, user.id)
+        .await?
+        .ok_or_else(|| ApiError::Internal("user disappeared from under us".to_owned()))?;
+
+    let hash = user_row.password_hash;
+    let ok = run_blocking(move || Ok(verify_password(&creds.current_password, &hash))).await?;
+    if !ok {
+        return Err(ApiError::BadRequest(
+            "current password is wrong".to_owned(),
+        ));
+    }
+
+    let new_hash = run_blocking(move || hash_password(&creds.new_password)).await?;
+    db::update_user_password(&state.pool, user.id, &new_hash).await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Issues a fresh invite code the signed-in user can hand to a friend,

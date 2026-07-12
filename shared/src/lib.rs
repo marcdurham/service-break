@@ -534,6 +534,13 @@ pub struct Credentials {
     pub invite_code: String,
 }
 
+/// Body for `PUT /api/auth/password`: the current password (verified against /// the stored hash) plus a new one that must satisfy the registration rules.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChangePassword {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 /// Days before an unredeemed invitation code expires.
 pub const INVITE_EXPIRY_DAYS: i32 = 7;
 /// Most invitations a user may send per (rolling) day.

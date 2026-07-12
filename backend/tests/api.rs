@@ -1151,3 +1151,81 @@ async fn admin_export_import_round_trip(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 }
+
+#[sqlx::test]
+async fn change_password_works(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    let token = register_fresh_with_code(&app, "alice", &code).await;
+
+    // Wrong current password is rejected.
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({
+            "current_password": "wrong-password",
+            "new_password": "brand-new-secret"
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Empty current password is rejected.
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({
+            "current_password": "",
+            "new_password": "brand-new-secret"
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Empty new password is rejected.
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({
+            "current_password": "correct-horse-battery",
+            "new_password": ""
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Successful change returns 204.
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({
+            "current_password": "correct-horse-battery",
+            "new_password": "brand-new-secret"
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Old token still works (sessions aren't rotated).
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    // Old password no longer works.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({
+            "username": "alice",
+            "password": "correct-horse-battery"
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // New password works.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({
+            "username": "alice",
+            "password": "brand-new-secret"
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+}

@@ -506,6 +506,43 @@ pub async fn register_user(
     Ok(user_id)
 }
 
+/// Replaces a user's stored Argon2 hash. Used for password changes; never
+/// returns error on an unknown id so callers can't probe account existence.
+pub async fn update_user_password(
+    pool: &PgPool,
+    user_id: Uuid,
+    new_hash: &str,
+) -> Result<(), ApiError> {
+    sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
+        .bind(user_id)
+        .bind(new_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Looks a user up by id. Used when the caller already has an authenticated /// identity but needs to read stored fields (e.g. the password hash).
+pub async fn find_user_by_id(
+    pool: &PgPool,
+    id: Uuid,
+) -> Result<Option<UserRow>, ApiError> {
+    let row = sqlx::query(
+        "SELECT id, username, password_hash, is_admin FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|r| {
+        Ok(UserRow {
+            id: r.try_get("id")?,
+            username: r.try_get("username")?,
+            password_hash: r.try_get("password_hash")?,
+            is_admin: r.try_get("is_admin")?,
+        })
+    })
+    .transpose()
+}
+
 /// An 8-character invite code — just the code, no prefix.
 fn new_invite_code() -> String {
     Uuid::new_v4().simple().to_string()[..8].to_uppercase()
