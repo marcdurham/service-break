@@ -220,6 +220,49 @@ async fn list_filters_by_type_and_purchase(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn list_filters_by_offered_amenities(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+    // Camber Coffee offers restrooms + coffee (new_place_json default).
+    let mut park = new_place_json("Elm Street Park");
+    park["place_type"] = json!("park");
+    park["amenities"] = json!(["seating"]);
+    let mut kiosk = new_place_json("Bare Kiosk");
+    kiosk["amenities"] = json!([]);
+    for body in [new_place_json("Camber Coffee"), park, kiosk] {
+        let req = TestRequest::post()
+            .uri("/api/places")
+            .insert_header(auth(&token))
+            .set_json(body)
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
+
+    // A single amenity narrows to places offering it.
+    let req = TestRequest::get().uri("/api/places?amenities=coffee").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(places.len(), 1);
+    assert_eq!(places[0].name, "Camber Coffee");
+
+    // Several amenities match places offering at least one of them.
+    let req = TestRequest::get()
+        .uri("/api/places?amenities=coffee,seating")
+        .to_request();
+    let mut names: Vec<String> = read_body_json::<Vec<PlaceSummary>, _>(call_service(&app, req).await)
+        .await
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Camber Coffee", "Elm Street Park"]);
+
+    // No amenities param leaves every place visible.
+    let req = TestRequest::get().uri("/api/places").to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(places.len(), 3);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
     let app = app(pool.clone()).await;
     let token = register(&app, &pool, "scout-one").await;

@@ -212,6 +212,10 @@ button { cursor: pointer; }
 .sresult-empty { padding: 16px 14px; font-size: 13.5px; color: var(--muted2); text-align: center; }
 
 .chips { display: flex; gap: 7px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px; }
+/* chipbar stacks the offerings row and the expandable place-type row */
+.chipbar { display: flex; flex-direction: column; margin-top: 10px; }
+.chipbar .chips { margin-top: 0; }
+.chipbar .chips + .chips { margin-top: 7px; }
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 8px 13px; border-radius: 999px;
@@ -321,7 +325,7 @@ button { cursor: pointer; }
 .list-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 4px; }
 .list-head .icon-btn { width: 42px; height: 42px; border-radius: 13px; box-shadow: 0 4px 12px -6px rgba(74, 53, 39, .4); }
 .list-head .icon-btn .mi { font-size: 21px; }
-.screen .chips { margin: 14px 0 16px; }
+.screen .chipbar { margin: 14px 0 16px; }
 
 .cards { display: flex; flex-direction: column; gap: 12px; }
 .card {

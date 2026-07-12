@@ -6,6 +6,15 @@ short description.
 
 ## 2026-07-11
 
+- 20:12 — Reworked the top filter chips on the map and list screens:
+  the six place-type chips (Shop, Store, Mall, Park, Public, Hall) are
+  now tucked behind a single "Type" chip that expands them on tap, and
+  the top level instead shows what places offer — Restroom, Coffee,
+  Food, Seating — all selected by default. Deselecting chips narrows to
+  places offering at least one of the remaining selections, via a new
+  `amenities` parameter on `GET /api/places` (`&&` overlap on the
+  existing `places.amenities` column; no schema change). Covered by a
+  new `#[sqlx::test]` and shared-crate unit tests (TODO 113).
 - 19:30 — Refreshed the onboarding (main entry) copy: tagline is now
   "find places for refreshment", headline "Good places to take breaks",
   intro "Places with coffee, food, bathrooms, places to sit at shops,

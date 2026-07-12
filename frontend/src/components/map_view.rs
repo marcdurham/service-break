@@ -1,5 +1,5 @@
 use serde::Serialize;
-use shared::{PlaceSummary, PlaceType, PlacesQuery};
+use shared::{Amenity, PlaceSummary, PlaceType, PlacesQuery};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -7,7 +7,7 @@ use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
 use crate::app::FALLBACK_CENTER;
-use crate::components::ui::{self, TypeChips};
+use crate::components::ui::{self, FilterChips};
 use crate::{api, glue};
 
 #[derive(Serialize)]
@@ -30,10 +30,12 @@ pub struct MapViewProps {
     pub focus: Option<(f64, f64)>,
     pub filters_active: bool,
     pub active_types: Vec<PlaceType>,
+    pub active_amenities: Vec<Amenity>,
     pub on_select: Callback<Uuid>,
     pub on_open: Callback<Uuid>,
     pub on_open_filters: Callback<()>,
     pub on_toggle_type: Callback<PlaceType>,
+    pub on_toggle_amenity: Callback<Amenity>,
     pub on_recenter: Callback<()>,
 }
 
@@ -216,7 +218,12 @@ pub fn map_view(props: &MapViewProps) -> Html {
                         { search_results(&list, &pick_result) }
                     }
                 } else {
-                    <TypeChips active={props.active_types.clone()} on_toggle={props.on_toggle_type.clone()} />
+                    <FilterChips
+                        active_types={props.active_types.clone()}
+                        active_amenities={props.active_amenities.clone()}
+                        on_toggle_type={props.on_toggle_type.clone()}
+                        on_toggle_amenity={props.on_toggle_amenity.clone()}
+                    />
                 }
             </div>
 
