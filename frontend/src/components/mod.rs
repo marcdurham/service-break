@@ -12,4 +12,5 @@ pub mod onboarding;
 pub mod register_view;
 pub mod saved_view;
 pub mod tab_bar;
+pub mod users_view;
 pub mod ui;

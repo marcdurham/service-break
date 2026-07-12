@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use shared::{
     Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, INVITES_PER_DAY,
-    INVITE_EXPIRY_DAYS, INVITE_WAIT_HOURS,
+    PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
+    INVITES_PER_DAY, INVITE_EXPIRY_DAYS, INVITE_WAIT_HOURS,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -773,6 +773,28 @@ pub async fn unsave_place(pool: &PgPool, device_id: &str, place_id: Uuid) -> Res
         .execute(pool)
         .await?;
     Ok(())
+}
+
+/// All accounts — admin-only. Ids are returned as strings so the frontend
+/// doesn't have to pull in uuid for a read-only listing.
+pub async fn list_users(pool: &PgPool) -> Result<Vec<UserSummary>, ApiError> {
+    let rows = sqlx::query(
+        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at, id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let id: Uuid = r.try_get("id")?;
+            Ok(UserSummary {
+                id: id.to_string(),
+                username: r.try_get("username")?,
+                is_admin: r.try_get("is_admin")?,
+                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?)
 }
 
 pub async fn list_saved(

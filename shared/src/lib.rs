@@ -630,6 +630,16 @@ pub struct AuthSession {
     pub is_admin: bool,
 }
 
+/// A user summary for the admin users list — id, name, role and join date;
+/// never carries a password hash.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UserSummary {
+    pub id: String,
+    pub username: String,
+    pub is_admin: bool,
+    pub created_at: String,
+}
+
 /// What `POST /api/admin/import` did: how many rows each table now holds,
 /// plus the newly generated passwords for accounts that were recreated
 /// (password hashes are never exported, so imported accounts get fresh

@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 21:05 — Added /users page (admin-only) listing all accounts with a link from the admin menu.
+
 - 20:40 — Renamed the admin-flag migration `20260711120000` →
   `20260711130000` to avoid a version collision with a same-numbered
   migration that landed on main.

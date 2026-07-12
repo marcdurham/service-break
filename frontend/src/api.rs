@@ -5,7 +5,7 @@ use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, AuthSession, ChangePassword, Credentials, ImportSummary, Invitation,
     InviteNameUpdate, InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlacesQuery, UpdatePlace,
+    PlaceSummary, PlacesQuery, UpdatePlace, UserSummary,
 };
 use uuid::Uuid;
 
@@ -227,6 +227,16 @@ pub async fn export_backup() -> ApiResult<String> {
         return Err(error_message(res, "could not export data").await);
     }
     res.text().await.map_err(err)
+}
+
+/// All accounts — admin only. Ids are returned as strings so the frontend
+/// doesn't need to pull in uuid for a read-only listing.
+pub async fn fetch_users() -> ApiResult<Vec<UserSummary>> {
+    let res = with_auth(Request::get("/api/admin/users")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load users").await);
+    }
+    res.json().await.map_err(err)
 }
 
 /// Restores a backup (admin only) from the raw JSON text of an export.

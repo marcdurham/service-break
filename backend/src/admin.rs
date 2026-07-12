@@ -18,6 +18,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::auth::{hash_password, run_blocking, AdminUser};
+use crate::db;
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -30,7 +31,9 @@ pub const DEFAULT_ADMIN_PASSWORD: &str = "I brake for coffee";
 pub const EXPORT_FORMAT_VERSION: u32 = 1;
 
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(export_data).service(import_data);
+    cfg.service(export_data)
+        .service(import_data)
+        .service(list_users);
 }
 
 /// Creates the `admin` account with [`DEFAULT_ADMIN_PASSWORD`] if no user
@@ -186,6 +189,16 @@ async fn collect_export(pool: &PgPool) -> Result<ExportData, ApiError> {
         reviews,
         saved_places,
     })
+}
+
+/// `GET /api/admin/users` — every account, no password hash.
+#[get("/api/admin/users")]
+async fn list_users(
+    state: Data<AppState>,
+    _admin: AdminUser,
+) -> Result<HttpResponse, ApiError> {
+    let users = db::list_users(&state.pool).await?;
+    Ok(HttpResponse::Ok().json(users))
 }
 
 /// `POST /api/admin/import` — replaces the database contents with a backup
