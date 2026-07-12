@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-11
 
+- 23:10 — Changed invitation limits per TODO #2: new accounts can send 25 invites/day immediately (no more 24-hour wait), and accounts older than 24 hours get 100/day. Admins bypass the limit entirely.
+
 - 22:45 — Added show/hide password toggles (eye button) to the Password and Confirm password fields on `/register`, matching the existing toggle on the Account page's change-password section.
 
 - 22:23 — Fixed admin accounts unable to create invite codes on fresh installs:
