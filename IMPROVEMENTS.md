@@ -64,7 +64,7 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `shared/src/lib.rs`, `backend/tests/api.rs`  
 **Acceptance:** Updated validate_name to trim input before checking emptiness, preventing whitespace-only strings from being accepted as valid names.
 
-### 16. Add clippy lints configuration for workspace
+### 16. ~~Add clippy lints configuration for workspace~~ ✅
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
