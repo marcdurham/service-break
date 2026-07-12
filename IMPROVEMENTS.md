@@ -48,7 +48,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that attempting to update profile with both given and family names as empty strings returns 400 Bad Request.
 
-### 12. Add clippy lints configuration for workspace
+### 12. ~~Add test for special characters in profile names~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test verifies that names with apostrophes and hyphens (O'Brien, Smith-Jones) are accepted by the profile update endpoint.
+
+### 13. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
