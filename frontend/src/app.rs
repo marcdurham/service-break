@@ -451,6 +451,17 @@ pub fn app() -> Html {
         })
     };
 
+    let on_detail_deleted = {
+        let detail = detail.clone();
+        let selected = selected.clone();
+        let refresh = refresh.clone();
+        Callback::from(move |()| {
+            detail.set(None);
+            selected.set(None);
+            refresh.set(refresh.wrapping_add(1));
+        })
+    };
+
     let on_recenter = {
         let origin = origin.clone();
         let selected = selected.clone();
@@ -573,6 +584,7 @@ pub fn app() -> Html {
                     on_show_on_map={on_show_on_map}
                     on_toggle_save={on_toggle_save}
                     on_updated={on_detail_updated}
+                    on_deleted={on_detail_deleted}
                     on_toast={show_toast.clone()}
                 />
             }
