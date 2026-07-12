@@ -80,6 +80,10 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`
 **Acceptance:** New test `duplicate_username_rejected` verifies that attempting to register with a username that already exists returns 409 Conflict.
 
+### 20. ~~Add test for partial given name profile update~~ ✅
+**Files:** `backend/tests/api.rs`
+**Acceptance:** New test `update_profile_partial_given_name` verifies that updating only the given name (without family name) succeeds and the change is reflected in /api/auth/me.
+
 ## Done
 
 - (none yet)
