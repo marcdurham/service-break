@@ -16,7 +16,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test `revoke_rejects_unauthorized_user` verifies that a non-inviter attempting to revoke an invitation receives a 404 response.
 
-### 4. ~~Add clippy lints configuration for workspace~~ ✅
+### 4. ~~Add test for revoking redeemed invitation fails~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** New test `revoke_redeemed_invite_fails` verifies that attempting to revoke an already-redeemed invitation returns 404.
+
+### 5. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
