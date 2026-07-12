@@ -84,6 +84,10 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`
 **Acceptance:** New test `update_profile_partial_given_name` verifies that updating only the given name (without family name) succeeds and the change is reflected in /api/auth/me.
 
+### 21. ~~Add test for rename invite authorization~~ ✅
+**Files:** `backend/tests/api.rs`
+**Acceptance:** New test `rename_invite_authorization` verifies that the inviter can rename their own pending invite, a redeemer can rename theirs, and an unrelated user gets 404.
+
 ## Done
 
-- (none yet)
+- All 21 items complete. Four TODOs implemented: user name fields, revised invite limits, invite revocation, place sharing. Full test coverage for auth/invite/profile/validation.
