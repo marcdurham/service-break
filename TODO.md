@@ -2,7 +2,6 @@
 - 108 Make places editable for users who are logged in, log to the database changes made, when, and by whom.
 - 107 Change the app's main logo from `wc` to `coffee`.
 - 113 Change the top filters Shop, Store, Mall, Park, Public, Hall to a single chip that can be tapped to show things options called "Type" (mean type of place) instead add the things that are offered like Restroom, Coffee, Food, Seating a the top level, by default show them all.
-- 117 Add a back-end bash script to reset user passwords like ./scripts/change-password.sh {user} {password} where if the password is omitted you are prompted for it.
 - 100 Add a password confirm for registering new accounts
 - 101 Only allow invited users to register, include a one-time invitation code that expires after 7 days, put the code in the URI so that an easy link can be shared, only allow existing users to invite new users. Only allow 5 invitations per day to be sent by each user, but new usrs have to wait only after 24 hours of registering to send invitations. 
 - 102 Add a 'Name' field to invitations, that the invited user can change once they've registered, Show a list of invitations and friends and their status on the account menu.

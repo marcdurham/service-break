@@ -6,6 +6,13 @@ short description.
 
 ## 2026-07-11
 
+- 20:33 — Added `scripts/change-password.sh <user> [password]` (TODO 117
+  done): prompts with hidden input when the password is omitted, hashes it
+  locally via the new `hash-password` backend binary (same Argon2 code the
+  server uses), and applies the UPDATE to the running docker Postgres —
+  also revoking the user's sessions. Works against production by setting
+  `COMPOSE="docker --context service-break-prod compose …"`; documented in
+  DEPLOY.md.
 - 20:24 — Added the admin page to the frontend (TODO 120 done): signing in
   as an admin shows an Admin button on the Account page leading to
   `/admin`, where one button downloads the full backup as a JSON file and
