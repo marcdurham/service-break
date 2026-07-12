@@ -1378,3 +1378,25 @@ async fn update_profile_rejects_too_long_name(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_valid_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-valid").await;
+    // Update with valid given name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Alice" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify the name was saved by checking /me.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["given_name"], "Alice");
+}
