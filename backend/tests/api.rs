@@ -1557,3 +1557,29 @@ async fn admin_invites_bypass_daily_limit(pool: PgPool) {
     let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
     assert_eq!(overview.invites.len(), 30);
 }
+
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invite_name_too_long_rejected(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-name-len").await;
+    // Create an invitation with a name that's too long (41 chars).
+    let long_name = format!("{}{}", "a".repeat(20), "b".repeat(21));
+    assert_eq!(long_name.chars().count(), 41);
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": long_name }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // But a name at the limit (40 chars) should work.
+    let ok_name = format!("{}.{}", "a".repeat(20), "b".repeat(19));
+    assert_eq!(ok_name.chars().count(), 40);
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": ok_name }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+}
