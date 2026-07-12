@@ -72,6 +72,10 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`
 **Acceptance:** New test `admin_invites_bypass_daily_limit` verifies that an admin user can send more than the daily invite limit (25+) without hitting the rate limit error.
 
+### 18. ~~Add test for invite name length validation~~ ✅
+**Files:** `backend/tests/api.rs`
+**Acceptance:** New test `invite_name_too_long_rejected` verifies that names over 40 characters are rejected when creating an invitation, while names at or under the limit succeed.
+
 ## Done
 
 - (none yet)
