@@ -1310,7 +1310,7 @@ async fn revoke_rejects_unauthorized_user(pool: PgPool) {
     let code = seed_invite(&pool).await;
     // Bob tries to revoke it — should fail with 404 (not found from his perspective).
     let req = TestRequest::delete()
-        .uri(&format!("/api/invites/{}", code))
+        .uri(&format!("/api/invites/{code}"))
         .insert_header(auth(&token_b))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
@@ -1333,7 +1333,7 @@ async fn revoke_redeemed_invite_fails(pool: PgPool) {
     assert_eq!(call_service(&app, res).await.status(), StatusCode::CREATED);
     // Try to revoke the now-redeemed invitation — should fail.
     let req = TestRequest::delete()
-        .uri(&format!("/api/invites/{}", code))
+        .uri(&format!("/api/invites/{code}"))
         .insert_header(auth(&inviter_token))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
@@ -1346,7 +1346,7 @@ async fn revoke_nonexistent_invite_returns_404(pool: PgPool) {
     // Try to revoke a code that doesn't exist.
     let fake_code = format!("nonexistent-{}", uuid::Uuid::new_v4());
     let req = TestRequest::delete()
-        .uri(&format!("/api/invites/{}", fake_code))
+        .uri(&format!("/api/invites/{fake_code}"))
         .insert_header(auth(&token))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
@@ -1444,7 +1444,7 @@ async fn update_profile_partial_family_name(pool: PgPool) {
     assert_eq!(res.status(), StatusCode::OK);
     let body: serde_json::Value = read_body_json(res).await;
     // given_name should be either null or empty string
-    assert!(body["given_name"].is_null() || body["given_name"].as_str().map_or(true, |s| s.is_empty()));
+    assert!(body["given_name"].is_null() || body["given_name"].as_str().is_none_or(|s| s.is_empty()));
     assert_eq!(body["family_name"], "Jones");
 }
 
