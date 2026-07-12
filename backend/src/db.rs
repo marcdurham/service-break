@@ -109,6 +109,12 @@ fn push_filters(qb: &mut QueryBuilder<'_, Postgres>, q: &PlacesQuery) {
         }
         qb.push(")");
     }
+    let amenities = q.parsed_amenities();
+    if !amenities.is_empty() {
+        // Overlap (`&&`): the place offers at least one requested amenity.
+        let amenities: Vec<String> = amenities.iter().map(|a| a.to_string()).collect();
+        qb.push(" AND p.amenities && ").push_bind(amenities);
+    }
     if q.no_purchase == Some(true) {
         qb.push(" AND p.purchase_required = 'no' AND p.code_required = 'no'");
     }

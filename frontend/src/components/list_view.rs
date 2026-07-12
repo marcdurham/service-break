@@ -1,16 +1,18 @@
-use shared::{PlaceSummary, PlaceType};
+use shared::{Amenity, PlaceSummary, PlaceType};
 use uuid::Uuid;
 use yew::prelude::*;
 
-use crate::components::ui::{PlaceCard, TypeChips};
+use crate::components::ui::{FilterChips, PlaceCard};
 
 #[derive(Properties, PartialEq)]
 pub struct ListViewProps {
     pub places: Vec<PlaceSummary>,
     pub active_types: Vec<PlaceType>,
+    pub active_amenities: Vec<Amenity>,
     pub on_open: Callback<Uuid>,
     pub on_open_filters: Callback<()>,
     pub on_toggle_type: Callback<PlaceType>,
+    pub on_toggle_amenity: Callback<Amenity>,
     pub on_reset_filters: Callback<()>,
 }
 
@@ -37,7 +39,12 @@ pub fn list_view(props: &ListViewProps) -> Html {
                     <span class="mi">{"tune"}</span>
                 </button>
             </div>
-            <TypeChips active={props.active_types.clone()} on_toggle={props.on_toggle_type.clone()} />
+            <FilterChips
+                active_types={props.active_types.clone()}
+                active_amenities={props.active_amenities.clone()}
+                on_toggle_type={props.on_toggle_type.clone()}
+                on_toggle_amenity={props.on_toggle_amenity.clone()}
+            />
             if props.places.is_empty() {
                 <div class="empty">
                     <span class="mi">{"travel_explore"}</span>

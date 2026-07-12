@@ -1,7 +1,5 @@
 # TODO
 - 108 Make places editable for users who are logged in, log to the database changes made, when, and by whom.
-- 107 Change the app's main logo from `wc` to `coffee`.
-- 113 Change the top filters Shop, Store, Mall, Park, Public, Hall to a single chip that can be tapped to show things options called "Type" (mean type of place) instead add the things that are offered like Restroom, Coffee, Food, Seating a the top level, by default show them all.
 - 120 Add an admin account, with the default password of "I brake for coffee", which will be in the documenation, that has an admin menu which includes a way to back-up all data and download it as a single JSON file, but not passwords, store newly generated passwords.  Also include a way to import all data on that same page so that the data can quickly be exported, the app re-deployed and the data can quickly be restored.
 - 117 Add a back-end bash script to reset user passwords like ./scripts/change-password.sh {user} {password} where if the password is omitted you are prompted for it.
 - 100 Add a password confirm for registering new accounts
@@ -12,7 +10,6 @@
 - 105 Make a new page for creating accounts that can be navigated to from the account page, that's where the invite code would be entered, or pre-entered if it was already in the URI from the invitation link.  The invitation link would take a new user directly to th new "create an account" page.  
 - 106 Change this phrase "Invite your fellow travelers" to "Invite your friends".
 - 109 Make the ratings specific to aspects like bathroom cleanliness, coffee, or food.
-- 112 On the main entry page it says: "Find a clean place" change that to "Find places for refreshment".  It also says "Every good trip needs a clean break." change that to "Good places to take breaks" It also says "Real ratings for bathrooms at shops, stores, malls, parks & more" change that to "Places with coffee, food, bathrooms, places to sit at shops, stores, malls, parks & more".  Change "Cleanliness you can trust" to "Cleanliness ratings"
 - 116 re-generate the invite code once copy or share it used.  Add the text "One time use code"
 
 # BACKLOG (Don't do the tasks below yet)

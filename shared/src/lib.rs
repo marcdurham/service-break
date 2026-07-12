@@ -178,6 +178,15 @@ pub enum Amenity {
 }
 
 impl Amenity {
+    /// The offerings surfaced as top-level filter chips on the map and
+    /// list screens, in display order.
+    pub const FEATURED: [Amenity; 4] = [
+        Amenity::Restrooms,
+        Amenity::Coffee,
+        Amenity::Food,
+        Amenity::Seating,
+    ];
+
     pub const ALL: [Amenity; 6] = [
         Amenity::Restrooms,
         Amenity::Coffee,
@@ -455,6 +464,10 @@ pub struct PlacesQuery {
     /// Comma-separated list of [`PlaceType`] strings.
     #[serde(default)]
     pub types: Option<String>,
+    /// Comma-separated list of [`Amenity`] strings; matches places
+    /// offering at least one of them.
+    #[serde(default)]
+    pub amenities: Option<String>,
     #[serde(default)]
     pub clean_min: Option<f64>,
     #[serde(default)]
@@ -468,6 +481,15 @@ pub struct PlacesQuery {
 impl PlacesQuery {
     pub fn parsed_types(&self) -> Vec<PlaceType> {
         self.types
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect()
+    }
+
+    pub fn parsed_amenities(&self) -> Vec<Amenity> {
+        self.amenities
             .as_deref()
             .unwrap_or("")
             .split(',')
@@ -492,6 +514,9 @@ impl PlacesQuery {
         }
         if let Some(t) = self.types.as_deref().filter(|t| !t.is_empty()) {
             parts.push(format!("types={t}"));
+        }
+        if let Some(a) = self.amenities.as_deref().filter(|a| !a.is_empty()) {
+            parts.push(format!("amenities={a}"));
         }
         if let Some(v) = self.clean_min {
             parts.push(format!("clean_min={v}"));
@@ -655,6 +680,7 @@ mod tests {
             lng: Some(-122.3),
             radius_mi: Some(5.0),
             types: Some("shop,park".to_owned()),
+            amenities: Some("coffee,seating".to_owned()),
             clean_min: Some(4.0),
             no_purchase: Some(true),
             has_parking: None,
@@ -662,9 +688,11 @@ mod tests {
         };
         let qs = q.to_query_string();
         assert!(qs.contains("types=shop,park"));
+        assert!(qs.contains("amenities=coffee,seating"));
         assert!(qs.contains("sort=cleanliness"));
         assert!(!qs.contains("has_parking"));
         assert_eq!(q.parsed_types(), vec![PlaceType::Shop, PlaceType::Park]);
+        assert_eq!(q.parsed_amenities(), vec![Amenity::Coffee, Amenity::Seating]);
     }
 
     #[test]
@@ -696,6 +724,23 @@ mod tests {
             ..PlacesQuery::default()
         };
         assert_eq!(q.parsed_types(), vec![PlaceType::Shop, PlaceType::Store]);
+    }
+
+    #[test]
+    fn parsed_amenities_skips_unknown_entries_and_defaults_empty() {
+        let q = PlacesQuery {
+            amenities: Some("coffee,sauna,food".to_owned()),
+            ..PlacesQuery::default()
+        };
+        assert_eq!(q.parsed_amenities(), vec![Amenity::Coffee, Amenity::Food]);
+        assert!(PlacesQuery::default().parsed_amenities().is_empty());
+    }
+
+    #[test]
+    fn featured_amenities_are_a_subset_of_all() {
+        for a in Amenity::FEATURED {
+            assert!(Amenity::ALL.contains(&a));
+        }
     }
 
     #[test]

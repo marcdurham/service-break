@@ -4,6 +4,27 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-11
+
+- 20:12 — Reworked the top filter chips on the map and list screens:
+  the six place-type chips (Shop, Store, Mall, Park, Public, Hall) are
+  now tucked behind a single "Type" chip that expands them on tap, and
+  the top level instead shows what places offer — Restroom, Coffee,
+  Food, Seating — all selected by default. Deselecting chips narrows to
+  places offering at least one of the remaining selections, via a new
+  `amenities` parameter on `GET /api/places` (`&&` overlap on the
+  existing `places.amenities` column; no schema change). Covered by a
+  new `#[sqlx::test]` and shared-crate unit tests (TODO 113).
+- 19:30 — Refreshed the onboarding (main entry) copy: tagline is now
+  "find places for refreshment", headline "Good places to take breaks",
+  intro "Places with coffee, food, bathrooms, places to sit at shops,
+  stores, malls, parks & more", and the feature bullet reads
+  "Cleanliness ratings" (TODO 112).
+- 19:25 — Changed the app's main logo glyph from `wc` to `coffee`
+  (onboarding badge, desktop nav-rail logo) and redrew the PWA icon
+  (icon.svg + regenerated icon-192/512.png) as a steaming coffee cup
+  in the same palette (TODO 107).
+
 ## 2026-07-10
 
 - 20:35 — Containerized the app: multi-stage Dockerfiles for the backend
