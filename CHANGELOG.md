@@ -6,6 +6,10 @@ short description.
 
 ## 2026-07-11
 
+- 00:50 — Added rename_invite_authorization test covering inviter/redeemer/unauthorized access to PUT /api/invites/{code}/name; fixed clippy format! suggestion.
+
+- 00:45 — Added tests for partial given_name profile update, duplicate username rejection, and admin invite limit bypass. All 48 backend tests pass, workspace clippy-clean.
+
 - 16:00 — M4 frontend complete (share place URI): Place Detail view now has a Share button in the action row that copies the current URL to clipboard via Web Clipboard API and shows a toast confirmation.
 
 - 15:45 — M3 frontend complete (invite revocation UI): Account view now shows a Revoke button on each pending invitation; clicking it calls the new DELETE endpoint and refreshes the list with a toast.
