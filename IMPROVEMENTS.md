@@ -68,6 +68,10 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
+### 17. ~~Add test for admin invite limit bypass~~ ✅
+**Files:** `backend/tests/api.rs`
+**Acceptance:** New test `admin_invites_bypass_daily_limit` verifies that an admin user can send more than the daily invite limit (25+) without hitting the rate limit error.
+
 ## Done
 
 - (none yet)
