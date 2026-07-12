@@ -71,7 +71,7 @@ register/login.
 - `GET /api/devices/{device_id}/saved` · 🔒 `PUT/DELETE /api/devices/{device_id}/saved/{place_id}`
 - `POST /api/auth/register`, `POST /api/auth/login` — body
   `{ "username", "password" }`, return `{ "token", "username" }`
-- 🔒 `POST /api/auth/logout`, `GET /api/auth/me`
+- 🔒 `POST /api/auth/logout`, `GET /api/auth/me` — returns `{ "token", "username", "is_admin", "given_name", "family_name" }`
 - 🔒 `GET /api/admin/export`, `POST /api/admin/import` — admin only (403
   otherwise); see "Admin account" below
 - `GET  /api/geocode?q=`

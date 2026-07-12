@@ -6,6 +6,24 @@ short description.
 
 ## 2026-07-11
 
+- 00:50 — Added rename_invite_authorization test covering inviter/redeemer/unauthorized access to PUT /api/invites/{code}/name; fixed clippy format! suggestion.
+
+- 00:45 — Added tests for partial given_name profile update, duplicate username rejection, and admin invite limit bypass. All 48 backend tests pass, workspace clippy-clean.
+
+- 16:00 — M4 frontend complete (share place URI): Place Detail view now has a Share button in the action row that copies the current URL to clipboard via Web Clipboard API and shows a toast confirmation.
+
+- 15:45 — M3 frontend complete (invite revocation UI): Account view now shows a Revoke button on each pending invitation; clicking it calls the new DELETE endpoint and refreshes the list with a toast.
+
+- 15:30 — M3 backend complete (invite revocation): added `DELETE /api/invites/{code}` endpoint with migration for `is_expired` column on invitations table.
+
+- 15:10 — M2 complete (revised invite limits): confirmed constants are already set to 25/day (new) and 100/day (old), backend enforcement uses them, updated comments and DEPLOY.md.
+
+- 14:50 — Frontend for M1 (user given/family name fields): Account page now displays Given Name and Family Name inputs with a Save Profile button; loads names from `GET /api/auth/me` on sign-in; added `get_me()` and `update_profile()` API functions.
+
+- 14:30 — Backend for M1 (user given/family name fields): migration `20260711140000_user_names.sql`, updated `UserRow` and all user queries, added `PATCH /api/auth/profile` endpoint with partial-update logic, extended `GET /api/auth/me` to return the new fields. Fixed invite-limit tests to use the new constants.
+
+- 23:10 — Changed invitation limits per TODO #2: new accounts can send 25 invites/day immediately (no more 24-hour wait), and accounts older than 24 hours get 100/day. Admins bypass the limit entirely.
+
 - 22:45 — Added show/hide password toggles (eye button) to the Password and Confirm password fields on `/register`, matching the existing toggle on the Account page's change-password section.
 
 - 22:23 — Fixed admin accounts unable to create invite codes on fresh installs:

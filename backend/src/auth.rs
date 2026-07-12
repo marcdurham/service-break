@@ -4,19 +4,20 @@
 //! `Authorization: Bearer <token>`; handlers that change data take an
 //! [`AuthUser`] argument, which rejects requests without a valid session.
 
+use actix_web::delete;
 use std::future::Future;
 use std::pin::Pin;
 
 use actix_web::dev::Payload;
 use actix_web::web::{self, Data, Json, Path, ServiceConfig};
-use actix_web::{get, post, put, FromRequest, HttpRequest, HttpResponse};
+use actix_web::{get, patch, post, put, FromRequest, HttpRequest, HttpResponse};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use serde_json::json;
 use shared::{
-    validate_invite_name, validate_password, validate_username, AuthSession, ChangePassword,
-    Credentials, InviteNameUpdate, NewInvite,
+    validate_invite_name, validate_name, validate_password, validate_username, AuthSession,
+    ChangePassword, Credentials, InviteNameUpdate, NewInvite, UpdateProfile,
 };
 use uuid::Uuid;
 
@@ -30,9 +31,11 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(logout)
         .service(me)
         .service(change_password)
+        .service(update_profile)
         .service(create_invite)
         .service(list_invites)
-        .service(rename_invite);
+        .service(rename_invite)
+        .service(delete_invite);
 }
 
 /// The logged-in user behind a request, extracted from the bearer token.
@@ -41,6 +44,8 @@ pub struct AuthUser {
     pub id: Uuid,
     pub username: String,
     pub is_admin: bool,
+    pub given_name: String,
+    pub family_name: String,
 }
 
 /// Extractor for admin-only endpoints: like [`AuthUser`], but rejects
@@ -191,19 +196,50 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
 async fn me(state: Data<AppState>, user: AuthUser) -> HttpResponse {
-    let (given, family) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+    let (given, family) = match sqlx::query_as::<_, (Option<String>, Option<String>)>(
         "SELECT given_name, family_name FROM users WHERE id = $1",
     )
     .bind(user.id)
     .fetch_one(&state.pool)
     .await
-    .ok();
+    {
+        Ok(row) => row,
+        Err(_) => (None, None),
+    };
     HttpResponse::Ok().json(json!({
         "username": user.username,
         "is_admin": user.is_admin,
         "given_name": given,
         "family_name": family,
     }))
+}
+
+/// Updates the signed-in user's given and/or family name. Only fields
+/// present in the request body are changed; empty strings are rejected.
+#[patch("/api/auth/profile")]
+async fn update_profile(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<UpdateProfile>,
+) -> Result<HttpResponse, ApiError> {
+    let profile = body.into_inner();
+
+    if let Some(ref name) = profile.given_name {
+        validate_name(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    }
+    if let Some(ref name) = profile.family_name {
+        validate_name(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+    }
+
+    db::update_user_names(
+        &state.pool,
+        user.id,
+        profile.given_name.as_deref(),
+        profile.family_name.as_deref(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Swaps the signed-in user's password. The current password is verified
@@ -269,6 +305,18 @@ async fn rename_invite(
     let name = body.into_inner().name.trim().to_owned();
     validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     db::rename_invitation(&state.pool, user.id, code.trim(), &name).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Revokes (expires) a pending invitation. Only the inviter can revoke.
+#[delete("/api/invites/{code}")]
+async fn delete_invite(
+    state: Data<AppState>,
+    user: AuthUser,
+    path: Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let code = path.into_inner();
+    db::revoke_invitation(&state.pool, user.id, &code).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -541,12 +541,39 @@ pub struct ChangePassword {
     pub new_password: String,
 }
 
+/// Body for `PATCH /api/auth/profile`: optional given and family name fields.
+/// Only fields present in the JSON are updated; omitting a field leaves it
+/// unchanged on the server.
+pub const NAME_MAX: usize = 40;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateProfile {
+    #[serde(default)]
+    pub given_name: Option<String>,
+    #[serde(default)]
+    pub family_name: Option<String>,
+}
+
+/// Validates a given or family name for the profile update endpoint.
+pub fn validate_name(name: &str) -> Result<(), &'static str> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("name must not be empty");
+    }
+    if trimmed.chars().count() > NAME_MAX {
+        return Err("name must be 40 characters or fewer");
+    }
+    Ok(())
+}
+
 /// Days before an unredeemed invitation code expires.
 pub const INVITE_EXPIRY_DAYS: i32 = 7;
-/// Most invitations a user may send per (rolling) day.
-pub const INVITES_PER_DAY: i64 = 5;
-/// Hours a new account must wait before it can send invitations.
-pub const INVITE_WAIT_HOURS: i32 = 24;
+/// Most invitations a new user may send per (rolling) day, before their
+/// account is 24 hours old.
+pub const INVITES_PER_DAY_NEW: i64 = 25;
+/// Most invitations an older user may send per (rolling) day, once the
+/// account has existed for at least 24 hours.
+pub const INVITES_PER_DAY_OLD_AGE: i64 = 100;
 /// Longest allowed invitation name.
 pub const INVITE_NAME_MAX: usize = 40;
 

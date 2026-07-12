@@ -13,7 +13,7 @@ use backend::{handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
     AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
-    PlaceEdit, PlaceSummary, PlaceType, Requirement, INVITES_PER_DAY,
+    PlaceEdit, PlaceSummary, PlaceType, Requirement,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -671,12 +671,22 @@ async fn invited_users_can_issue_and_track_their_own_invites(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
+async fn new_accounts_can_invite_with_lower_limit(pool: PgPool) {
     let app = app(pool.clone()).await;
     let code = seed_invite(&pool).await;
     // Registered just now — not backdated like the `register` helper does.
     let token = register_fresh_with_code(&app, "newbie", &code).await;
 
+    // New accounts can invite immediately (INVITE_WAIT_HOURS = 0),
+    // but are limited to INVITES_PER_DAY_NEW per day.
+    for _ in 0..shared::INVITES_PER_DAY_NEW {
+        let req = TestRequest::post()
+            .uri("/api/invites")
+            .insert_header(auth(&token))
+            .set_json(json!({}))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
     let req = TestRequest::post()
         .uri("/api/invites")
         .insert_header(auth(&token))
@@ -684,7 +694,7 @@ async fn new_accounts_wait_a_day_before_inviting(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 
-    // Once the account is a day old, inviting works.
+    // Once the account is a day old, the limit rises to INVITES_PER_DAY_OLD_AGE.
     sqlx::query("UPDATE users SET created_at = now() - interval '25 hours' WHERE username = $1")
         .bind("newbie")
         .execute(&pool)
@@ -719,7 +729,9 @@ async fn invitations_are_limited_to_five_per_day(pool: PgPool) {
     let app = app(pool.clone()).await;
     let token = register(&app, &pool, "scout-one").await;
 
-    for _ in 0..INVITES_PER_DAY {
+    // The `register` helper backdates accounts 2 days, so they get the
+    // older-user limit of INVITES_PER_DAY_OLD_AGE per day.
+    for _ in 0..shared::INVITES_PER_DAY_OLD_AGE {
         let req = TestRequest::post()
             .uri("/api/invites")
             .insert_header(auth(&token))
@@ -1244,4 +1256,423 @@ async fn change_password_works(pool: PgPool) {
         }))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoked_invite_cannot_be_redeemed(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let inviter_token = register(&app, &pool, "inviter").await;
+
+    // Create an invitation.
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&inviter_token))
+        .set_json(json!({ "name": "Charlie" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let issued: Invitation = read_body_json(res).await;
+
+    // Revoke it.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", issued.code))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Try to redeem the revoked code — should fail.
+    let res = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "charlie",
+            "password": TEST_PASSWORD,
+            "invite_code": issued.code
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, res).await.status(), StatusCode::BAD_REQUEST);
+
+    // Verify invitation status is now Expired.
+    let req = TestRequest::get()
+        .uri("/api/invites")
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites[0].status, InviteStatus::Expired);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_rejects_unauthorized_user(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create two users.
+    let _token_a = register(&app, &pool, "alice-revoke").await;
+    let token_b = register(&app, &pool, "bob-revoke").await;
+    // Alice issues an invite.
+    let code = seed_invite(&pool).await;
+    // Bob tries to revoke it — should fail with 404 (not found from his perspective).
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{code}"))
+        .insert_header(auth(&token_b))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_redeemed_invite_fails(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let inviter_token = register(&app, &pool, "inviter-redeem").await;
+    // Create and redeem an invitation.
+    let code = seed_invite(&pool).await;
+    let res = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "redeemed-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, res).await.status(), StatusCode::CREATED);
+    // Try to revoke the now-redeemed invitation — should fail.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{code}"))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn revoke_nonexistent_invite_returns_404(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "alice-nonexist").await;
+    // Try to revoke a code that doesn't exist.
+    let fake_code = format!("nonexistent-{}", uuid::Uuid::new_v4());
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{fake_code}"))
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_rejects_empty_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile").await;
+    // Try to update with empty given name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_rejects_too_long_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-long").await;
+    // Try to update with a name that's too long.
+    let long_name = "a".repeat(41);
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": long_name }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_valid_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-valid").await;
+    // Update with valid given name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Alice" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify the name was saved by checking /me.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["given_name"], "Alice");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_both_names(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-both").await;
+    // Update with both given and family names.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Alice", "family_name": "Smith" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify both names were saved.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["given_name"], "Alice");
+    assert_eq!(body["family_name"], "Smith");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_partial_family_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-partial").await;
+    // Update with only family name (no given name).
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "family_name": "Jones" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify family name was saved and given name is still empty/null.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    // given_name should be either null or empty string
+    assert!(body["given_name"].is_null() || body["given_name"].as_str().is_none_or(|s| s.is_empty()));
+    assert_eq!(body["family_name"], "Jones");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_rejects_both_empty_names(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-both-empty").await;
+    // Try to update with both names empty.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "", "family_name": "" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_special_characters_in_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-special").await;
+    // Update with special characters in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "O'Brien", "family_name": "Smith-Jones" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_unicode_names(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-unicode").await;
+    // Update with Unicode characters in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "José", "family_name": "García" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_trims_whitespace_in_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-trim").await;
+    // Update with leading/trailing whitespace in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "  Alice  ", "family_name": " Smith " }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_rejects_whitespace_only_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-whitespace").await;
+    // Try to update with only whitespace in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "   " }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_accepts_internal_whitespace_in_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-iw").await;
+    // Update with internal whitespace in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Mary Jane" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+}
+
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_invites_bypass_daily_limit(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create an admin user.
+    let token = register(&app, &pool, "admin-test").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = $1")
+        .bind("admin-test")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Send more than the daily limit (25).
+    for i in 0..30 {
+        let req = TestRequest::post()
+            .uri("/api/invites")
+            .insert_header(auth(&token))
+            .set_json(json!({ "name": format!("Test invite {i}") }))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
+
+    // Verify all 30 were created.
+    let req = TestRequest::get()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites.len(), 30);
+}
+
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invite_name_too_long_rejected(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-name-len").await;
+    // Create an invitation with a name that's too long (41 chars).
+    let long_name = format!("{}{}", "a".repeat(20), "b".repeat(21));
+    assert_eq!(long_name.chars().count(), 41);
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": long_name }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // But a name at the limit (40 chars) should work.
+    let ok_name = format!("{}.{}", "a".repeat(20), "b".repeat(19));
+    assert_eq!(ok_name.chars().count(), 40);
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .set_json(json!({ "name": ok_name }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn duplicate_username_rejected(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Register first user.
+    let code_a = seed_invite(&pool).await;
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "unique-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code_a,
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    // Try to register same username with a different invite code.
+    let code_b = seed_invite(&pool).await;
+    let req = TestRequest::post()
+        .uri("/api/auth/register")
+        .set_json(json!({
+            "username": "unique-user",
+            "password": TEST_PASSWORD,
+            "invite_code": code_b,
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CONFLICT);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_partial_given_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-given").await;
+    // Update with only given name (no family name).
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "John" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    // Verify given name was saved and family name is still empty/null.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    assert_eq!(body["given_name"], "John");
+    // family_name should be either null or empty string
+    assert!(body["family_name"].is_null() || body["family_name"].as_str().is_none_or(|s| s.is_empty()));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn rename_invite_authorization(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Alice creates an invite via the API (sets inviter_id).
+    let alice_token = register(&app, &pool, "rename-alice").await;
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&alice_token))
+        .set_json(json!({ "name": "Original" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let code_a: Invitation = read_body_json(res).await;
+
+    // Alice can rename her own pending invite.
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", code_a.code))
+        .insert_header(auth(&alice_token))
+        .set_json(json!({ "name": "RenamedByAlice" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Bob (non-inviter, non-redeemer) cannot rename it.
+    let bob_token = register(&app, &pool, "rename-bob").await;
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{}/name", code_a.code))
+        .insert_header(auth(&bob_token))
+        .set_json(json!({ "name": "Hacked" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    // Redeemer can rename it.
+    let code_b = seed_invite(&pool).await;
+    let redeemer_token = register_fresh_with_code(&app, "redeemer-user", &code_b).await;
+    let req = TestRequest::put()
+        .uri(&format!("/api/invites/{code_b}/name"))
+        .insert_header(auth(&redeemer_token))
+        .set_json(json!({ "name": "MyInviteName" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 }

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use shared::{
     Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
     PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
-    INVITES_PER_DAY, INVITE_EXPIRY_DAYS, INVITE_WAIT_HOURS,
+    INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -456,6 +456,8 @@ pub struct UserRow {
     pub username: String,
     pub password_hash: String,
     pub is_admin: bool,
+    pub given_name: String,
+    pub family_name: String,
 }
 
 /// Atomically redeems `invite_code` and creates the account it admits.
@@ -471,6 +473,7 @@ pub async fn register_user(
 
     let invitation_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM invitations WHERE code = $1 AND redeemed_at IS NULL \
+         AND is_expired = false \
          AND created_at > now() - make_interval(days => $2) FOR UPDATE",
     )
     .bind(invite_code)
@@ -521,13 +524,52 @@ pub async fn update_user_password(
     Ok(())
 }
 
+/// Updates a user's given and/or family name. Only fields that are `Some`
+/// get written; `None` leaves the column untouched.
+pub async fn update_user_names(
+    pool: &PgPool,
+    user_id: Uuid,
+    given_name: Option<&str>,
+    family_name: Option<&str>,
+) -> Result<(), ApiError> {
+    match (
+        given_name.map(|s| s.to_owned()),
+        family_name.map(|s| s.to_owned()),
+    ) {
+        (Some(g), Some(f)) => {
+            sqlx::query("UPDATE users SET given_name = $1, family_name = $2 WHERE id = $3")
+                .bind(&g)
+                .bind(&f)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (Some(g), None) => {
+            sqlx::query("UPDATE users SET given_name = $1 WHERE id = $2")
+                .bind(&g)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (None, Some(f)) => {
+            sqlx::query("UPDATE users SET family_name = $1 WHERE id = $2")
+                .bind(&f)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
+        }
+        (None, None) => {}
+    }
+    Ok(())
+}
+
 /// Looks a user up by id. Used when the caller already has an authenticated /// identity but needs to read stored fields (e.g. the password hash).
 pub async fn find_user_by_id(
     pool: &PgPool,
     id: Uuid,
 ) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash, is_admin FROM users WHERE id = $1",
+        "SELECT id, username, password_hash, is_admin, given_name, family_name FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -538,6 +580,8 @@ pub async fn find_user_by_id(
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()
@@ -549,28 +593,29 @@ fn new_invite_code() -> String {
 }
 
 /// Issues a fresh, unredeemed invitation code for `inviter_id`, enforcing
-/// the anti-abuse rules: accounts younger than 24 hours can't invite yet,
-/// and nobody sends more than 5 invitations per (rolling) day.
+/// the anti-abuse rules: new accounts get 25 invites/day, older accounts
+/// (24+ hours) get 100/day. Admins bypass the limit entirely.
 pub async fn create_invitation(
     pool: &PgPool,
     inviter_id: Uuid,
     name: &str,
     is_admin: bool,
 ) -> Result<Invitation, ApiError> {
-    if !is_admin {
+    let limit = if !is_admin {
         let old_enough: Option<bool> = sqlx::query_scalar(
-            "SELECT created_at <= now() - make_interval(hours => $2) FROM users WHERE id = $1",
+            "SELECT created_at <= now() - interval '24 hours' FROM users WHERE id = $1",
         )
         .bind(inviter_id)
-        .bind(INVITE_WAIT_HOURS)
         .fetch_optional(pool)
         .await?;
-        if !old_enough.unwrap_or(false) {
-            return Err(ApiError::BadRequest(format!(
-                "new accounts can send invitations {INVITE_WAIT_HOURS} hours after joining"
-            )));
+        if old_enough.unwrap_or(false) {
+            INVITES_PER_DAY_OLD_AGE
+        } else {
+            INVITES_PER_DAY_NEW
         }
-    }
+    } else {
+        i64::MAX // admins bypass the limit entirely
+    };
 
     let sent_today: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM invitations \
@@ -579,9 +624,9 @@ pub async fn create_invitation(
     .bind(inviter_id)
     .fetch_one(pool)
     .await?;
-    if sent_today >= INVITES_PER_DAY {
+    if sent_today >= limit {
         return Err(ApiError::BadRequest(format!(
-            "invitation limit reached — you can send {INVITES_PER_DAY} per day"
+            "invitation limit reached — you can send {limit} per day"
         )));
     }
 
@@ -615,7 +660,7 @@ pub async fn create_invitation(
 pub async fn invites_overview(pool: &PgPool, user_id: Uuid) -> Result<InvitesOverview, ApiError> {
     let rows = sqlx::query(
         "SELECT i.code, i.name, i.redeemed_at IS NOT NULL AS redeemed, \
-         i.created_at <= now() - make_interval(days => $2) AS expired, \
+         (i.created_at <= now() - make_interval(days => $2) OR i.is_expired) AS expired, \
          u.username AS joined_username \
          FROM invitations i LEFT JOIN users u ON u.id = i.redeemed_by \
          WHERE i.inviter_id = $1 ORDER BY i.created_at DESC",
@@ -688,10 +733,30 @@ pub async fn rename_invitation(
     Ok(())
 }
 
+/// Revokes (expires) an invitation. Only the inviter can revoke pending codes;
+/// redeemed invitations cannot be revoked.
+pub async fn revoke_invitation(
+    pool: &PgPool,
+    user_id: Uuid,
+    code: &str,
+) -> Result<(), ApiError> {
+    let res = sqlx::query(
+        "UPDATE invitations SET is_expired = true WHERE code = $1 AND inviter_id = $2 AND redeemed_at IS NULL",
+    )
+    .bind(code)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    Ok(())
+}
+
 /// Looks a user up by username, case-insensitively.
 pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash, is_admin FROM users \
+        "SELECT id, username, password_hash, is_admin, given_name, family_name FROM users \
          WHERE lower(username) = lower($1)",
     )
     .bind(username)
@@ -703,6 +768,8 @@ pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>,
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()
@@ -735,7 +802,7 @@ pub async fn session_user(
     token: &str,
 ) -> Result<Option<crate::auth::AuthUser>, ApiError> {
     let row = sqlx::query(
-        "SELECT u.id, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id \
+        "SELECT u.id, u.username, u.is_admin, u.given_name, u.family_name FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.token = $1 AND s.expires_at > now()",
     )
     .bind(token)
@@ -746,6 +813,8 @@ pub async fn session_user(
             id: r.try_get("id")?,
             username: r.try_get("username")?,
             is_admin: r.try_get("is_admin")?,
+            given_name: r.try_get("given_name")?,
+            family_name: r.try_get("family_name")?,
         })
     })
     .transpose()

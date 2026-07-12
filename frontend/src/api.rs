@@ -5,7 +5,7 @@ use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, AuthSession, ChangePassword, Credentials, ImportSummary, Invitation,
     InviteNameUpdate, InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlacesQuery, UpdatePlace, UserSummary,
+    PlaceSummary, PlacesQuery, UpdatePlace, UpdateProfile, UserSummary,
 };
 use uuid::Uuid;
 
@@ -191,6 +191,19 @@ pub async fn rename_invite(code: &str, name: &str) -> ApiResult<()> {
     Ok(())
 }
 
+/// Revokes (expires) a pending invitation. Only the inviter can revoke.
+pub async fn revoke_invite(code: &str) -> ApiResult<()> {
+    let url = format!("/api/invites/{}", encode_query_component(code));
+    let res = with_auth(Request::delete(&url))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not revoke the invitation").await);
+    }
+    Ok(())
+}
+
 /// Swaps the signed-in user's password. The current password is verified
 /// against the stored hash before the new one is accepted.
 pub async fn change_password(creds: &ChangePassword) -> ApiResult<()> {
@@ -206,6 +219,20 @@ pub async fn change_password(creds: &ChangePassword) -> ApiResult<()> {
     Ok(())
 }
 
+/// Updates the signed-in user's given and/or family name.
+pub async fn update_profile(profile: &UpdateProfile) -> ApiResult<()> {
+    let res = with_auth(Request::patch("/api/auth/profile"))
+        .json(profile)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not update profile").await);
+    }
+    Ok(())
+}
+
 /// Best-effort server-side session invalidation.
 pub async fn logout() {
     let _ = with_auth(Request::post("/api/auth/logout")).send().await;
@@ -217,6 +244,16 @@ pub async fn logout() {
 pub async fn session_is_valid() -> ApiResult<bool> {
     let res = with_auth(Request::get("/api/auth/me")).send().await.map_err(err)?;
     Ok(res.status() < 400)
+}
+
+/// Returns the signed-in user's profile (username, admin flag, given/family
+/// name) from `GET /api/auth/me`.
+pub async fn get_me() -> ApiResult<serde_json::Value> {
+    let res = with_auth(Request::get("/api/auth/me")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load profile").await);
+    }
+    res.json().await.map_err(err)
 }
 
 /// Downloads the full-data backup (admin only) as raw JSON text, kept

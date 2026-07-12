@@ -1,4 +1,4 @@
-use shared::{AuthSession, Credentials, Invitation, InviteStatus, InvitesOverview};
+use shared::{AuthSession, Credentials, Invitation, InviteStatus, InvitesOverview, UpdateProfile};
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
@@ -15,7 +15,7 @@ pub struct AccountViewProps {
 }
 
 /// One row in the friends & invitations list.
-fn invite_row(inv: &Invitation) -> Html {
+fn invite_row(inv: &Invitation, on_revoke: Callback<String>) -> Html {
     let title = if !inv.name.is_empty() {
         inv.name.clone()
     } else if let Some(u) = &inv.joined_username {
@@ -32,13 +32,30 @@ fn invite_row(inv: &Invitation) -> Html {
         InviteStatus::Expired => "friend-status status-expired",
         InviteStatus::Joined => "friend-status status-joined",
     };
+    let code = inv.code.clone();
+    let on_revoke = on_revoke.clone();
+    let is_pending = inv.status == InviteStatus::Pending;
     html! {
-        <div class="friend-row" key={inv.code.clone()}>
+        <div class="friend-row" key={code.clone()}>
             <div>
                 <div class="friend-name">{title}</div>
                 <div class="friend-sub">{sub}</div>
             </div>
-            <span class={chip_class}>{inv.status.label()}</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+                if is_pending {
+                    <button
+                        class="revoke-btn"
+                        onclick={{
+                            let code = code.clone();
+                            Callback::from(move |_| on_revoke.emit(code.clone()))
+                        }}
+                        title="Revoke this invitation"
+                    >
+                        <span class="mi">{"cancel"}</span>
+                    </button>
+                }
+                <span class={chip_class}>{inv.status.label()}</span>
+            </div>
         </div>
     }
 }
@@ -54,16 +71,30 @@ pub fn account_view(props: &AccountViewProps) -> Html {
     let busy = use_state(|| false);
     let overview = use_state(|| None::<InvitesOverview>);
     let my_name = use_state(String::new);
+    let given_name = use_state(String::new);
+    let family_name = use_state(String::new);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
-    // Load the invitations overview whenever we're signed in.
+    // Load the invitations overview and profile whenever we're signed in.
     {
         let overview = overview.clone();
         let my_name = my_name.clone();
+        let given_name = given_name.clone();
+        let family_name = family_name.clone();
         let signed_in = props.auth.is_some();
         use_effect_with(signed_in, move |signed_in| {
             if *signed_in {
                 wasm_bindgen_futures::spawn_local(async move {
+                    // Load profile (given/family name) from /me.
+                    if let Ok(profile) = api::get_me().await {
+                        if let Some(given) = profile.get("given_name").and_then(|v| v.as_str()) {
+                            given_name.set(given.to_owned());
+                        }
+                        if let Some(family) = profile.get("family_name").and_then(|v| v.as_str()) {
+                            family_name.set(family.to_owned());
+                        }
+                    }
+                    // Load invitations overview.
                     if let Ok(o) = api::list_invites().await {
                         my_name.set(o.my_invite_name.clone().unwrap_or_default());
                         overview.set(Some(o));
@@ -74,6 +105,29 @@ pub fn account_view(props: &AccountViewProps) -> Html {
             }
         });
     }
+
+    let revoke_invite = {
+        let overview = overview.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |code: String| {
+            let overview = overview.clone();
+            let on_toast = on_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::revoke_invite(&code).await {
+                    Ok(()) => {
+                        on_toast.emit("Invitation revoked".to_owned());
+                        // Refresh the overview to update the list.
+                        if let Ok(o) = api::list_invites().await {
+                            overview.set(Some(o));
+                        }
+                    }
+                    Err(msg) => {
+                        on_toast.emit(msg);
+                    }
+                }
+            });
+        })
+    };
 
     let log_in = {
         let username = username.clone();
@@ -143,6 +197,25 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         })
     };
 
+    let save_profile = {
+        let given_name = given_name.clone();
+        let family_name = family_name.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            let profile = UpdateProfile {
+                given_name: if (*given_name).is_empty() { None } else { Some((*given_name).clone()) },
+                family_name: if (*family_name).is_empty() { None } else { Some((*family_name).clone()) },
+            };
+            let on_toast = on_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::update_profile(&profile).await {
+                    Ok(()) => on_toast.emit("Profile updated".to_owned()),
+                    Err(msg) => on_toast.emit(msg),
+                }
+            });
+        })
+    };
+
     let sign_out = {
         let cb = props.on_logout.clone();
         Callback::from(move |_| cb.emit(()))
@@ -190,6 +263,41 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     <span class="mi">{"group_add"}</span>{"Invite your friends"}
                 </button>
 
+                <div class="section-title">{"Your name"}</div>
+                <div class="name-edit-row">
+                    <input
+                        class="input"
+                        style="margin-bottom:0; flex: 1 1 auto"
+                        placeholder="Given name (optional)"
+                        value={(*given_name).clone()}
+                        oninput={{
+                            let given_name = given_name.clone();
+                            Callback::from(move |e: InputEvent| {
+                                if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                                    given_name.set(el.value());
+                                }
+                            })
+                        }}
+                    />
+                </div>
+                <div class="name-edit-row">
+                    <input
+                        class="input"
+                        style="margin-bottom:0; flex: 1 1 auto"
+                        placeholder="Family name (optional)"
+                        value={(*family_name).clone()}
+                        oninput={{
+                            let family_name = family_name.clone();
+                            Callback::from(move |e: InputEvent| {
+                                if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                                    family_name.set(el.value());
+                                }
+                            })
+                        }}
+                    />
+                </div>
+                <button class="name-save-btn" onclick={save_profile} style="margin-top:8px">{"Save profile"}</button>
+
                 if overview.as_ref().is_some_and(|o| o.my_invite_code.is_some()) {
                     <div class="section-title">{"Your name"}</div>
                     <div class="name-edit-row">
@@ -223,7 +331,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                                 <span class="friend-status status-joined">{"Friend"}</span>
                             </div>
                         }
-                        { for o.invites.iter().map(invite_row) }
+                        { for o.invites.iter().map(|inv| invite_row(inv, revoke_invite.clone())) }
                         if o.invites.is_empty() && o.invited_by.is_none() {
                             <div class="friend-row">
                                 <div class="friend-sub">

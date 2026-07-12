@@ -115,6 +115,36 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
             on_toast.emit("Changes saved".to_owned());
         })
     };
+    let share_place = {
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            if let Some(window) = web_sys::window() {
+                match window.location().href() {
+                    Ok(url) => {
+                        let navigator = window.navigator();
+                        let clipboard = navigator.clipboard();
+                        let on_toast = on_toast.clone();
+                        wasm_bindgen_futures::spawn_local(async move {
+                            match clipboard.write_text(&url).await {
+                                Ok(_) => on_toast.emit("Link copied to clipboard".to_owned()),
+                                Err(_) => on_toast.emit("Could not copy link".to_owned()),
+                            }
+                        });
+                    }
+                    Err(_) => {
+                        on_toast.emit("Could not get URL".to_owned());
+                    }
+                }
+            } else {
+                on_toast.emit("Window not available".to_owned());
+            }
+        })
+    };
+
+
+
+
+
     let send_review = {
         let composing = composing.clone();
         let clean_pick = clean_pick.clone();
@@ -204,6 +234,9 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         </button>
                         <button class="rate-btn" onclick={open_editor}>
                             <span class="mi">{"edit"}</span>{"Edit"}
+                        </button>
+                        <button class="rate-btn" onclick={share_place}>
+                            <span class="mi">{"share"}</span>{"Share"}
                         </button>
                     </div>
 
