@@ -17,7 +17,7 @@ pub fn onboarding(props: &OnboardingProps) -> Html {
             <div class="onb-blob-b"></div>
             <div class="onb-body">
                 <div class="onb-logo">
-                    <div class="onb-logo-badge"><span class="mi">{"wc"}</span></div>
+                    <div class="onb-logo-badge"><span class="mi">{"coffee"}</span></div>
                     <div>
                         <div class="onb-app-name">{"Service Break"}</div>
                         <div class="onb-tagline">{"find a clean place"}</div>
