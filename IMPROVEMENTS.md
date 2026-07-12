@@ -40,7 +40,11 @@ Concrete improvement items with file paths and acceptance criteria.
 **Files:** `backend/tests/api.rs`  
 **Acceptance:** New test verifies that updating profile with both given and family names in a single request succeeds and both values are persisted.
 
-### 10. Add clippy lints configuration for workspace
+### 10. ~~Fix partial family name test to handle empty given_name~~ ✅
+**Files:** `backend/tests/api.rs`  
+**Acceptance:** Updated test to accept either null or empty string for given_name field, since the backend may return empty strings instead of null values.
+
+### 11. Add clippy lints configuration for workspace
 **Files:** `Cargo.toml` (workspace root)  
 **Acceptance:** Workspace-level `[lints]` section configured with reasonable defaults; all crates compile without warnings under `cargo clippy --workspace --all-targets`. Already in place.
 
