@@ -1,6 +1,4 @@
 # TODO
-- 120 Add an admin account, with the default password of "I brake for coffee", which will be in the documenation, that has an admin menu which includes a way to back-up all data and download it as a single JSON file, but not passwords, store newly generated passwords.  Also include a way to import all data on that same page so that the data can quickly be exported, the app re-deployed and the data can quickly be restored.
-- 117 Add a back-end bash script to reset user passwords like ./scripts/change-password.sh {user} {password} where if the password is omitted you are prompted for it.
 
 # BACKLOG (Don't do the tasks below yet)
 - 118 On the "Nearby places" page automatically expand the range until at least one place appears or you reach the max limit.

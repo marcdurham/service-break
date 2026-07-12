@@ -72,6 +72,8 @@ register/login.
 - `POST /api/auth/register`, `POST /api/auth/login` — body
   `{ "username", "password" }`, return `{ "token", "username" }`
 - 🔒 `POST /api/auth/logout`, `GET /api/auth/me`
+- 🔒 `GET /api/admin/export`, `POST /api/admin/import` — admin only (403
+  otherwise); see "Admin account" below
 - `GET  /api/geocode?q=`
 - `GET  /api/health`
 
@@ -79,6 +81,33 @@ Accounts are username + password (Argon2-hashed) with 30-day session
 tokens; changing anything requires signing in, browsing doesn't. The
 anonymous per-device id in localStorage still scopes saved lists and
 names reviews written before accounts existed.
+
+## Admin account
+
+On startup the backend creates an `admin` account (if none exists) with the
+default password **`I brake for coffee`** — change it immediately with
+`./scripts/change-password.sh admin` (see below). Signing in as an admin
+adds an **Admin** button to the Account page, which opens the admin menu:
+
+- **Export backup** — downloads every table (places, reviews, saved lists,
+  invitations, accounts) as one JSON file. Password hashes and session
+  tokens are never exported.
+- **Import backup** — paste a backup file's contents to restore it. Content
+  is replaced wholesale with ids preserved (deep links keep working).
+  Accounts that don't exist yet are recreated with freshly generated random
+  passwords, shown once after the import; accounts that already exist
+  (matched by username — including the importing admin) keep their current
+  password.
+
+Together these make "export → re-deploy → import" a quick way to move data.
+
+## Resetting a password
+
+`./scripts/change-password.sh <username> [password]` writes a fresh Argon2
+hash for `<username>` straight into the running database (and revokes their
+sessions). Omit the password to be prompted with hidden input. It targets
+the local docker Postgres by default; see DEPLOY.md for running it against
+production.
 
 
 ## Deploying

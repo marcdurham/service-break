@@ -6,6 +6,31 @@ short description.
 
 ## 2026-07-11
 
+- 20:40 — Renamed the admin-flag migration `20260711120000` →
+  `20260711130000` to avoid a version collision with a same-numbered
+  migration that landed on main.
+- 20:33 — Added `scripts/change-password.sh <user> [password]` (TODO 117
+  done): prompts with hidden input when the password is omitted, hashes it
+  locally via the new `hash-password` backend binary (same Argon2 code the
+  server uses), and applies the UPDATE to the running docker Postgres —
+  also revoking the user's sessions. Works against production by setting
+  `COMPOSE="docker --context service-break-prod compose …"`; documented in
+  DEPLOY.md.
+- 20:24 — Added the admin page to the frontend (TODO 120 done): signing in
+  as an admin shows an Admin button on the Account page leading to
+  `/admin`, where one button downloads the full backup as a JSON file and
+  a paste-area imports one back — restored accounts' newly generated
+  passwords are listed once after the import. Documented the admin
+  account, its default password, and the export → re-deploy → restore
+  flow in README.md and DEPLOY.md.
+- 20:13 — Added admin accounts to the backend: an `is_admin` flag on users
+  (migration `20260711130000`), an `admin` account auto-created at startup
+  with the documented default password ("I brake for coffee" — change it!),
+  and admin-only `GET /api/admin/export` / `POST /api/admin/import`
+  endpoints. Export is one JSON document of all data minus sessions and
+  password hashes; import restores it wholesale (ids preserved), recreating
+  missing accounts with freshly generated random passwords that are
+  returned once in the response. Sessions/`/me` now carry `is_admin`.
 - 20:30 — Removed the completed invitation tasks (100-106, 116) from
   TODO.md and documented the new invite rules in DEPLOY.md (7-day code
   expiry, 24-hour wait and 5/day limit for senders, with a psql backdate

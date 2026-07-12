@@ -148,6 +148,9 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         Callback::from(move |_| cb.emit(()))
     };
 
+    let navigator = use_navigator().expect("BrowserRouter provides a navigator");
+    let go_to_admin = Callback::from(move |_| navigator.push(&Route::Admin));
+
     html! {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Account"}</div>
@@ -163,6 +166,11 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     <div class="account-sub">
                         {"Places, reviews and saves you add are signed with this name."}
                     </div>
+                    if session.is_admin {
+                        <button class="alt-auth-btn" onclick={go_to_admin}>
+                            <span class="mi">{"admin_panel_settings"}</span>{"Admin"}
+                        </button>
+                    }
                     <button class="signout-btn" onclick={sign_out}>
                         <span class="mi">{"logout"}</span>{"Sign out"}
                     </button>

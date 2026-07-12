@@ -6,14 +6,14 @@
 use actix_web::body::MessageBody;
 use actix_web::dev::{Service, ServiceResponse};
 use actix_web::http::StatusCode;
-use actix_web::test::{call_service, init_service, read_body_json, TestRequest};
+use actix_web::test::{call_service, init_service, read_body, read_body_json, TestRequest};
 use actix_web::web::Data;
 use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
-    AuthSession, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlaceType, Requirement, INVITES_PER_DAY,
+    AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
+    PlaceEdit, PlaceSummary, PlaceType, Requirement, INVITES_PER_DAY,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -959,4 +959,195 @@ async fn edit_place_validates_input_and_requires_login(pool: PgPool) {
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
     let req = TestRequest::get().uri(&format!("/api/places/{missing}/edits")).to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+/// Logs in as the startup-created admin account with its documented
+/// default password, returning the session.
+async fn login_admin<S, B>(app: &S, pool: &PgPool) -> AuthSession
+where
+    S: Service<actix_http::Request, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    B: MessageBody,
+{
+    backend::admin::ensure_admin(pool).await.unwrap();
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({
+            "username": backend::admin::ADMIN_USERNAME,
+            "password": backend::admin::DEFAULT_ADMIN_PASSWORD,
+        }))
+        .to_request();
+    let res = call_service(app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    read_body_json(res).await
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_account_logs_in_with_default_password(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Twice: creating the account is idempotent across restarts.
+    backend::admin::ensure_admin(&pool).await.unwrap();
+    let session = login_admin(&app, &pool).await;
+    assert!(session.is_admin);
+    assert_eq!(session.username, "admin");
+
+    // /me reports the flag, and regular accounts don't have it.
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&session.token))
+        .to_request();
+    let me: serde_json::Value = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(me["is_admin"], true);
+
+    let token = register(&app, &pool, "scout-one").await;
+    let req = TestRequest::get().uri("/api/auth/me").insert_header(auth(&token)).to_request();
+    let me: serde_json::Value = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(me["is_admin"], false);
+}
+
+/// A syntactically valid, empty backup document.
+fn empty_backup() -> serde_json::Value {
+    json!({
+        "format_version": 1,
+        "exported_at": "2026-01-01T00:00:00Z",
+        "users": [],
+        "invitations": [],
+        "places": [],
+        "reviews": [],
+        "saved_places": [],
+    })
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_endpoints_reject_anonymous_and_non_admin_callers(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+
+    let req = TestRequest::get().uri("/api/admin/export").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    let req =
+        TestRequest::get().uri("/api/admin/export").insert_header(auth(&token)).to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+
+    let req = TestRequest::post()
+        .uri("/api/admin/import")
+        .insert_header(auth(&token))
+        .set_json(empty_backup())
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_export_import_round_trip(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let admin = login_admin(&app, &pool).await;
+
+    // A scout adds a place (with its first review), saves it, and mints an
+    // invite — so every exported table has something in it.
+    let scout = register(&app, &pool, "scout-one").await;
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&scout))
+        .set_json(new_place_json("Camber Coffee"))
+        .to_request();
+    let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
+    let place_id = created.summary.id;
+    let req = TestRequest::put()
+        .uri(&format!("/api/devices/dev-a/saved/{place_id}"))
+        .insert_header(auth(&scout))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&scout))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    // Export: one JSON document — and no password material in it.
+    let req = TestRequest::get()
+        .uri("/api/admin/export")
+        .insert_header(auth(&admin.token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = read_body(res).await;
+    let text = std::str::from_utf8(&body).unwrap().to_owned();
+    assert!(!text.contains("password_hash"));
+    assert!(!text.contains("$argon2"));
+    let export: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(export["users"].as_array().unwrap().len(), 2); // admin + scout
+    assert_eq!(export["places"].as_array().unwrap().len(), 1);
+    assert_eq!(export["reviews"].as_array().unwrap().len(), 1);
+    assert_eq!(export["saved_places"].as_array().unwrap().len(), 1);
+    // The (redeemed) registration invite plus the fresh one.
+    assert_eq!(export["invitations"].as_array().unwrap().len(), 2);
+
+    // Simulate "export → re-deploy → restore": wipe everything except the
+    // admin account (a fresh install recreates it at startup) and import.
+    for sql in [
+        "DELETE FROM saved_places",
+        "DELETE FROM reviews",
+        "DELETE FROM places",
+        "DELETE FROM invitations",
+        "DELETE FROM users WHERE username <> 'admin'",
+    ] {
+        sqlx::query(sql).execute(&pool).await.unwrap();
+    }
+
+    let req = TestRequest::post()
+        .uri("/api/admin/import")
+        .insert_header(auth(&admin.token))
+        .set_json(export.clone())
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let summary: ImportSummary = read_body_json(res).await;
+    assert_eq!(summary.users, 2);
+    assert_eq!(summary.places, 1);
+    assert_eq!(summary.reviews, 1);
+    assert_eq!(summary.saved_places, 1);
+    assert_eq!(summary.invitations, 2);
+    // Only the recreated scout got a fresh password; the admin (matched by
+    // username) kept the one it had.
+    assert_eq!(summary.new_passwords.len(), 1);
+    let new_password = summary.new_passwords.get("scout-one").unwrap().clone();
+
+    // The place is back under the same id, review author intact.
+    let req = TestRequest::get().uri(&format!("/api/places/{place_id}")).to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let detail: PlaceDetail = read_body_json(res).await;
+    assert_eq!(detail.summary.name, "Camber Coffee");
+    assert_eq!(detail.summary.review_count, 1);
+    assert_eq!(detail.reviews[0].author, "scout-one");
+
+    // The scout's old password no longer works; the generated one does.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "scout-one", "password": TEST_PASSWORD }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "scout-one", "password": new_password }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    // The admin still works too (session survived, password unchanged).
+    let req = TestRequest::get()
+        .uri("/api/auth/me")
+        .insert_header(auth(&admin.token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    // Backups from an incompatible future format are rejected.
+    let mut bad = export;
+    bad["format_version"] = json!(999);
+    let req = TestRequest::post()
+        .uri("/api/admin/import")
+        .insert_header(auth(&admin.token))
+        .set_json(bad)
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
 }

@@ -1,7 +1,7 @@
 use actix_cors::Cors;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
-use backend::{db, handlers, http_client, AppState, DEFAULT_NOMINATIM_URL};
+use backend::{admin, db, handlers, http_client, AppState, DEFAULT_NOMINATIM_URL};
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
@@ -23,6 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     db::ensure_seeded(&pool).await?;
+    admin::ensure_admin(&pool).await?;
 
     let state = Data::new(AppState {
         pool,

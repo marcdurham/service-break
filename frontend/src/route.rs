@@ -19,6 +19,10 @@ pub enum Route {
     Account,
     #[at("/register")]
     Register,
+    /// Admin-only tools (backup export / import); reached from the Account
+    /// page, not the tab bar.
+    #[at("/admin")]
+    Admin,
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]

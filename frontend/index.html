@@ -149,6 +149,18 @@
         if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
       };
 
+      // Saves text to the user's device as a file (admin backup download).
+      window.sbDownload = function (filename, text) {
+        const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+
       // Opens the native share sheet with the invite text and a link back to
       // this app carrying the invite code; returns true if it did. Falls
       // back to the clipboard otherwise.
