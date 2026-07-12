@@ -10,6 +10,7 @@ use yew_router::prelude::*;
 
 use crate::components::account_view::AccountView;
 use crate::components::add_form::AddForm;
+use crate::components::admin_view::AdminView;
 use crate::components::detail_view::DetailView;
 use crate::components::filters_sheet::FiltersSheet;
 use crate::components::invite_view::InviteView;
@@ -490,6 +491,9 @@ pub fn app() -> Html {
                             on_logout={on_logout}
                             on_toast={show_toast.clone()}
                         />
+                    },
+                    Route::Admin => html! {
+                        <AdminView auth={(*auth).clone()} on_toast={show_toast.clone()} />
                     },
                     _ => html! {
                         <MapView

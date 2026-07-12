@@ -3,8 +3,8 @@
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
-    AuthSession, Credentials, Invitation, NewPlace, NewReview, PlaceDetail, PlaceSummary,
-    PlacesQuery,
+    AuthSession, Credentials, ImportSummary, Invitation, NewPlace, NewReview, PlaceDetail,
+    PlaceSummary, PlacesQuery,
 };
 use uuid::Uuid;
 
@@ -164,4 +164,29 @@ pub async fn logout() {
 pub async fn session_is_valid() -> ApiResult<bool> {
     let res = with_auth(Request::get("/api/auth/me")).send().await.map_err(err)?;
     Ok(res.status() < 400)
+}
+
+/// Downloads the full-data backup (admin only) as raw JSON text, kept
+/// opaque so it can be saved to a file untouched.
+pub async fn export_backup() -> ApiResult<String> {
+    let res = with_auth(Request::get("/api/admin/export")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not export data").await);
+    }
+    res.text().await.map_err(err)
+}
+
+/// Restores a backup (admin only) from the raw JSON text of an export.
+pub async fn import_backup(backup_json: &str) -> ApiResult<ImportSummary> {
+    let res = with_auth(Request::post("/api/admin/import"))
+        .header("Content-Type", "application/json")
+        .body(backup_json.to_owned())
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not import data").await);
+    }
+    res.json().await.map_err(err)
 }

@@ -59,6 +59,41 @@ docker --context service-break-prod compose \
 Register the first account with that code, then invite everyone else from
 the app.
 
+### Admin account — change the default password!
+
+On first startup the backend creates an `admin` account with the default
+password **`I brake for coffee`**. It's public knowledge (it's in this
+file), so change it right after deploying:
+
+```
+COMPOSE="docker --context service-break-prod compose \
+  -f docker-compose.yml -f docker-compose.prod.yml --profile app" \
+  ./scripts/change-password.sh admin
+```
+
+The script prompts for the new password with hidden input, Argon2-hashes it
+**locally** (using the same code the backend uses), and applies just the
+`UPDATE` over the SSH docker context — the plaintext never travels to the
+server. It works for any account, not just `admin`, and also revokes that
+user's sessions. Without `COMPOSE=…` it targets the local dev database
+(the docker Postgres on 127.0.0.1:5433).
+
+### Backups (export → re-deploy → restore)
+
+Sign in as `admin` and open **Account → Admin**:
+
+1. **Export backup** downloads all data as a single JSON file (no password
+   hashes, no session tokens).
+2. Re-deploy / rebuild the app — even onto a fresh database.
+3. Sign in as `admin` again (fresh installs recreate it with the default
+   password) and **Import backup**: paste the file's contents and import.
+
+Import replaces the database contents with the backup, keeping ids stable.
+Accounts that don't exist yet are recreated with newly generated random
+passwords, listed once on the page after the import — hand them out, or
+reset them with `scripts/change-password.sh`. Accounts that already exist,
+like the `admin` you're signed in as, keep their current password.
+
 ## Rollback
 
 ```

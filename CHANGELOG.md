@@ -6,6 +6,13 @@ short description.
 
 ## 2026-07-11
 
+- 20:24 — Added the admin page to the frontend (TODO 120 done): signing in
+  as an admin shows an Admin button on the Account page leading to
+  `/admin`, where one button downloads the full backup as a JSON file and
+  a paste-area imports one back — restored accounts' newly generated
+  passwords are listed once after the import. Documented the admin
+  account, its default password, and the export → re-deploy → restore
+  flow in README.md and DEPLOY.md.
 - 20:13 — Added admin accounts to the backend: an `is_admin` flag on users
   (migration `20260711120000`), an `admin` account auto-created at startup
   with the documented default password ("I brake for coffee" — change it!),
