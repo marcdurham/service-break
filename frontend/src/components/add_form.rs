@@ -7,6 +7,7 @@ use yew::prelude::*;
 use crate::api;
 use crate::app::FALLBACK_CENTER;
 use crate::components::location_picker::LocationPicker;
+use crate::components::ui;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Door {
@@ -53,6 +54,8 @@ struct Form {
     address: String,
     place_type: PlaceType,
     clean: i16,
+    coffee: Option<i16>,
+    food: Option<i16>,
     door: Door,
     parking: Parking,
     purchase: Requirement,
@@ -68,6 +71,8 @@ impl Default for Form {
             address: String::new(),
             place_type: PlaceType::Shop,
             clean: 5,
+            coffee: None,
+            food: None,
             door: Door::AtEntrance,
             parking: Parking::Easy,
             purchase: Requirement::Unknown,
@@ -200,6 +205,8 @@ pub fn add_form(props: &AddFormProps) -> Html {
                 lng: None,
                 address: Some(f.address.trim().to_owned()),
                 clean: f.clean,
+                coffee: f.coffee,
+                food: f.food,
                 door_ft: f.door.ft(),
                 door_note: f.door.note().to_owned(),
                 parking: f.parking,
@@ -330,6 +337,26 @@ pub fn add_form(props: &AddFormProps) -> Html {
                     }
                 }) }
             </div>
+
+            <div class="field-label">{"Coffee "}<span class="lite">{"· optional, if they serve it"}</span></div>
+            { ui::aspect_score_picker(form.coffee, &{
+                let form = form.clone();
+                Callback::from(move |v| {
+                    let mut next = (*form).clone();
+                    next.coffee = v;
+                    form.set(next);
+                })
+            }) }
+
+            <div class="field-label">{"Food "}<span class="lite">{"· optional, if they serve it"}</span></div>
+            { ui::aspect_score_picker(form.food, &{
+                let form = form.clone();
+                Callback::from(move |v| {
+                    let mut next = (*form).clone();
+                    next.food = v;
+                    form.set(next);
+                })
+            }) }
 
             <div class="field-label">{"How far is bathroom from the door?"}</div>
             <div class="pick-grid-2">

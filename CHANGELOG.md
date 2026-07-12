@@ -46,6 +46,22 @@ short description.
   (onboarding badge, desktop nav-rail logo) and redrew the PWA icon
   (icon.svg + regenerated icon-192/512.png) as a steaming coffee cup
   in the same palette (TODO 107).
+- 20:18 — Places are now editable by any logged-in user, with a full audit
+  trail: `PUT /api/places/{id}` diffs the submitted fields against the
+  stored row and writes one row per changed field to the new `place_edits`
+  table (field, old/new value, editor, timestamp);
+  `GET /api/places/{id}/edits` serves the history. The place detail page
+  gained an Edit button (opens a prefilled full-screen editor; asks
+  logged-out users to sign in) and a public "Change history" section. An
+  unchanged address keeps the stored coordinates without re-geocoding;
+  a no-op save writes no audit rows.
+- 20:08 — Ratings are now aspect-specific: reviews keep the required
+  bathroom-cleanliness score and can optionally score Coffee and Food
+  (1-5, new nullable `coffee`/`food` columns on reviews). Place summaries
+  expose per-aspect averages (`coffee_avg`/`food_avg`); the detail page's
+  breakdown shows a bar per rated aspect, review cards show aspect chips,
+  and the add-place form and review composer grew optional Coffee/Food
+  pickers (tap the selected score again to clear it).
 
 ## 2026-07-10
 

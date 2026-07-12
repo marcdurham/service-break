@@ -245,6 +245,69 @@ impl FromStr for Amenity {
     }
 }
 
+/// A rateable aspect of a place. Bathroom cleanliness is required on every
+/// review; the other aspects are optional 1-5 scores for places that offer
+/// them (see [`Amenity`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Aspect {
+    Cleanliness,
+    Coffee,
+    Food,
+}
+
+impl Aspect {
+    pub const ALL: [Aspect; 3] = [Aspect::Cleanliness, Aspect::Coffee, Aspect::Food];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "cleanliness",
+            Aspect::Coffee => "coffee",
+            Aspect::Food => "food",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "Cleanliness",
+            Aspect::Coffee => "Coffee",
+            Aspect::Food => "Food",
+        }
+    }
+
+    /// Material Symbols icon name used in the UI.
+    pub fn icon(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "mop",
+            Aspect::Coffee => "local_cafe",
+            Aspect::Food => "restaurant",
+        }
+    }
+
+    /// Accent color for the aspect's row in the ratings breakdown.
+    pub fn color(self) -> &'static str {
+        match self {
+            Aspect::Cleanliness => "#6f8256",
+            Aspect::Coffee => "#6f4e37",
+            Aspect::Food => "#c08a4a",
+        }
+    }
+}
+
+impl fmt::Display for Aspect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Aspect {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Aspect::ALL.into_iter().find(|a| a.as_str() == s).ok_or(())
+    }
+}
+
 /// A tri-state answer for questions like "purchase required?" where the
 /// scout adding a place may simply not know.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -318,6 +381,12 @@ pub struct PlaceSummary {
     #[serde(default)]
     pub amenities: Vec<Amenity>,
     pub clean_avg: Option<f64>,
+    /// Average of the reviews' optional coffee scores, when any exist.
+    #[serde(default)]
+    pub coffee_avg: Option<f64>,
+    /// Average of the reviews' optional food scores, when any exist.
+    #[serde(default)]
+    pub food_avg: Option<f64>,
     pub review_count: i64,
     pub distance_mi: Option<f64>,
 }
@@ -336,6 +405,10 @@ pub struct Review {
     pub id: Uuid,
     pub author: String,
     pub clean: i16,
+    #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
     pub text: String,
     pub created_at: String,
     pub time_ago: String,
@@ -353,6 +426,10 @@ pub struct NewPlace {
     #[serde(default)]
     pub address: Option<String>,
     pub clean: i16,
+    #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
     pub door_ft: i32,
     #[serde(default)]
     pub door_note: String,
@@ -372,7 +449,78 @@ pub struct NewReview {
     pub device_id: String,
     pub clean: i16,
     #[serde(default)]
+    pub coffee: Option<i16>,
+    #[serde(default)]
+    pub food: Option<i16>,
+    #[serde(default)]
     pub text: String,
+}
+
+/// Full set of editable place fields, sent to `PUT /api/places/{id}` by a
+/// logged-in user. Coordinates resolve like on create — explicit lat/lng
+/// win, otherwise a *changed* address is parsed as "lat, lng" or geocoded;
+/// an unchanged address keeps the stored coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdatePlace {
+    pub name: String,
+    pub place_type: PlaceType,
+    #[serde(default)]
+    pub lat: Option<f64>,
+    #[serde(default)]
+    pub lng: Option<f64>,
+    #[serde(default)]
+    pub address: Option<String>,
+    pub door_ft: i32,
+    #[serde(default)]
+    pub door_note: String,
+    pub parking: Parking,
+    #[serde(default)]
+    pub purchase_required: Requirement,
+    #[serde(default)]
+    pub code_required: Requirement,
+    #[serde(default)]
+    pub amenities: Vec<Amenity>,
+    #[serde(default)]
+    pub hours: Option<String>,
+}
+
+/// One audited change to a place, from `GET /api/places/{id}/edits`: which
+/// field changed, its old and new value, who changed it and when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaceEdit {
+    pub field: String,
+    pub old_value: String,
+    pub new_value: String,
+    pub author: String,
+    pub created_at: String,
+    pub time_ago: String,
+}
+
+/// Human-readable label for a field name recorded in the place edit log.
+pub fn edit_field_label(field: &str) -> &str {
+    match field {
+        "name" => "Name",
+        "place_type" => "Type",
+        "location" => "Location",
+        "address" => "Address",
+        "door_ft" => "Bathroom distance (ft)",
+        "door_note" => "Bathroom directions",
+        "parking" => "Parking",
+        "purchase_required" => "Purchase required",
+        "code_required" => "Code required",
+        "amenities" => "Amenities",
+        "hours" => "Hours",
+        other => other,
+    }
+}
+
+/// How an audited value reads in the history UI; blanks become "(empty)".
+pub fn edit_value_display(value: &str) -> &str {
+    if value.trim().is_empty() {
+        "(empty)"
+    } else {
+        value
+    }
 }
 
 /// Username + password sent to `POST /api/auth/register` and `/login`.
@@ -784,6 +932,18 @@ mod tests {
     }
 
     #[test]
+    fn aspect_serde_round_trip() {
+        for a in Aspect::ALL {
+            let json = serde_json::to_string(&a).expect("serialize");
+            assert_eq!(json, format!("\"{}\"", a.as_str()));
+            let back: Aspect = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, a);
+            assert_eq!(a.as_str().parse::<Aspect>(), Ok(a));
+        }
+        assert!("vibes".parse::<Aspect>().is_err());
+    }
+
+    #[test]
     fn requirement_round_trip_and_defaults_to_unknown() {
         for r in Requirement::ALL {
             assert_eq!(r.as_str().parse::<Requirement>(), Ok(r));
@@ -867,6 +1027,22 @@ mod tests {
     fn door_short_labels() {
         assert_eq!(door_short(0), "At entrance");
         assert_eq!(door_short(40), "40 ft");
+    }
+
+    #[test]
+    fn edit_field_labels_are_humanized() {
+        assert_eq!(edit_field_label("name"), "Name");
+        assert_eq!(edit_field_label("door_ft"), "Bathroom distance (ft)");
+        assert_eq!(edit_field_label("purchase_required"), "Purchase required");
+        // Unknown fields pass through so old logs never break the UI.
+        assert_eq!(edit_field_label("mystery"), "mystery");
+    }
+
+    #[test]
+    fn edit_value_display_marks_blanks() {
+        assert_eq!(edit_value_display("street"), "street");
+        assert_eq!(edit_value_display(""), "(empty)");
+        assert_eq!(edit_value_display("   "), "(empty)");
     }
 
     #[test]
@@ -996,6 +1172,8 @@ mod tests {
                 code_required: Requirement::Yes,
                 amenities: vec![Amenity::Coffee, Amenity::Seating],
                 clean_avg: Some(4.8),
+                coffee_avg: Some(4.5),
+                food_avg: None,
                 review_count: 2,
                 distance_mi: Some(0.2),
             },

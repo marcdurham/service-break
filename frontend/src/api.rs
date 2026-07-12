@@ -4,7 +4,8 @@ use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, AuthSession, Credentials, Invitation, InviteNameUpdate,
-    InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceSummary, PlacesQuery,
+    InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit, PlaceSummary,
+    PlacesQuery, UpdatePlace,
 };
 use uuid::Uuid;
 
@@ -76,6 +77,25 @@ pub async fn create_place(new: &NewPlace) -> ApiResult<PlaceDetail> {
         return Err(error_message(res, "could not add place").await);
     }
     res.json().await.map_err(err)
+}
+
+pub async fn update_place(place_id: Uuid, update: &UpdatePlace) -> ApiResult<PlaceDetail> {
+    let res = with_auth(Request::put(&format!("/api/places/{place_id}")))
+        .json(update)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not save changes").await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// The audit log of edits to a place, most recent first.
+pub async fn fetch_place_edits(place_id: Uuid) -> ApiResult<Vec<PlaceEdit>> {
+    let url = format!("/api/places/{place_id}/edits");
+    Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)
 }
 
 pub async fn create_review(place_id: Uuid, review: &NewReview) -> ApiResult<PlaceDetail> {

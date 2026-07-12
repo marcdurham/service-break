@@ -12,8 +12,8 @@ use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
-    AuthSession, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceSummary,
-    PlaceType, Requirement, INVITES_PER_DAY,
+    AuthSession, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
+    PlaceSummary, PlaceType, Requirement, INVITES_PER_DAY,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -100,6 +100,7 @@ fn new_place_json(name: &str) -> serde_json::Value {
         "lng": -122.3402,
         "address": "214 Maple Ave",
         "clean": 5,
+        "coffee": 4,
         "door_ft": 15,
         "door_note": "Right past the counter",
         "parking": "street",
@@ -107,6 +108,22 @@ fn new_place_json(name: &str) -> serde_json::Value {
         "code_required": "yes",
         "amenities": ["restrooms", "coffee"],
         "comment": "Spotless."
+    })
+}
+
+/// An update body matching the place `new_place_json` creates, so tests
+/// start from a no-op edit and mutate only the fields under test.
+fn update_place_json() -> serde_json::Value {
+    json!({
+        "name": "Camber Coffee",
+        "place_type": "shop",
+        "address": "214 Maple Ave",
+        "door_ft": 15,
+        "door_note": "Right past the counter",
+        "parking": "street",
+        "purchase_required": "yes",
+        "code_required": "yes",
+        "amenities": ["restrooms", "coffee"],
     })
 }
 
@@ -126,8 +143,14 @@ async fn create_place_then_list_returns_it(pool: PgPool) {
     assert_eq!(created.summary.name, "Camber Coffee");
     assert_eq!(created.summary.review_count, 1);
     assert_eq!(created.summary.clean_avg, Some(5.0));
+    // The optional aspect scores from the first review flow into the
+    // per-aspect averages; unrated aspects stay unrated.
+    assert_eq!(created.summary.coffee_avg, Some(4.0));
+    assert_eq!(created.summary.food_avg, None);
     assert_eq!(created.reviews.len(), 1);
     assert_eq!(created.reviews[0].text, "Spotless.");
+    assert_eq!(created.reviews[0].coffee, Some(4));
+    assert_eq!(created.reviews[0].food, None);
     // The review is attributed to the logged-in account, not the device.
     assert_eq!(created.reviews[0].author, "scout-one");
 
@@ -302,22 +325,42 @@ async fn review_updates_average_and_sorting_by_cleanliness(pool: PgPool) {
     let req = TestRequest::post()
         .uri(&format!("/api/places/{id}/reviews"))
         .insert_header(auth(&other))
-        .set_json(json!({ "device_id": "other-device", "clean": 3, "text": "Okay." }))
+        .set_json(json!({
+            "device_id": "other-device",
+            "clean": 3,
+            "coffee": 2,
+            "food": 4,
+            "text": "Okay.",
+        }))
         .to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let detail: PlaceDetail = read_body_json(res).await;
     assert_eq!(detail.summary.review_count, 2);
     assert_eq!(detail.summary.clean_avg, Some(4.0));
+    // Aspect averages only count the reviews that rated the aspect: coffee
+    // was rated 4 (creation) and 2; food only once, a 4.
+    assert_eq!(detail.summary.coffee_avg, Some(3.0));
+    assert_eq!(detail.summary.food_avg, Some(4.0));
     assert_eq!(detail.reviews.len(), 2);
     assert_eq!(detail.reviews[0].author, "scout-two");
+    assert_eq!(detail.reviews[0].coffee, Some(2));
+    assert_eq!(detail.reviews[0].food, Some(4));
 
-    let req = TestRequest::post()
-        .uri(&format!("/api/places/{id}/reviews"))
-        .insert_header(auth(&other))
-        .set_json(json!({ "device_id": "other-device", "clean": 9, "text": "" }))
-        .to_request();
-    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    // Out-of-range scores are rejected, for the required cleanliness score
+    // and the optional aspect scores alike.
+    for body in [
+        json!({ "device_id": "other-device", "clean": 9, "text": "" }),
+        json!({ "device_id": "other-device", "clean": 4, "coffee": 0, "text": "" }),
+        json!({ "device_id": "other-device", "clean": 4, "food": 6, "text": "" }),
+    ] {
+        let req = TestRequest::post()
+            .uri(&format!("/api/places/{id}/reviews"))
+            .insert_header(auth(&other))
+            .set_json(body)
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -776,4 +819,144 @@ async fn pending_invites_show_expired_after_seven_days(pool: PgPool) {
     let req = TestRequest::get().uri("/api/invites").insert_header(auth(&token)).to_request();
     let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
     assert_eq!(overview.invites[0].status, InviteStatus::Expired);
+}
+
+/// Creates "Camber Coffee" as `scout-one` and returns (editor's token, id):
+/// the place is made by one account and edited by another, proving any
+/// logged-in user can edit and the audit rows name the actual editor.
+async fn place_for_editing<S, B>(app: &S, pool: &PgPool) -> (String, Uuid)
+where
+    S: Service<actix_http::Request, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    B: MessageBody,
+{
+    let owner = register(app, pool, "scout-one").await;
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&owner))
+        .set_json(new_place_json("Camber Coffee"))
+        .to_request();
+    let created: PlaceDetail = read_body_json(call_service(app, req).await).await;
+    let editor = register(app, pool, "scout-two").await;
+    (editor, created.summary.id)
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn edit_place_updates_fields_and_logs_who_changed_what(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let (editor, id) = place_for_editing(&app, &pool).await;
+
+    // No audit rows before any edit.
+    let req = TestRequest::get().uri(&format!("/api/places/{id}/edits")).to_request();
+    let edits: Vec<PlaceEdit> = read_body_json(call_service(&app, req).await).await;
+    assert!(edits.is_empty());
+
+    // Change the name, parking, amenities and hours; keep the rest
+    // (including the address, which must not trigger geocoding — the test
+    // geocoder is unroutable).
+    let mut body = update_place_json();
+    body["name"] = json!("Camber Coffee House");
+    body["parking"] = json!("easy");
+    body["amenities"] = json!(["restrooms", "coffee", "seating"]);
+    body["hours"] = json!("Open · closes 9:00 PM");
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{id}"))
+        .insert_header(auth(&editor))
+        .set_json(body.clone())
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let detail: PlaceDetail = read_body_json(res).await;
+    assert_eq!(detail.summary.name, "Camber Coffee House");
+    assert_eq!(detail.summary.parking, Parking::Easy);
+    assert_eq!(detail.summary.amenities.len(), 3);
+    assert_eq!(detail.hours.as_deref(), Some("Open · closes 9:00 PM"));
+    // Untouched fields survive the edit.
+    assert_eq!(detail.summary.address, "214 Maple Ave");
+    assert!((detail.summary.lat - 47.6117).abs() < 1e-9);
+    assert_eq!(detail.summary.review_count, 1);
+
+    // One audit row per changed field, attributed to the editor.
+    let req = TestRequest::get().uri(&format!("/api/places/{id}/edits")).to_request();
+    let edits: Vec<PlaceEdit> = read_body_json(call_service(&app, req).await).await;
+    let mut fields: Vec<&str> = edits.iter().map(|e| e.field.as_str()).collect();
+    fields.sort_unstable();
+    assert_eq!(fields, vec!["amenities", "hours", "name", "parking"]);
+    assert!(edits.iter().all(|e| e.author == "scout-two"));
+    let name_edit = edits.iter().find(|e| e.field == "name").unwrap();
+    assert_eq!(name_edit.old_value, "Camber Coffee");
+    assert_eq!(name_edit.new_value, "Camber Coffee House");
+    let hours_edit = edits.iter().find(|e| e.field == "hours").unwrap();
+    assert_eq!(hours_edit.old_value, "");
+    assert_eq!(hours_edit.new_value, "Open · closes 9:00 PM");
+
+    // Submitting the identical state again is a no-op: no new audit rows.
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{id}"))
+        .insert_header(auth(&editor))
+        .set_json(body)
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+    let req = TestRequest::get().uri(&format!("/api/places/{id}/edits")).to_request();
+    let after: Vec<PlaceEdit> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(after.len(), edits.len());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn edit_place_relocates_from_latlng_address(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let (editor, id) = place_for_editing(&app, &pool).await;
+
+    let mut body = update_place_json();
+    body["address"] = json!("37.7749, -122.4194");
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{id}"))
+        .insert_header(auth(&editor))
+        .set_json(body)
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let detail: PlaceDetail = read_body_json(res).await;
+    assert!((detail.summary.lat - 37.7749).abs() < 1e-9);
+    assert!((detail.summary.lng + 122.4194).abs() < 1e-9);
+
+    // Both the address and the derived location are audited.
+    let req = TestRequest::get().uri(&format!("/api/places/{id}/edits")).to_request();
+    let edits: Vec<PlaceEdit> = read_body_json(call_service(&app, req).await).await;
+    let mut fields: Vec<&str> = edits.iter().map(|e| e.field.as_str()).collect();
+    fields.sort_unstable();
+    assert_eq!(fields, vec!["address", "location"]);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn edit_place_validates_input_and_requires_login(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let (editor, id) = place_for_editing(&app, &pool).await;
+
+    // Editing is a write: no session, no edit.
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{id}"))
+        .set_json(update_place_json())
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // A blank name is rejected.
+    let mut body = update_place_json();
+    body["name"] = json!("   ");
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{id}"))
+        .insert_header(auth(&editor))
+        .set_json(body)
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Unknown places 404 for both the edit and its history.
+    let missing = "00000000-0000-0000-0000-00000000dead";
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{missing}"))
+        .insert_header(auth(&editor))
+        .set_json(update_place_json())
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+    let req = TestRequest::get().uri(&format!("/api/places/{missing}/edits")).to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
 }
