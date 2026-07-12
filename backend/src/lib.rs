@@ -1,5 +1,6 @@
 //! Service Break API: places with rated bathrooms, reviews, and saved lists.
 
+pub mod admin;
 pub mod auth;
 pub mod db;
 pub mod error;

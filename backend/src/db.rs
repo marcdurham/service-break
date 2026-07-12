@@ -281,6 +281,7 @@ pub struct UserRow {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
+    pub is_admin: bool,
 }
 
 /// Atomically redeems `invite_code` and creates the account it admits.
@@ -370,7 +371,8 @@ pub async fn list_invitations(pool: &PgPool, inviter_id: Uuid) -> Result<Vec<Inv
 /// Looks a user up by username, case-insensitively.
 pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>, ApiError> {
     let row = sqlx::query(
-        "SELECT id, username, password_hash FROM users WHERE lower(username) = lower($1)",
+        "SELECT id, username, password_hash, is_admin FROM users \
+         WHERE lower(username) = lower($1)",
     )
     .bind(username)
     .fetch_optional(pool)
@@ -380,6 +382,7 @@ pub async fn find_user(pool: &PgPool, username: &str) -> Result<Option<UserRow>,
             id: r.try_get("id")?,
             username: r.try_get("username")?,
             password_hash: r.try_get("password_hash")?,
+            is_admin: r.try_get("is_admin")?,
         })
     })
     .transpose()
@@ -412,7 +415,7 @@ pub async fn session_user(
     token: &str,
 ) -> Result<Option<crate::auth::AuthUser>, ApiError> {
     let row = sqlx::query(
-        "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id \
+        "SELECT u.id, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id \
          WHERE s.token = $1 AND s.expires_at > now()",
     )
     .bind(token)
@@ -422,6 +425,7 @@ pub async fn session_user(
         Ok(crate::auth::AuthUser {
             id: r.try_get("id")?,
             username: r.try_get("username")?,
+            is_admin: r.try_get("is_admin")?,
         })
     })
     .transpose()

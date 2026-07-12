@@ -389,6 +389,27 @@ pub struct Invitation {
 pub struct AuthSession {
     pub token: String,
     pub username: String,
+    /// Admins get the admin page (backup export / import). Defaults so
+    /// sessions stored before the field existed still deserialize.
+    #[serde(default)]
+    pub is_admin: bool,
+}
+
+/// What `POST /api/admin/import` did: how many rows each table now holds,
+/// plus the newly generated passwords for accounts that were recreated
+/// (password hashes are never exported, so imported accounts get fresh
+/// random passwords — shown once, here).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImportSummary {
+    pub users: usize,
+    pub invitations: usize,
+    pub places: usize,
+    pub reviews: usize,
+    pub saved_places: usize,
+    /// username → newly generated password. Accounts that already existed
+    /// (matched by username — notably the importing admin) keep their
+    /// current password and don't appear here.
+    pub new_passwords: std::collections::BTreeMap<String, String>,
 }
 
 pub const USERNAME_MIN: usize = 3;

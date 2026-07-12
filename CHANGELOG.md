@@ -4,6 +4,17 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-11
+
+- 20:13 — Added admin accounts to the backend: an `is_admin` flag on users
+  (migration `20260711120000`), an `admin` account auto-created at startup
+  with the documented default password ("I brake for coffee" — change it!),
+  and admin-only `GET /api/admin/export` / `POST /api/admin/import`
+  endpoints. Export is one JSON document of all data minus sessions and
+  password hashes; import restores it wholesale (ids preserved), recreating
+  missing accounts with freshly generated random passwords that are
+  returned once in the response. Sessions/`/me` now carry `is_admin`.
+
 ## 2026-07-10
 
 - 20:35 — Containerized the app: multi-stage Dockerfiles for the backend
