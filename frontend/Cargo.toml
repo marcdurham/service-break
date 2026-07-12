@@ -14,7 +14,7 @@ shared.workspace = true
 uuid.workspace = true
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["HtmlInputElement", "HtmlTextAreaElement", "Window"] }
+web-sys = { version = "0.3", features = ["HtmlInputElement", "HtmlTextAreaElement", "Window", "Navigator", "Clipboard", "Location"] }
 yew = { version = "0.21", features = ["csr"] }
 yew-router = "0.18"
 
