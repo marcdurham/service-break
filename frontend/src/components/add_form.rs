@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use shared::{Amenity, NewPlace, Parking, PlaceDetail, PlaceType, Requirement};
+use shared::{Amenity, MapsLinkResult, NewPlace, Parking, PlaceDetail, PlaceType, Requirement};
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
@@ -83,6 +83,14 @@ impl Default for Form {
     }
 }
 
+impl Form {
+    /// A blank form with the name and location filled in from a resolved
+    /// Google Maps link.
+    fn prefilled(m: &MapsLinkResult) -> Self {
+        Form { name: m.name.clone(), address: shared::fmt_latlng(m.lat, m.lng), ..Form::default() }
+    }
+}
+
 #[derive(Properties, PartialEq)]
 pub struct AddFormProps {
     pub device_id: String,
@@ -93,6 +101,12 @@ pub struct AddFormProps {
     /// Adding a place requires an account; when false the form is replaced
     /// by a sign-in prompt that emits `on_sign_in`.
     pub logged_in: bool,
+    /// Name and location resolved from a pasted Google Maps link, if that's
+    /// how the user got here. Consumed once, on mount: read into the
+    /// initial form state, then reported back via `on_prefill_used` so a
+    /// later, unrelated visit to this page doesn't reuse it.
+    pub prefill: Option<MapsLinkResult>,
+    pub on_prefill_used: Callback<()>,
     pub on_created: Callback<PlaceDetail>,
     pub on_sign_in: Callback<()>,
     pub on_toast: Callback<String>,
@@ -100,9 +114,23 @@ pub struct AddFormProps {
 
 #[function_component(AddForm)]
 pub fn add_form(props: &AddFormProps) -> Html {
-    let form = use_state(Form::default);
+    let form = use_state(|| match &props.prefill {
+        Some(m) => Form::prefilled(m),
+        None => Form::default(),
+    });
     let submitting = use_state(|| false);
     let picking = use_state(|| false);
+
+    {
+        let had_prefill = props.prefill.is_some();
+        let on_prefill_used = props.on_prefill_used.clone();
+        use_effect_with((), move |()| {
+            if had_prefill {
+                on_prefill_used.emit(());
+            }
+            || ()
+        });
+    }
 
     // After the hooks so the hook count stays the same once the user logs in.
     if !props.logged_in {

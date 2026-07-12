@@ -4,8 +4,8 @@ use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, AuthSession, ChangePassword, Credentials, ImportSummary, Invitation,
-    InviteNameUpdate, InvitesOverview, NewInvite, NewPlace, NewReview, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlacesQuery, UpdatePlace, UpdateProfile, UserSummary,
+    InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite, NewPlace, NewReview, PlaceDetail,
+    PlaceEdit, PlaceSummary, PlacesQuery, UpdatePlace, UpdateProfile, UserSummary,
 };
 use uuid::Uuid;
 
@@ -59,6 +59,17 @@ pub async fn fetch_places(q: &PlacesQuery) -> ApiResult<Vec<PlaceSummary>> {
         format!("/api/places?{qs}")
     };
     Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)
+}
+
+/// Resolves a pasted Google Maps link to a place name and coordinates, for
+/// prefilling the "Add a place" form.
+pub async fn resolve_maps_link(url: &str) -> ApiResult<MapsLinkResult> {
+    let qs = encode_query_component(url);
+    let res = Request::get(&format!("/api/maps-link?url={qs}")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not read that link").await);
+    }
+    res.json().await.map_err(err)
 }
 
 pub async fn fetch_place(id: Uuid, origin: Option<(f64, f64)>) -> ApiResult<PlaceDetail> {
