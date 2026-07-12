@@ -3,7 +3,7 @@
 //! invite code.
 
 use shared::{query_param, validate_password, validate_username, AuthSession, Credentials};
-use web_sys::HtmlInputElement;
+use web_sys::{HtmlInputElement, MouseEvent};
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
 
@@ -55,6 +55,46 @@ fn field(
     }
 }
 
+/// A labelled text input with an eye button that toggles between password and
+/// plain text. `show` is the current value, `show_pw` controls visibility.
+fn pw_field(
+    label: &str,
+    placeholder: &str,
+    show: UseStateHandle<String>,
+    show_pw: bool,
+    on_toggle: Callback<MouseEvent>,
+) -> Html {
+    let input_type = if show_pw { "text" } else { "password" };
+    html! {
+        <>
+            <div class="field-label">{label.to_owned()}</div>
+            <div class="input-row">
+                <span class="mi">{"lock_outline"}</span>
+                <input
+                    type={input_type}
+                    placeholder={placeholder.to_owned()}
+                    value={(*show).clone()}
+                    oninput={{
+                        let show = show.clone();
+                        Callback::from(move |e: InputEvent| {
+                            if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                                show.set(el.value());
+                            }
+                        })
+                    }}
+                />
+                <button
+                    class="use-loc"
+                    onclick={on_toggle}
+                    title={if show_pw { "Hide" } else { "Show" }}
+                >
+                    <span class="mi">{if show_pw { "visibility_off" } else { "visibility" }}</span>
+                </button>
+            </div>
+        </>
+    }
+}
+
 #[function_component(RegisterView)]
 pub fn register_view(props: &RegisterViewProps) -> Html {
     let username = use_state(String::new);
@@ -62,6 +102,8 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
     let confirm = use_state(String::new);
     let invite_code = use_state(code_from_url);
     let busy = use_state(|| false);
+    let show_pw = use_state(|| false);
+    let show_confirm = use_state(|| false);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
     let create_account = {
@@ -119,6 +161,9 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
         Callback::from(move |_| navigator.push(&Route::Account))
     };
 
+    let toggle_pw = { let s = show_pw.clone(); Callback::from(move |_| s.set(!*s)) };
+    let toggle_confirm = { let s = show_confirm.clone(); Callback::from(move |_| s.set(!*s)) };
+
     html! {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Create an account"}</div>
@@ -136,8 +181,8 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
                 </div>
 
                 { field("Username", "e.g. trail-scout", false, &username) }
-                { field("Password", "At least 8 characters", true, &password) }
-                { field("Confirm password", "Type it again", true, &confirm) }
+                { pw_field("Password", "At least 8 characters", password.clone(), *show_pw, toggle_pw) }
+                { pw_field("Confirm password", "Type it again", confirm.clone(), *show_confirm, toggle_confirm) }
                 { field("Invite code", "e.g. A1B2C3D4", false, &invite_code) }
 
                 <button class="submit-btn" onclick={create_account} disabled={*busy}>
