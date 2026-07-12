@@ -22,6 +22,7 @@ pub struct DetailViewProps {
     pub on_show_on_map: Callback<PlaceSummary>,
     pub on_toggle_save: Callback<Uuid>,
     pub on_updated: Callback<PlaceDetail>,
+    pub on_deleted: Callback<()>,
     pub on_toast: Callback<String>,
 }
 
@@ -117,15 +118,24 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     };
     let delete_place = {
         let id = p.id;
+        let logged_in = props.logged_in;
+        let require_login = props.on_require_login.clone();
         let on_close = props.on_close.clone();
+        let on_deleted = props.on_deleted.clone();
         let on_toast = props.on_toast.clone();
         Callback::from(move |_| {
+            if !logged_in {
+                require_login.emit(());
+                return;
+            }
             let on_toast = on_toast.clone();
             let on_close = on_close.clone();
+            let on_deleted = on_deleted.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match api::delete_place(id).await {
                     Ok(()) => {
                         on_toast.emit("Place removed".to_owned());
+                        on_deleted.emit(());
                         on_close.emit(());
                     }
                     Err(msg) => on_toast.emit(msg),
