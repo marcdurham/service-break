@@ -21,6 +21,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(create_place)
         .service(get_place)
         .service(update_place)
+        .service(delete_place)
         .service(list_place_edits)
         .service(create_review)
         .service(list_saved)
@@ -202,6 +203,19 @@ async fn update_place(
     db::update_place(&state.pool, *id, user.id, &fields).await?;
     let detail = db::get_place(&state.pool, *id, None).await?;
     Ok(HttpResponse::Ok().json(detail))
+}
+
+/// Soft-deletes a place: marks `deleted_at` and `deleted_by`. The place
+/// drops out of list/saved results but stays queryable by id (so the detail
+/// page can still render after deletion).
+#[delete("/api/places/{id}")]
+async fn delete_place(
+    state: Data<AppState>,
+    user: AuthUser,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    db::delete_place(&state.pool, *id, user.id).await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// A place's edit history — who changed which field, from and to what,

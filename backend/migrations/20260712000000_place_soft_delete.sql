@@ -1,0 +1,2 @@
+ALTER TABLE places ADD COLUMN deleted_at TIMESTAMPTZ;
+ALTER TABLE places ADD COLUMN deleted_by UUID REFERENCES users(id);

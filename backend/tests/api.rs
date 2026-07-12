@@ -1676,3 +1676,108 @@ async fn rename_invite_authorization(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn delete_place_soft_deletes_and_hides(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-delete").await;
+
+    // Create a place.
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(new_place_json("To Be Deleted"))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let created: PlaceDetail = read_body_json(res).await;
+    let place_id = created.summary.id;
+
+    // It shows up in the list.
+    let req = TestRequest::get()
+        .uri("/api/places")
+        .to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert!(places.iter().any(|p| p.id == place_id));
+
+    // DELETE returns 204.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/places/{place_id}"))
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // No longer in the list.
+    let req = TestRequest::get()
+        .uri("/api/places")
+        .to_request();
+    let places: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
+    assert!(!places.iter().any(|p| p.id == place_id));
+
+    // GET /api/places/{id} returns 404.
+    let req = TestRequest::get()
+        .uri(&format!("/api/places/{place_id}"))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    // Row still exists in the database (soft delete).
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM places WHERE id = $1")
+        .bind(place_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+
+    // deleted_at and deleted_by are set.
+    let row: (Option<chrono::DateTime<chrono::Utc>>, Option<Uuid>) = sqlx::query_as(
+        "SELECT deleted_at, deleted_by FROM places WHERE id = $1",
+    )
+    .bind(place_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(row.0.is_some());
+    assert_eq!(row.1, Some(token_user_id(&pool, "scout-delete").await));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn delete_place_requires_login(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-del-auth").await;
+
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(new_place_json("Protected"))
+        .to_request();
+    let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
+    let place_id = created.summary.id;
+
+    // Unauthenticated DELETE is rejected.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/places/{place_id}"))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn delete_place_nonexistent_returns_404(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-del-nf").await;
+    let fake_id = Uuid::new_v4();
+
+    let req = TestRequest::delete()
+        .uri(&format!("/api/places/{fake_id}"))
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+/// Helper: look up a user's id by username from the test pool.
+async fn token_user_id(pool: &PgPool, username: &str) -> Uuid {
+    sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
