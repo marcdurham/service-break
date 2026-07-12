@@ -46,8 +46,10 @@ Database migrations run automatically on backend startup — no manual step.
 ### Registration is invite-only
 
 New accounts require a valid, unredeemed invite code (issued from the
-Invite tab by an existing account). On a brand-new install with zero users,
-nobody can issue one yet, so seed a one-off bootstrap invitation directly:
+"Invite your friends" button on the Account page of an existing account).
+Codes expire 7 days after they are created. On a brand-new install with
+zero users, nobody can issue one yet, so seed a one-off bootstrap
+invitation directly:
 
 ```
 docker --context service-break-prod compose \
@@ -57,7 +59,14 @@ docker --context service-break-prod compose \
 ```
 
 Register the first account with that code, then invite everyone else from
-the app.
+the app. Note that accounts must be 24 hours old before they can send
+invitations (and may send at most 5 per day); to let the first account
+invite immediately, backdate it:
+
+```
+  ... exec db psql -U service_break -d service_break \
+  -c "UPDATE users SET created_at = now() - interval '1 day' WHERE username = 'your-first-user';"
+```
 
 ## Rollback
 

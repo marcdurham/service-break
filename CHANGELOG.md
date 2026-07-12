@@ -6,6 +6,10 @@ short description.
 
 ## 2026-07-11
 
+- 20:30 — Removed the completed invitation tasks (100-106, 116) from
+  TODO.md and documented the new invite rules in DEPLOY.md (7-day code
+  expiry, 24-hour wait and 5/day limit for senders, with a psql backdate
+  snippet for bootstrapping the first account).
 - 20:25 — Added a dedicated "Create an account" page at `/register`:
   username, password + confirm-password fields, and the invite code —
   pre-filled when the page is opened from an invitation link
