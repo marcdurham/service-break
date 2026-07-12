@@ -9,6 +9,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::account_view::AccountView;
+use crate::components::change_password_view::ChangePasswordView;
 use crate::components::add_form::AddForm;
 use crate::components::admin_view::AdminView;
 use crate::components::users_view::UsersView;
@@ -514,6 +515,12 @@ pub fn app() -> Html {
                             auth={(*auth).clone()}
                             on_login={on_login}
                             on_logout={on_logout}
+                            on_toast={show_toast.clone()}
+                        />
+                    },
+                    Route::ChangePassword => html! {
+                        <ChangePasswordView
+                            auth={(*auth).clone()}
                             on_toast={show_toast.clone()}
                         />
                     },

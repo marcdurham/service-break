@@ -17,6 +17,8 @@ pub enum Route {
     Invite,
     #[at("/account")]
     Account,
+    #[at("/change-password")]
+    ChangePassword,
     #[at("/register")]
     Register,
     /// Admin-only tools (backup export / import); reached from the Account
