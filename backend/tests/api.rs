@@ -1526,3 +1526,34 @@ async fn update_profile_accepts_internal_whitespace_in_name(pool: PgPool) {
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 }
 
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_invites_bypass_daily_limit(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create an admin user.
+    let token = register(&app, &pool, "admin-test").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = $1")
+        .bind("admin-test")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Send more than the daily limit (25).
+    for i in 0..30 {
+        let code = format!("ADMIN-TEST-{}", i);
+        let req = TestRequest::post()
+            .uri("/api/invites")
+            .insert_header(auth(&token))
+            .set_json(json!({ "name": format!("Test invite {}", i) }))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+    }
+
+    // Verify all 30 were created.
+    let req = TestRequest::get()
+        .uri("/api/invites")
+        .insert_header(auth(&token))
+        .to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(overview.invites.len(), 30);
+}
