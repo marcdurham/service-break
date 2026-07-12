@@ -4,7 +4,7 @@ Concrete improvement items with file paths and acceptance criteria.
 
 ## Open Items
 
-### 1. Add test for invite revocation endpoint
+### 1. ~~Add test for invite revocation endpoint~~ ✅
 **Files:** `backend/tests/api.rs`, `backend/src/db.rs`  
 **Acceptance:** New test `revoked_invite_cannot_be_redeemed` verifies that a revoked invitation returns 400 when someone tries to register with it, and the invitation status changes to Expired.
 
