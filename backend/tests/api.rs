@@ -1499,3 +1499,16 @@ async fn update_profile_trims_whitespace_in_name(pool: PgPool) {
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn update_profile_rejects_whitespace_only_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile-whitespace").await;
+    // Try to update with only whitespace in name.
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "   " }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}

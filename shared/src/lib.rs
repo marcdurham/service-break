@@ -556,10 +556,11 @@ pub struct UpdateProfile {
 
 /// Validates a given or family name for the profile update endpoint.
 pub fn validate_name(name: &str) -> Result<(), &'static str> {
-    if name.is_empty() {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
         return Err("name must not be empty");
     }
-    if name.chars().count() > NAME_MAX {
+    if trimmed.chars().count() > NAME_MAX {
         return Err("name must be 40 characters or fewer");
     }
     Ok(())
