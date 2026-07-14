@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Suggestion: Error Resilience & Search Alternatives</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacTL; line-height: 1.6; color: #333; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f7f6; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .problem { color: #c0392b; font-weight: bold; }
+        .solution { color: #27ae60; font-weight: bold; }
+        code { background: #eee; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>UX Improvement: Error Resilience & Search Alternatives</h1>
+
+    <div class="card">
+        <p class="problem"><strong class="problem">Problem:</strong> When a user denies location permission, the app defaults to <code class="code">FALLBACK_CENTER</code> (Seattle), but the UI doesn't clearly communicate that the user is no longer seeing "their" nearby places. This can cause confusion if they expect local results.</p>
+        
+        <p class="solution"><strong class="solution">Solution:</strong> Implement a persistent "Location Unavailable" banner on the map. This banner should inform the user they are viewing Seattle and provide a clear action: <code class="code">"Search for another city"</code> or <code class="code">"Retry Location Access"</code>.</p>
+    </div>
+
+    <div class="card">
+        <h2>Proposed Flow</h2>
+        <ul>
+            <li><strong>Detection:</strong> If <code>origin.is_none()</code> and user is not in Seattle, show a top-mounted banner.</li>
+            <li><strong>Contextual UI:</strong> The banner should say: <em>"Showing places in Seattle. [Change Location]"</em>.</li>
+            <li><strong>Actionable Error:</strong> Clicking "Change Location" opens the <code class="code">LocationPicker</code> or a simple text search input to manually set the map center.</li>
+        </ul>
+    </div>
+</body>
+</html>
