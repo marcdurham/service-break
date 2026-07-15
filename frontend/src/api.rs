@@ -324,6 +324,76 @@ pub async fn fetch_users() -> ApiResult<Vec<UserSummary>> {
     res.json().await.map_err(err)
 }
 
+/// What `GET /api/admin/users/{id}` returns for the edit page.
+#[derive(Debug, serde::Deserialize)]
+pub struct AdminUserDetail {
+    pub username: String,
+    pub is_admin: bool,
+    #[serde(default)]
+    pub given_name: Option<String>,
+    #[serde(default)]
+    pub family_name: Option<String>,
+}
+
+/// Editable fields on a user account — admin-only.
+#[derive(Debug, serde::Serialize)]
+pub struct AdminUserUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_admin: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub given_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family_name: Option<String>,
+}
+
+/// What `PATCH /api/admin/users/{id}` returns — a fresh summary so the
+/// caller can update the list in place without refetching.
+pub type AdminUserUpdated = serde_json::Value;
+
+/// Updates one user account (admin only). Empty fields are skipped thanks
+/// to `skip_serializing_if`.
+pub async fn update_user(id: Uuid, update: &AdminUserUpdate) -> ApiResult<AdminUserUpdated> {
+    let res = with_auth(Request::patch(&format!("/api/admin/users/{id}")))
+        .json(update)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not update user").await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// Deletes a user account (admin only). Places/reviews cascade; invitations
+/// stay so the audit trail is intact.
+pub async fn delete_user(id: Uuid) -> ApiResult<()> {
+    let res = with_auth(Request::delete(&format!("/api/admin/users/{id}")))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not delete user").await);
+    }
+    Ok(())
+}
+
+/// Fetches one user's editable fields by id (admin only).
+pub async fn fetch_user_detail(id: Uuid) -> ApiResult<AdminUserDetail> {
+    let res = with_auth(Request::get(&format!("/api/admin/users/{id}")))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load user").await);
+    }
+    res.json().await.map_err(err)
+}
+
 /// Restores a backup (admin only) from the raw JSON text of an export.
 pub async fn import_backup(backup_json: &str) -> ApiResult<ImportSummary> {
     let res = with_auth(Request::post("/api/admin/import"))

@@ -4,6 +4,16 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-15
+
+- 17:00 — Removed `[[proxy]]` block from Trunk.toml; it conflicted with `--proxy-backend` by registering `/api/*` twice and panicking axum on startup.
+- 16:30 — Fixed EditUserView panic when navigating back from the edit page. The component was panicking because Yew hooks (use_state, Callback::from) were defined after an early return when not on the UserEdit route. Restructured so all hooks are initialized first, then check user_id_opt and return early if None.
+
+## 2026-07-14
+
+- 23:45 — Added admin user edit page with password reset and delete endpoints
+- 23:07 — Simplified `auth::me` to use `.unwrap_or_default()` instead of match (clippy `manual_unwrap_or_default`).
+
 ## 2026-07-12
 
 - 13:45 — Added a show/hide password toggle to the login form on `/account`, using the same `password_field` helper as the change-password section.

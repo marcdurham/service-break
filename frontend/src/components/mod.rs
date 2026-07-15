@@ -3,6 +3,7 @@ pub mod change_password_view;
 pub mod add_form;
 pub mod admin_view;
 pub mod detail_view;
+pub mod edit_user_view;
 pub mod edit_view;
 pub mod filters_sheet;
 pub mod invite_view;

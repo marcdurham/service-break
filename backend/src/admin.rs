@@ -7,13 +7,14 @@
 //! returned once in the [`ImportSummary`]; accounts whose username already
 //! exists (the importing admin in particular) keep their id and password.
 
+use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
 
-use actix_web::web::{Data, Json, ServiceConfig};
-use actix_web::{get, post, HttpResponse};
+use actix_web::web::{Data, Json, Path, ServiceConfig};
+use actix_web::{delete, get, patch, post, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared::ImportSummary;
+use shared::{validate_password, validate_username, ImportSummary};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -33,7 +34,10 @@ pub const EXPORT_FORMAT_VERSION: u32 = 1;
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(export_data)
         .service(import_data)
-        .service(list_users);
+        .service(list_users)
+        .service(get_user_detail)
+        .service(update_user)
+        .service(delete_user);
 }
 
 /// Creates the `admin` account with [`DEFAULT_ADMIN_PASSWORD`] if no user
@@ -207,6 +211,47 @@ async fn list_users(
 ) -> Result<HttpResponse, ApiError> {
     let users = db::list_users(&state.pool).await?;
     Ok(HttpResponse::Ok().json(users))
+}
+
+/// `GET /api/admin/users/{id}` — one account's editable fields.
+#[get("/api/admin/users/{id}")]
+async fn get_user_detail(
+    state: Data<AppState>,
+    _admin: AdminUser,
+    path: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let user = db::find_user_by_id(&state.pool, *path)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    Ok(HttpResponse::Ok().json(json!({
+        "id": user.id.to_string(),
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "given_name": user.given_name,
+        "family_name": user.family_name,
+    })))
+}
+
+/// Request body for `PATCH /api/admin/users/{id}`.
+///
+/// Every field is optional: only the ones present in the JSON are applied,
+/// so callers can send just `{"is_admin": true}` or
+/// `{"password": "new-secret"}` without touching the rest.
+#[derive(Debug, Default, Deserialize)]
+pub struct UpdateUser {
+    /// New username. Validated with [`validate_username`](shared::validate_username).
+    pub username: Option<String>,
+    /// Reset the password to a plain-text value; validated by
+    /// [`validate_password`](shared::validate_password). Omit to leave it.
+    pub password: Option<String>,
+    /// Flip admin status. The caller's own account can't be demoted — that
+    /// would lock them out of this very page.
+    pub is_admin: Option<bool>,
+    /// Given and family name, each optional; omit to leave untouched.
+    #[serde(default)]
+    pub given_name: Option<String>,
+    #[serde(default)]
+    pub family_name: Option<String>,
 }
 
 /// `POST /api/admin/import` — replaces the database contents with a backup
@@ -400,6 +445,156 @@ async fn run_import(
 
 /// 16 hex chars (64 random bits) — enough entropy for a handed-out
 /// password the user is expected to change anyway.
+/// `PATCH /api/admin/users/{id}` — edit any field on a user account.
+///
+/// Admins can rename the account, reset its password, flip admin status,
+/// and update given/family name. The caller's own account cannot be
+/// demoted (would lock them out of this page) or deleted.
+#[patch("/api/admin/users/{id}")]
+async fn update_user(
+    state: Data<AppState>,
+    admin: AdminUser,
+    path: Path<Uuid>,
+    body: Json<UpdateUser>,
+) -> Result<HttpResponse, ApiError> {
+    let target_id = *path;
+    if target_id == admin.0.id {
+        return Err(ApiError::BadRequest(
+            "you can't edit your own account from here".to_owned(),
+        ));
+    }
+
+    let user = db::find_user_by_id(&state.pool, target_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+
+    let new = body.into_inner();
+
+    if let Some(ref name) = new.username {
+        validate_username(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+        // Reject duplicate usernames (case-insensitive), except the current one.
+        let existing: Option<String> = sqlx::query_scalar(
+            "SELECT username FROM users WHERE lower(username) = lower($1) AND id <> $2",
+        )
+        .bind(name)
+        .bind(target_id)
+        .fetch_optional(&state.pool)
+        .await?;
+        if existing.is_some() {
+            return Err(ApiError::BadRequest(format!(
+                "username {name:?} is already taken"
+            )));
+        }
+    }
+
+    // Password reset: hash off the async workers (Argon2 is CPU-heavy).
+    let password_hash = if let Some(ref plain) = new.password {
+        validate_password(plain).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+        let plain = plain.clone();
+        Some(run_blocking(move || hash_password(&plain)).await?)
+    } else {
+        None
+    };
+
+    // Admin flag: don't allow demoting the caller.
+    if let (Some(target_is_admin), true) = (&new.is_admin, user.is_admin) {
+        if !*target_is_admin && target_id == admin.0.id {
+            return Err(ApiError::BadRequest(
+                "you can't remove your own admin flag".to_owned(),
+            ));
+        }
+    }
+
+    let mut tx = state.pool.begin().await?;
+
+    if let Some(name) = &new.username {
+        sqlx::query("UPDATE users SET username = $1 WHERE id = $2")
+            .bind(name)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    if let Some(hash) = password_hash {
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+            .bind(&hash)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    if let Some(is_admin) = new.is_admin {
+        sqlx::query("UPDATE users SET is_admin = $1 WHERE id = $2")
+            .bind(is_admin)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    if let (Some(g), Some(f)) = (&new.given_name, &new.family_name) {
+        sqlx::query("UPDATE users SET given_name = $1, family_name = $2 WHERE id = $3")
+            .bind(g)
+            .bind(f)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    } else if let Some(g) = &new.given_name {
+        sqlx::query("UPDATE users SET given_name = $1 WHERE id = $2")
+            .bind(g)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    } else if let Some(f) = &new.family_name {
+        sqlx::query("UPDATE users SET family_name = $1 WHERE id = $2")
+            .bind(f)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+
+    // Return the refreshed summary so the frontend can update the list in
+    // place without a full reload.
+    let updated = db::find_user_by_id(&state.pool, target_id).await?;
+    let row = updated.ok_or(ApiError::NotFound)?;
+    Ok(HttpResponse::Ok().json(json!({
+        "id": row.id.to_string(),
+        "username": row.username,
+        "is_admin": row.is_admin,
+        "given_name": row.given_name,
+        "family_name": row.family_name,
+    })))
+}
+
+/// `DELETE /api/admin/users/{id}` — remove an account.
+///
+/// The caller's own account can't be deleted (would kill their session).
+/// All places, reviews and saved lists owned by the user are cascade-deleted
+/// via FK constraints; invitations they issued or redeemed become orphaned
+/// but stay in the database so the audit trail is intact.
+#[delete("/api/admin/users/{id}")]
+async fn delete_user(
+    state: Data<AppState>,
+    admin: AdminUser,
+    path: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let target_id = *path;
+    if target_id == admin.0.id {
+        return Err(ApiError::BadRequest(
+            "you can't delete your own account".to_owned(),
+        ));
+    }
+
+    let _user = db::find_user_by_id(&state.pool, target_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(target_id)
+        .execute(&state.pool)
+        .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
 fn generate_password() -> String {
     let mut p = Uuid::new_v4().simple().to_string();
     p.truncate(16);

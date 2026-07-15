@@ -12,6 +12,7 @@ use crate::components::account_view::AccountView;
 use crate::components::change_password_view::ChangePasswordView;
 use crate::components::add_form::AddForm;
 use crate::components::admin_view::AdminView;
+use crate::components::edit_user_view::EditUserView;
 use crate::components::users_view::UsersView;
 use crate::components::detail_view::DetailView;
 use crate::components::filters_sheet::FiltersSheet;
@@ -598,6 +599,9 @@ pub fn app() -> Html {
                         <AdminView auth={(*auth).clone()} on_toast={show_toast.clone()} />
                     },
                     Route::Users => html! {<UsersView />},
+                    Route::UserEdit { .. } => html! {
+                        <EditUserView auth={(*auth).clone()} on_toast={show_toast.clone()} />
+                    },
                     _ => html! {
                         <MapView
                             places={(*places).clone()}

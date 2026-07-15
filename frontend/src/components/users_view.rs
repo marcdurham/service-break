@@ -1,9 +1,12 @@
 use shared::UserSummary;
+use uuid::Uuid;
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
 
 use crate::api;
 use crate::route::Route;
+
+const AVATAR_COLORS: [&str; 4] = ["#c05f38", "#6f8256", "#9b6a7d", "#4f7a86"];
 
 #[function_component(UsersView)]
 pub fn users_view() -> Html {
@@ -31,7 +34,10 @@ pub fn users_view() -> Html {
         });
     }
 
-    let go_back = Callback::from(move |_| navigator.push(&Route::Admin));
+    let go_back = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| navigator.push(&Route::Admin))
+    };
     let count = users.len();
     let header = if users.is_empty() {
         "No accounts yet.".to_owned()
@@ -60,33 +66,48 @@ pub fn users_view() -> Html {
                 if users.is_empty() {
                     <div class="auth-note">{"No accounts yet."}</div>
                 } else {
-                    <table style="width:100%;border-collapse:collapse;font-size:14px">
-                        <thead>
-                            <tr style="text-align:left;border-bottom:2px solid var(--line)">
-                                <th style="padding:6px 4px;color:var(--muted);font-weight:500">{"Username"}</th>
-                                <th style="padding:6px 4px;color:var(--muted);font-weight:500;width:70px">{"Role"}</th>
-                                <th style="padding:6px 4px;color:var(--muted);font-weight:500;width:130px">{"Joined"}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            { for users.iter().map(|u| html! {
-                                <tr style="border-bottom:1px solid var(--line)">
-                                    <td style="padding:8px 4px">
-                                        <div>{&u.username}</div>
-                                        <div style="font-size:11px;color:var(--muted);font-family:monospace">{&u.id[..8]}</div>
-                                    </td>
-                                    <td style="padding:8px 4px">
-                                        if u.is_admin {
-                                            <span class="badge" style="background:var(--accent);color:#fff;padding:2px 7px;border-radius:10px;font-size:11px">{"admin"}</span>
-                                        } else {
-                                            <span style="color:var(--muted);font-size:12px">{"user"}</span>
-                                        }
-                                    </td>
-                                    <td style="padding:8px 4px;color:var(--muted);font-size:12px">{&u.created_at[..10]}</td>
-                                </tr>
-                            }) }
-                        </tbody>
-                    </table>
+                    <div style="margin-top:4px">
+                        { for users.iter().enumerate().map(|(i, u)| {
+                            let color = AVATAR_COLORS[i % AVATAR_COLORS.len()];
+                            let initial = u.username.chars().next().unwrap_or('S').to_ascii_uppercase();
+                            // Debug: show the raw ID string.
+                            web_sys::console::log_1(&format!("Raw user ID for {}: '{}'", u.username, u.id).into());
+                            let id = Uuid::parse_str(&u.id).unwrap_or(Uuid::nil());
+                            // Debug: check if parsing succeeded.
+                            if id == Uuid::nil() {
+                                web_sys::console::error_1(&format!("Failed to parse UUID for user {}: '{}'", u.username, u.id).into());
+                            } else {
+                                web_sys::console::log_1(&format!("Parsed UUID: {}", id).into());
+                            }
+                            let go_to_edit = {
+                                let navigator = navigator.clone();
+                                Callback::from(move |_| {
+                                    web_sys::console::log_1(&format!("Navigating to /users/{}", id).into());
+                                    navigator.push(&Route::UserEdit { id })
+                                })
+                            };
+                            html! {
+                                <div
+                                    style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer"
+                                    onclick={go_to_edit}
+                                >
+                                    <div
+                                        class="avatar"
+                                        style={format!("background:{color}")}
+                                    >{initial}</div>
+                                    <div style="flex:1;min-width:0">
+                                        <div class="friend-name">{&u.username}</div>
+                                        <div class="friend-sub">
+                                            {&u.created_at[..10]}
+                                            if u.is_admin {
+                                                <span style="margin-left:8px;color:var(--accent);font-weight:700;font-size:11px">{"admin"}</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }) }
+                    </div>
                 }
             }
         </div>

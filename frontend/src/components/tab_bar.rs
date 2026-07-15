@@ -24,8 +24,15 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
             { for tabs.into_iter().map(|(r, label, icon)| {
                 let on = props.route == r;
                 let onclick = {
-                    let cb = props.on_change.clone();
-                    Callback::from(move |_| cb.emit(r))
+                    // Use window.location.href instead of Yew's navigator
+                    // because the client-side router can fail to re-render
+                    // components when navigating between sibling routes.
+                    Callback::from(move |_| {
+                        if let Some(window) = web_sys::window() {
+                            let location = window.location();
+                            let _ = location.set_href(route_to_path(r));
+                        }
+                    })
                 };
                 if r == Route::Add {
                     html! {
@@ -43,5 +50,17 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
                 }
             }) }
         </div>
+    }
+}
+
+/// Convert a route variant to its path string for `window.location.href`.
+fn route_to_path(r: Route) -> &'static str {
+    match r {
+        Route::Map => "/",
+        Route::List => "/list",
+        Route::Add => "/add",
+        Route::Saved => "/saved",
+        Route::Account => "/account",
+        _ => "/", // fallback for routes not in the tab bar
     }
 }

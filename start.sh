@@ -18,11 +18,14 @@ if [[ $# -ge 1 ]]; then
   fi
 fi
 
+BACKEND_PORT=$((8000 + SUFFIX))
+FRONTEND_PORT=$((8800 + SUFFIX))
+
 # label, cwd, command
 SERVICES=(
   "db|$ROOT|docker compose up"
-  "backend|$ROOT|BIND_ADDR=127.0.0.1:$((8000 + SUFFIX)) cargo run --bin backend"
-  "frontend|$ROOT/frontend|trunk serve --port $((8800 + SUFFIX))"
+  "backend|$ROOT|BIND_ADDR=127.0.0.1:${BACKEND_PORT} cargo run --bin backend"
+  "frontend|$ROOT/frontend|trunk serve --port ${FRONTEND_PORT} --proxy-backend http://127.0.0.1:${BACKEND_PORT}/api"
 )
 
 for entry in "${SERVICES[@]}"; do
