@@ -6,7 +6,7 @@ short description.
 
 ## 2026-07-15
 
-- 16:50 — Switched `start.sh` from temp Trunk.toml to `--proxy-backend` flag for trunk serve.
+- 17:00 — Removed `[[proxy]]` block from Trunk.toml; it conflicted with `--proxy-backend` by registering `/api/*` twice and panicking axum on startup.
 - 16:30 — Fixed EditUserView panic when navigating back from the edit page. The component was panicking because Yew hooks (use_state, Callback::from) were defined after an early return when not on the UserEdit route. Restructured so all hooks are initialized first, then check user_id_opt and return early if None.
 
 ## 2026-07-14
