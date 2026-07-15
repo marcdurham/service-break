@@ -6,6 +6,7 @@ short description.
 
 ## 2026-07-14
 
+- 23:45 — Added admin user edit page with password reset and delete endpoints
 - 23:07 — Simplified `auth::me` to use `.unwrap_or_default()` instead of match (clippy `manual_unwrap_or_default`).
 
 ## 2026-07-12
