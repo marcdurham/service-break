@@ -21,18 +21,11 @@ fi
 BACKEND_PORT=$((8000 + SUFFIX))
 FRONTEND_PORT=$((8800 + SUFFIX))
 
-# Generate a temporary Trunk.toml that proxies /api to the backend on the
-# same port offset as the one we're about to start.
-TRUNK_CONFIG=$(mktemp)
-cp "$ROOT/frontend/Trunk.toml" "$TRUNK_CONFIG"
-sed -i "s|http://127.0.0.1:8081/api|http://127.0.0.1:${BACKEND_PORT}/api|" "$TRUNK_CONFIG"
-trap 'rm -f "$TRUNK_CONFIG"' EXIT
-
 # label, cwd, command
 SERVICES=(
   "db|$ROOT|docker compose up"
   "backend|$ROOT|BIND_ADDR=127.0.0.1:${BACKEND_PORT} cargo run --bin backend"
-  "frontend|$ROOT/frontend|trunk serve --port ${FRONTEND_PORT} --config $TRUNK_CONFIG"
+  "frontend|$ROOT/frontend|trunk serve --port ${FRONTEND_PORT} --proxy-backend http://127.0.0.1:${BACKEND_PORT}/api"
 )
 
 for entry in "${SERVICES[@]}"; do
