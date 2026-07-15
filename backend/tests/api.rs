@@ -2018,6 +2018,188 @@ async fn delete_place_nonexistent_returns_404(pool: PgPool) {
     assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_can_edit_user(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create a regular user and an admin.
+    let code = seed_invite(&pool).await;
+    register(&app, &pool, "edit-target").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'edit-target'")
+        .bind("edit-target")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let admin_token = register(&app, &pool, "admin-editor").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'admin-editor'")
+        .bind("admin-editor")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let target_id = token_user_id(&pool, "edit-target").await;
+
+    // Admin fetches the user detail.
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    let resp = call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let detail: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(detail["username"], "edit-target");
+
+    // Admin updates given_name and family_name.
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .set_json(json!({
+            "given_name": "Updated",
+            "family_name": "Name"
+        }))
+        .to_request();
+    let resp = call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify the update persisted.
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    let detail: serde_json::Value = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(detail["given_name"], "Updated");
+    assert_eq!(detail["family_name"], "Name");
+
+    // Admin toggles is_admin.
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .set_json(json!({ "is_admin": false }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    let detail: serde_json::Value = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(detail["is_admin"], false);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_cannot_edit_self(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    let token = register(&app, &pool, "self-edit").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'self-edit'")
+        .bind("self-edit")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let my_id = token_user_id(&pool, "self-edit").await;
+
+    // Self-edit returns 400 (BadRequest), not 403.
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{my_id}"))
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Nope" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn non_admin_cannot_edit_users(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    register(&app, &pool, "regular-user").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'regular-user'")
+        .bind("regular-user")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let regular_token = register(&app, &pool, "jealous-user").await;
+
+    let target_id = token_user_id(&pool, "regular-user").await;
+
+    // GET /api/admin/users/{id} should be forbidden for non-admins.
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&regular_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+
+    // PATCH should also be forbidden.
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&regular_token))
+        .set_json(json!({ "given_name": "Hacked" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_edit_nonexistent_user_returns_404(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "admin-404").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'admin-404'")
+        .bind("admin-404")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let fake_id = Uuid::new_v4();
+
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{fake_id}"))
+        .insert_header(auth(&token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{fake_id}"))
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Ghost" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_delete_user(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    // Create the target user.
+    register(&app, &pool, "delete-me").await;
+
+    // Create the admin user and promote them.
+    let admin_token = register(&app, &pool, "admin-del").await;
+    sqlx::query("UPDATE users SET is_admin = true WHERE username = 'admin-del'")
+        .bind("admin-del")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let target_id = token_user_id(&pool, "delete-me").await;
+
+    // Admin cannot delete themselves.
+    let my_id = token_user_id(&pool, "admin-del").await;
+    let req = TestRequest::delete()
+        .uri(&format!("/api/admin/users/{my_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+
+    // Admin can delete the target user.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Verify the user is gone.
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}"))
+        .insert_header(auth(&admin_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}
+
 /// Helper: look up a user's id by username from the test pool.
 async fn token_user_id(pool: &PgPool, username: &str) -> Uuid {
     sqlx::query_scalar("SELECT id FROM users WHERE username = $1")

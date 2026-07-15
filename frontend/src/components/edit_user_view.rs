@@ -34,6 +34,8 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     let password = use_state(String::new);
     let confirm_password = use_state(String::new);
     let initial_username = use_state(String::new);
+    let initial_given_name = use_state(String::new);
+    let initial_family_name = use_state(String::new);
     let error = use_state(String::new);
 
     // Pull the user id out of the URL route. Must happen after all hooks
@@ -48,6 +50,41 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
             None
         }
     };
+
+    // Load user detail on mount.
+    let username_ef = username.clone();
+    let given_name_ef = given_name.clone();
+    let family_name_ef = family_name.clone();
+    let is_admin_ef = is_admin.clone();
+    let initial_username_ef = initial_username.clone();
+    let initial_given_name_ef = initial_given_name.clone();
+    let initial_family_name_ef = initial_family_name.clone();
+    let error_ef = error.clone();
+    yew::use_effect_with(user_id_opt, move |user_id_opt| {
+        if let Some(user_id) = user_id_opt.as_ref() {
+            let user_id = *user_id;
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::fetch_user_detail(user_id).await {
+                    Ok(detail) => {
+                        let username_val = detail.username;
+                        let given_name_val = detail.given_name.unwrap_or_default();
+                        let family_name_val = detail.family_name.unwrap_or_default();
+                        username_ef.set(username_val.clone());
+                        initial_given_name_ef.set(given_name_val.clone());
+                        initial_family_name_ef.set(family_name_val.clone());
+                        given_name_ef.set(given_name_val);
+                        family_name_ef.set(family_name_val);
+                        is_admin_ef.set(detail.is_admin);
+                        initial_username_ef.set(username_val);
+                    }
+                    Err(msg) => {
+                        error_ef.set(msg);
+                    }
+                }
+            });
+        }
+        || ()
+    });
 
     // All callbacks must be defined before any early return to satisfy Yew's
     // hook ordering rules.
@@ -131,6 +168,8 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
         let password = password.clone();
         let confirm_password = confirm_password.clone();
         let initial_username = initial_username.clone();
+        let initial_given_name = initial_given_name.clone();
+        let initial_family_name = initial_family_name.clone();
         let error = error.clone();
         let on_toast = props.on_toast.clone();
         Callback::from(move |_| {
@@ -154,6 +193,8 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                 (*password).clone()
             };
             let initial_username_val = (*initial_username).clone();
+            let initial_given_name_val = (*initial_given_name).clone();
+            let initial_family_name_val = (*initial_family_name).clone();
             let busy = busy.clone();
             let error = error.clone();
             let on_toast = on_toast.clone();
@@ -177,10 +218,10 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                     update.password = Some(password_val);
                 }
                 update.is_admin = Some(is_admin_val);
-                if !given_name_val.is_empty() {
+                if given_name_val != initial_given_name_val {
                     update.given_name = Some(given_name_val);
                 }
-                if !family_name_val.is_empty() {
+                if family_name_val != initial_family_name_val {
                     update.family_name = Some(family_name_val);
                 }
 
@@ -238,8 +279,8 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
         *username != *initial_username
             || !password.is_empty()
             || *is_admin
-            || (*given_name).is_empty()
-            || (*family_name).is_empty()
+            || (*given_name) != (*initial_given_name)
+            || (*family_name) != (*initial_family_name)
     };
 
     html! {
