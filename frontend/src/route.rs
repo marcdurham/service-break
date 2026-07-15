@@ -25,6 +25,10 @@ pub enum Route {
     /// round trip, with the session (or an error) in the URL fragment.
     #[at("/oauth-complete")]
     OauthComplete,
+    /// Where Android's Web Share Target intent lands (e.g. "Share" on a
+    /// place in Google Maps), with the shared link in the query string.
+    #[at("/share-target")]
+    ShareTarget,
     /// Admin-only tools (backup export / import); reached from the Account
     /// page, not the tab bar.
     #[at("/admin")]
