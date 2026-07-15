@@ -201,16 +201,13 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
 async fn me(state: Data<AppState>, user: AuthUser) -> HttpResponse {
-    let (given, family) = match sqlx::query_as::<_, (Option<String>, Option<String>)>(
+    let (given, family): (Option<String>, Option<String>) = sqlx::query_as(
         "SELECT given_name, family_name FROM users WHERE id = $1",
     )
     .bind(user.id)
     .fetch_one(&state.pool)
     .await
-    {
-        Ok(row) => row,
-        Err(_) => (None, None),
-    };
+    .unwrap_or_default();
     HttpResponse::Ok().json(json!({
         "username": user.username,
         "is_admin": user.is_admin,
