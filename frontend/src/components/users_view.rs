@@ -70,10 +70,21 @@ pub fn users_view() -> Html {
                         { for users.iter().enumerate().map(|(i, u)| {
                             let color = AVATAR_COLORS[i % AVATAR_COLORS.len()];
                             let initial = u.username.chars().next().unwrap_or('S').to_ascii_uppercase();
+                            // Debug: show the raw ID string.
+                            web_sys::console::log_1(&format!("Raw user ID for {}: '{}'", u.username, u.id).into());
                             let id = Uuid::parse_str(&u.id).unwrap_or(Uuid::nil());
+                            // Debug: check if parsing succeeded.
+                            if id == Uuid::nil() {
+                                web_sys::console::error_1(&format!("Failed to parse UUID for user {}: '{}'", u.username, u.id).into());
+                            } else {
+                                web_sys::console::log_1(&format!("Parsed UUID: {}", id).into());
+                            }
                             let go_to_edit = {
                                 let navigator = navigator.clone();
-                                Callback::from(move |_| navigator.push(&Route::UserEdit { id }))
+                                Callback::from(move |_| {
+                                    web_sys::console::log_1(&format!("Navigating to /users/{}", id).into());
+                                    navigator.push(&Route::UserEdit { id })
+                                })
                             };
                             html! {
                                 <div
