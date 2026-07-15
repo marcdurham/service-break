@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-15
+
+- 16:30 — Fixed EditUserView panic when navigating back from the edit page. The component was panicking because Yew hooks (use_state, Callback::from) were defined after an early return when not on the UserEdit route. Restructured so all hooks are initialized first, then check user_id_opt and return early if None.
+
 ## 2026-07-14
 
 - 23:45 — Added admin user edit page with password reset and delete endpoints
