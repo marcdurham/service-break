@@ -31,3 +31,4 @@
 {"ts":"2026-07-12T08:04:49.741Z","iteration":31,"event":"continue","stuckStreak":0}
 {"ts":"2026-07-12T08:05:29.540Z","iteration":32,"event":"continue","stuckStreak":0}
 {"ts":"2026-07-12T08:05:58.464Z","iteration":33,"event":"continue","stuckStreak":0}
+{"ts":"2026-07-15T06:10:47.746Z","iteration":0,"event":"operator_abort","stuckStreak":0,"notice":"Turn aborted by operator. Use /loop resume to continue."}
