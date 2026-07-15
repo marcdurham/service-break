@@ -1,4 +1,5 @@
 use shared::UserSummary;
+use uuid::Uuid;
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
 
@@ -33,7 +34,10 @@ pub fn users_view() -> Html {
         });
     }
 
-    let go_back = Callback::from(move |_| navigator.push(&Route::Admin));
+    let go_back = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| navigator.push(&Route::Admin))
+    };
     let count = users.len();
     let header = if users.is_empty() {
         "No accounts yet.".to_owned()
@@ -66,8 +70,16 @@ pub fn users_view() -> Html {
                         { for users.iter().enumerate().map(|(i, u)| {
                             let color = AVATAR_COLORS[i % AVATAR_COLORS.len()];
                             let initial = u.username.chars().next().unwrap_or('S').to_ascii_uppercase();
+                            let id = Uuid::parse_str(&u.id).unwrap_or(Uuid::nil());
+                            let go_to_edit = {
+                                let navigator = navigator.clone();
+                                Callback::from(move |_| navigator.push(&Route::UserEdit { id }))
+                            };
                             html! {
-                                <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border)">
+                                <div
+                                    style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer"
+                                    onclick={go_to_edit}
+                                >
                                     <div
                                         class="avatar"
                                         style={format!("background:{color}")}

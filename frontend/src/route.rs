@@ -36,6 +36,9 @@ pub enum Route {
     /// Admin-only: list all accounts.
     #[at("/users")]
     Users,
+    /// Admin-only: edit a single account (reached from /users).
+    #[at("/users/:id")]
+    UserEdit { id: Uuid },
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]
