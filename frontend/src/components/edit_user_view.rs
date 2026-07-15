@@ -23,18 +23,6 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     // Debug: log the current route.
     web_sys::console::log_1(&format!("EditUserView route: {:?}", route).into());
 
-    // Pull the user id out of the URL route.
-    let user_id = match route {
-        Route::UserEdit { id } => {
-            web_sys::console::log_1(&format!("Extracted user ID: {}", id).into());
-            id
-        }
-        _ => {
-            web_sys::console::log_1(&"Not on UserEdit route".into());
-            return html! {}
-        }
-    };
-
     // Form state. `initial_username` is captured once so we can detect the
     // "same as before" case and skip sending it (which would trigger a
     // duplicate-username error against ourselves).
@@ -48,39 +36,35 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     let initial_username = use_state(String::new);
     let error = use_state(String::new);
 
-    // Load the user on mount.
-    if username.is_empty() {
-        let username = username.clone();
-        let given_name = given_name.clone();
-        let family_name = family_name.clone();
-        let is_admin = is_admin.clone();
-        let initial_username = initial_username.clone();
-        let busy = busy.clone();
-        let error = error.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            match api::fetch_user_detail(user_id).await {
-                Ok(u) => {
-                    let username_clone = u.username.clone();
-                    username.set(u.username);
-                    given_name.set(u.given_name.unwrap_or_default());
-                    family_name.set(u.family_name.unwrap_or_default());
-                    is_admin.set(u.is_admin);
-                    initial_username.set(username_clone);
-                    busy.set(false);
-                }
-                Err(msg) => {
-                    error.set(msg);
-                    busy.set(false);
-                }
-            }
-        });
-    }
-
-    let go_back = {
-        let nav = navigator.clone();
-        Callback::from(move |_| nav.push(&Route::Users))
+    // Pull the user id out of the URL route. Must happen after all hooks
+    // are initialized so Yew's hook counter stays in sync.
+    let user_id_opt: Option<uuid::Uuid> = match &route {
+        Route::UserEdit { id } => {
+            web_sys::console::log_1(&format!("Extracted user ID: {}", id).into());
+            Some(*id)
+        }
+        _ => {
+            web_sys::console::log_1(&"Not on UserEdit route".into());
+            None
+        }
     };
 
+    // All callbacks must be defined before any early return to satisfy Yew's
+    // hook ordering rules.
+    
+    // Back button: navigate with window.location.href instead of navigator.push()
+    // because Yew's client-side router can fail to re-render components when
+    // navigating between sibling routes (both match `/users*`).
+    let go_back = {
+        Callback::from(move |_| {
+            if let Some(window) = web_sys::window() {
+                let location = window.location();
+                let _ = location.set_href("/users");
+            }
+        })
+    };
+
+    // Input handlers.
     let on_username_input = {
         let username = username.clone();
         Callback::from(move |e: InputEvent| {
@@ -159,7 +143,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                 return;
             }
             busy.set(true);
-            let user_id = user_id;
+            let user_id = user_id_opt.unwrap();
             let username_val = (*username).clone();
             let given_name_val = (*given_name).clone();
             let family_name_val = (*family_name).clone();
@@ -216,6 +200,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     };
 
     let delete_navigator = navigator.clone();
+    // Delete handler.
     let delete = {
         let busy = busy.clone();
         let on_toast = props.on_toast.clone();
@@ -223,7 +208,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
             if *busy {
                 return;
             }
-            let user_id = user_id;
+            let user_id = user_id_opt.unwrap();
             let busy = busy.clone();
             let on_toast = on_toast.clone();
             let delete_navigator = delete_navigator.clone();
@@ -240,6 +225,13 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                 }
             });
         })
+    };
+
+    // Early return if not on the UserEdit route — all hooks are already
+    // initialized above so Yew's hook counter stays in sync.
+    let user_id = match user_id_opt {
+        Some(id) => id,
+        None => return html! {},
     };
 
     let has_changes = || {
