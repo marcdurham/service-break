@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Break — Code Changes Reference</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fira+Code:wght@400;500&display=swap">
+  <style>
+    :root {
+      --bg: #f6efe4;
+      --ink: #2c211a;
+      --muted: #8a7863;
+      --accent: #c05f38;
+      --green: #6f8256;
+      --red: #b5533f;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+    }
+    
+    .header {
+      background: var(--ink);
+      color: #f6ecd9;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+    
+    .header p {
+      color: #d8c3ac;
+      font-size: 15px;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    
+    .file-section {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 3px 12px -7px rgba(74, 53, 39, .4);
+    }
+    
+    .file-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f2ece2;
+    }
+    
+    .file-path {
+      font-family: 'Fira Code', monospace;
+      font-size: 14px;
+      color: var(--ink);
+      font-weight: 500;
+    }
+    
+    .change-type {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    
+    .type-edit { background: #eaf1e6; color: var(--green); }
+    .type-new { background: #f7efdc; color: #a8792f; }
+    
+    .code-block {
+      background: #2c211a;
+      color: #f6ecd9;
+      border-radius: 14px;
+      padding: 20px;
+      font-family: 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    
+    .code-add { background: rgba(111, 130, 86, 0.2); display: block; margin: 4px -20px; padding: 0 20px; border-left: 3px solid var(--green); }
+    .code-remove { background: rgba(181, 83, 63, 0.2); display: block; margin: 4px -20px; padding: 0 20px; border-left: 3px solid var(--red); text-decoration: line-through; }
+    .code-context { color: #8a7863; }
+    
+    .comment-block {
+      background: #f6efe4;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 16px;
+      border-left: 4px solid var(--accent);
+    }
+    
+    .comment-title {
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .comment-text {
+      font-size: 14px;
+      color: #5c4c3e;
+      line-height: 1.7;
+    }
+    
+    .toc {
+      background: #fff;
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 3px 12px -7px rgba(74, 53, 39, .4);
+    }
+    
+    .toc-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 22px;
+      margin-bottom: 16px;
+      color: var(--ink);
+    }
+    
+    .toc-list {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+    
+    .toc-item a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #f6efe4;
+      border-radius: 12px;
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .toc-item a:hover {
+      background: #e7dccb;
+      transform: translateX(4px);
+    }
+    
+    .toc-number {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Code Changes Reference</h1>
+    <p>Exact code modifications needed for UX improvements</p>
+  </div>
+  
+  <div class="container">
+    <!-- Table of Contents -->
+    <div class="toc">
+      <div class="toc-title">📑 Quick Navigation</div>
+      <ul class="toc-list">
+        <li class="toc-item"><a href="#onboarding"><span class="toc-number">1</span> Fix Onboarding Branding (onboarding.rs)</a></li>
+        <li class="toc-item"><a href="#detail-search"><span class="toc-number">2</span> Add Search to Detail View (detail_view.rs)</a></li>
+        <li class="toc-item"><a href="#loading-state"><span class="toc-number">3</span> Add Loading States (ui.rs, list_view.rs)</a></li>
+        <li class="toc-item"><a href="#empty-states"><span class="toc-number">4</span> Enhance Empty States (saved_view.rs)</a></li>
+        <li class="toc-item"><a href="#accessibility"><span class="toc-number">5</span> Improve Accessibility (styles.css, ui.rs)</a></li>
+        <li class="toc-item"><a href="#distance-formatting"><span class="toc-number">6</span> Standardize Distance Display (shared/lib.rs)</a></li>
+      </ul>
+    </div>
+    
+    <!-- Change 1: Onboarding -->
+    <div id="onboarding" class="file-section">
+      <div class="file-header">
+        <span class="file-path">frontend/src/components/onboarding.rs</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Line 25-30: Update logo icon from coffee to WC</span>
+<span class="code-remove">&lt;div class="onb-logo-badge"&gt;&lt;span class="mi"&gt;"coffee"&lt;/span&gt;&lt;/div&gt;</span>
+<span class="code-add">&lt;div class="onb-logo-badge"&gt;&lt;span class="mi"&gt;"wc"&lt;/span&gt;&lt;/div&gt;</span>
+
+<span class="code-context">// Line 35-40: Update headline text</span>
+<span class="code-remove">&lt;h1 class="onb-h1"&gt;"Good places to take breaks"&lt;/h1&gt;</span>
+<span class="code-add">&lt;h1 class="onb-h1"&gt;"Every good trip needs a clean break"&lt;/h1&gt;</span>
+
+<span class="code-context">// Line 42-50: Update description text</span>
+<span class="code-remove">&lt;p class="onb-p"&gt;
+    {"Places with coffee, food, bathrooms, places to sit at \
+      shops, stores, malls, parks & more — sorted by what's \
+      closest to you."}
+&lt;/p&gt;</span>
+<span class="code-add">&lt;p class="onb-p"&gt;
+    {"Find clean, reliable places to rest, eat, and refresh — \
+     sorted by what's closest to you."}
+&lt;/p&gt;</span>
+
+<span class="code-context">// Line 60-70: Update feature descriptions</span>
+<span class="code-remove">&lt;div class="onb-feature-text"&gt;"Cleanliness ratings"&lt;/div&gt;</span>
+<span class="code-add">&lt;div class="onb-feature-text"&gt;"Clean, verified reviews"&lt;/div&gt;</span>
+
+<span class="code-remove">&lt;div class="onb-feature-text"&gt;"Directions in one tap"&lt;/div&gt;</span>
+<span class="code-add">&lt;div class="onb-feature-text"&gt;"One-tap directions to any place"&lt;/div&gt;</span>
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          The current implementation uses a coffee cup icon which misrepresents the app's primary purpose. 
+          Users might think this is only for coffee shops, when it actually covers all venue types (grocery stores, 
+          parks, gas stations, etc.). The WC icon immediately communicates "restrooms" while the tagline clarifies 
+          the broader scope.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Change 2: Detail View Search -->
+    <div id="detail-search" class="file-section">
+      <div class="file-header">
+        <span class="file-path">frontend/src/components/detail_view.rs</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Add search state to component struct or props</span>
+#[derive(Properties, PartialEq)]
+pub struct DetailViewProps {
+    pub place_id: uuid::Uuid,
++   pub on_search: Callback&lt;String&gt;,  // New callback for search queries
+}
+
+<span class="code-context">// Line ~50: Add search input to detail overlay</span>
+html! {
+    &lt;div class="detail-overlay"&gt;
++       &lt;!-- Search bar at top of detail view --&gt;
++       &lt;div class="search-bar"&gt;
++           &lt;span class="mi"&gt;"search"&lt;/span&gt;
++           &lt;input 
++               type="text" 
++               placeholder="Search nearby places..."
++               oninput={on_search_input}
++               class="search-input"
++           /&gt;
++       &lt;/div&gt;
+        
+        // ... existing detail content ...
+    &lt;/div&gt;
+}
+
+<span class="code-context">// Add search input handler</span>
+let on_search_input = {
+    let on_search = props.on_search.clone();
+    Callback::from(move |e: InputEvent| {
+        let value = e.target_value();
+        // Debounce for performance
+        setTimeout({
+            move || {
+                on_search.emit(value);
+            }
+        }, 300).unwrap_or_default();
+    })
+};
+
+<span class="code-context">// In app.rs: Pass search callback to detail view</span>
+html! {
+    &lt;DetailView 
+        place_id={selected_place_id}
++       on_search={search_callback.clone()}
+    /&gt;
+}
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          Users viewing a place detail have no way to quickly search for other places without navigating back. 
+          Adding a search bar at the top of the detail view allows them to compare locations or find alternatives 
+          without losing their current context. The debounce prevents excessive API calls while typing.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Change 3: Loading States -->
+    <div id="loading-state" class="file-section">
+      <div class="file-header">
+        <span class="file-path">frontend/src/components/ui.rs</span>
+        <span class="change-type type-new">New Component File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Create new file: frontend/src/components/loading_indicator.rs</span>
+
+use yew::prelude::*;
+
+#[function_component(LoadingIndicator)]
+pub fn loading_indicator() -&gt; Html {
+    html! {
+        &lt;div class="loading-state"&gt;
+            &lt;div class="spinner"&gt;&lt;/div&gt;
+            &lt;div class="loading-text"&gt;{"Finding places near you..."}&lt;/div&gt;
+        &lt;/div&gt;
+    }
+}
+
+<span class="code-context">// Add CSS to frontend/assets/styles.css</span>
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #f2ece2;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 500;
+}
+      </div>
+      
+      <div class="file-header" style="margin-top: 24px;">
+        <span class="file-path">frontend/src/components/list_view.rs</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Add loading state to list view component</span>
+#[function_component(ListView)]
+pub fn list_view(props: &ListViewProps) -&gt; Html {
+    let places = use_state(|| Vec::new());
++   let is_loading = use_state(|| false);
+    
+    // ... existing code ...
+    
+    html! {
+        if *is_loading {
+            html! { <LoadingIndicator /> }
+        } else if let Some(places) = &*places {
+            if places.is_empty() {
+                html! { <EmptyState /> }
+            } else {
+                html! {
+                    &lt;div class="cards"&gt;
+                        { for places.iter().map(|p| place_card(p)) }
+                    &lt;/div&gt;
+                }
+            }
+        }
+    }
+}
+
+<span class="code-context">// Wire up loading state in async operations</span>
+let fetch_places = {
+    let is_loading = is_loading.clone();
+    let places = places.clone();
+    Callback::from(move ||| {
+        is_loading.set(true);
+        // ... existing fetch logic ...
+        is_loading.set(false);
+    })
+};
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          During async operations (loading places, submitting reviews), users receive no visual feedback. 
+          This creates uncertainty about whether the app is working or if they need to tap again. A loading 
+          indicator provides immediate feedback and improves perceived performance. The spinner animation 
+          should be subtle and not distracting.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Change 4: Empty States -->
+    <div id="empty-states" class="file-section">
+      <div class="file-header">
+        <span class="file-path">frontend/src/components/saved_view.rs</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Replace basic empty state with enhanced version</span>
+html! {
+    if *saved_places.is_empty() {
++       html! {
++           &lt;div class="empty-state"&gt;
++               &lt;div class="empty-icon"&gt;"🗺️"&lt;/div&gt;
++               &lt;div class="empty-title"&gt;{"Your saved places will appear here"}&lt;/div&gt;
++               &lt;div class="empty-sub"&gt;{"Tap the heart icon on any place to save it for quick access later."}&lt;/div&gt;
++               &lt;button 
++                   class="cta-btn" 
++                   onclick={on_explore}
++               &gt;
++                   &lt;span class="mi"&gt;"explore"&lt;/span&gt;
++                   {"Explore nearby places"}
++               &lt;/button&gt;
++           &lt;/div&gt;
++       }
+    } else {
+        html! {
+            &lt;div class="cards"&gt;
+                { for saved_places.iter().map(|p| place_card(p)) }
+            &lt;/div&gt;
+        }
+    }
+}
+
+<span class="code-context">// Add explore callback</span>
+let on_explore = Callback::from(move |_: ClickEvent| {
+    // Navigate to map view or trigger location request
+    props.on_navigate.emit(NavigateTarget::Map);
+});
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          When users have no saved places, the empty state should encourage engagement rather than just 
+          stating a fact. A clear call-to-action button guides them to the next logical step (exploring 
+          nearby places). The icon and descriptive text reinforce what they can do with the app.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Change 5: Accessibility -->
+    <div id="accessibility" class="file-section">
+      <div class="file-header">
+        <span class="file-path">frontend/assets/styles.css</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Add focus styles to CSS</span>
+
+:root {
+  --focus-ring: 2px solid var(--accent);
++ outline-offset: 2px;
+}
+
+* { box-sizing: border-box; }
+
++ /* Global focus styles for keyboard navigation */
++ *:focus-visible {
++   outline: var(--focus-ring);
++ }
++ 
++ /* Specific focus styles for interactive elements */
++ .icon-btn:focus-visible,
++ .chip:focus-visible,
++ .card:focus-visible,
++ .tab:focus-visible {
++   outline: var(--focus-ring);
++   outline-offset: 2px;
++   border-radius: inherit;
++ }
+
+// ... existing styles ...
+
+<span class="code-context">// Add skip navigation link to index.html</span>
+&lt;body&gt;
++ &lt;a href="#main-content" class="skip-link"&gt;{"Skip to main content"}&lt;/a&gt;
+  
+  &lt;div id="root"&gt;&lt;/div&gt;
+  
++ &lt;style&gt;
++ .skip-link {
++   position: absolute;
++   top: -40px;
++   left: 0;
++   background: var(--accent);
++   color: #fff;
++   padding: 8px 16px;
++   z-index: 9999;
++   font-weight: 700;
++ }
++ 
++ .skip-link:focus {
++   top: 0;
++ }
++ &lt;/style&gt;
+&lt;/body&gt;
+      </div>
+      
+      <div class="file-header" style="margin-top: 24px;">
+        <span class="file-path">frontend/src/components/ui.rs</span>
+        <span class="change-type type-edit">Edit Existing File</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Add ARIA labels to interactive elements</span>
+
+html! {
+    &lt;button 
+        class="icon-btn"
++       aria-label="Close detail view"
+        onclick={on_close}
++       tabindex="0"
+    &gt;
+        &lt;span class="mi"&gt;"close"&lt;/span&gt;
+    &lt;/button&gt;
+}
+
+html! {
+    &lt;button 
+        class="directions-btn"
++       aria-label="Get directions to {place.name}"
+        onclick={on_directions}
+    &gt;
+        &lt;span class="mi"&gt;"directions"&lt;/span&gt;
+        {"Directions"}
+    &lt;/button&gt;
+}
+
+html! {
+    &lt;div 
+        class="badge"
++       aria-label="{place.place_type.label()}"
+    &gt;
+        &lt;span class="mi"&gt;{place.place_type.icon()}&lt;/span&gt;
+    &lt;/div&gt;
+}
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          The app lacks proper ARIA labels, focus management, and skip navigation. This excludes users with 
+          disabilities from fully using the service. Adding aria-label attributes to buttons and icons provides 
+          context for screen readers. Focus styles ensure keyboard users can see which element is active. Skip 
+          navigation links allow quick access to main content without tabbing through all navigation elements.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Change 6: Distance Formatting -->
+    <div id="distance-formatting" class="file-section">
+      <div class="file-header">
+        <span class="file-path">shared/src/lib.rs</span>
+        <span class="change-type type-new">New Utility Function</span>
+      </div>
+      
+      <div class="code-block">
+<span class="code-context">// Add distance formatting utility to shared library</span>
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DistanceUnit {
+    Miles,
+    Kilometers,
+}
+
+impl Default for DistanceUnit {
+    fn default() -&gt; Self {
+        DistanceUnit::Miles
+    }
+}
+
++ pub fn format_distance(miles: f64, unit: DistanceUnit) -&gt; String {
++     match unit {
++         DistanceUnit::Miles =&gt; format!("{:.1} mi", miles),
++         DistanceUnit::Kilometers =&gt; format!("{:.2} km", miles * 1.60934),
++     }
++ }
+
+<span class="code-context">// Update existing distance formatting functions to use new utility</span>
+
+- pub fn fmt_distance_mi(miles: f64) -&gt; String {
+-     format!("{:.1} mi", miles)
+- }
+
++ pub fn fmt_distance_mi(miles: f64) -&gt; String {
++     format_distance(miles, DistanceUnit::Miles)
++ }
+
+<span class="code-context">// Usage in components</span>
+// Instead of inline formatting:
+- &lt;div class="dist-num"&gt;{format!("{:.1} mi", p.distance_mi)}&lt;/div&gt;
+
+// Use centralized formatter:
++ &lt;div class="dist-num"&gt;{shared::fmt_distance_mi(p.distance_mi)}&lt;/div&gt;
+      </div>
+      
+      <div class="comment-block">
+        <div class="comment-title">💡 Why This Change?</div>
+        <div class="comment-text">
+          Distance is displayed inconsistently across the app — sometimes as "0.2 mi", other times as 
+          "0.2 miles", and occasionally without units. A centralized formatter ensures consistent formatting 
+          throughout the app. Adding a unit preference setting (miles vs kilometers) allows users to choose 
+          their preferred system of measurement.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Summary -->
+    <div class="file-section">
+      <div class="file-header">
+        <span class="file-path">📊 Implementation Summary</span>
+      </div>
+      
+      <div style="display: grid; gap: 16px;">
+        <div style="background: #f6efe4; border-radius: 14px; padding: 20px;">
+          <div style="font-weight: 700; margin-bottom: 12px; color: var(--ink);">📁 Files Modified</div>
+          <ul style="list-style: none; display: grid; gap: 8px; font-size: 14px;">
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/onboarding.rs</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/detail_view.rs</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/list_view.rs</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/saved_view.rs</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/ui.rs</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/assets/styles.css</code>
+            </li>
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--green);">✓</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/index.html</code>
+            </li>
+          </ul>
+        </div>
+        
+        <div style="background: #f6efe4; border-radius: 14px; padding: 20px;">
+          <div style="font-weight: 700; margin-bottom: 12px; color: var(--ink);">✨ New Files Created</div>
+          <ul style="list-style: none; display: grid; gap: 8px; font-size: 14px;">
+            <li style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--accent);">+</span>
+              <code style="background: #fff; padding: 4px 8px; border-radius: 6px;">frontend/src/components/loading_indicator.rs</code>
+            </li>
+          </ul>
+        </div>
+        
+        <div style="background: #eef2e6; border-radius: 14px; padding: 20px; border-left: 4px solid var(--green);">
+          <div style="font-weight: 700; margin-bottom: 8px; color: var(--green);">✅ Total Estimated Time</div>
+          <div style="font-size: 15px; color: #5c4c3e;">~2.5 hours for all improvements (excluding testing)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>Code changes reference generated from UX analysis of Service Break app</p>
+    <p style="margin-top: 8px; color: var(--accent); font-weight: 700;">Ready to implement — copy and paste directly into your codebase</p>
+  </div>
+</body>
+</html>

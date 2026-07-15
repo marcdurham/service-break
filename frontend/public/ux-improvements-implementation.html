@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Break — UX Implementation Guide</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Instrument+Serif:wght@400&display=swap">
+  <style>
+    :root {
+      --bg: #f6efe4;
+      --ink: #2c211a;
+      --muted: #8a7863;
+      --accent: #c05f38;
+      --green: #6f8256;
+      --gold: #c9a26a;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+    }
+    
+    .header {
+      background: var(--ink);
+      color: #f6ecd9;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+    
+    .header p {
+      color: #d8c3ac;
+      font-size: 15px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    
+    .section {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 3px 12px -7px rgba(74, 53, 39, .4);
+    }
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f2ece2;
+    }
+    
+    .section-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 15px;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+    }
+    
+    .section-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 24px;
+      color: var(--ink);
+    }
+    
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    
+    .code-block {
+      background: #2c211a;
+      color: #f6ecd9;
+      border-radius: 14px;
+      padding: 20px;
+      font-family: 'Fira Code', monospace;
+      font-size: 13.5px;
+      line-height: 1.7;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+    
+    .code-comment { color: #8a7863; }
+    .code-keyword { color: #c9a26a; }
+    .code-string { color: #e7b877; }
+    .code-function { color: #8fc194; }
+    
+    .implementation-steps {
+      display: grid;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    
+    .step {
+      background: #f6efe4;
+      border-radius: 14px;
+      padding: 18px;
+      border-left: 4px solid var(--accent);
+    }
+    
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 700;
+      margin-right: 10px;
+    }
+    
+    .step-title {
+      font-weight: 700;
+      color: var(--ink);
+      display: inline;
+    }
+    
+    .step-desc {
+      font-size: 14px;
+      color: #5c4c3e;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+    
+    .file-list {
+      background: #f6efe4;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    
+    .file-title {
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #fff;
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    
+    .file-item:last-child { margin-bottom: 0; }
+    
+    .file-path {
+      font-family: 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    
+    .file-action {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    
+    .action-edit { background: #eaf1e6; color: var(--green); }
+    .action-new { background: #f7efdc; color: #a8792f; }
+    
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .priority-high { background: #f6e6e0; color: #b5533f; }
+    .priority-medium { background: #f7efdc; color: #a8792f; }
+    .priority-low { background: #eaf1e6; color: var(--green); }
+    
+    .timeline {
+      display: grid;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    
+    .timeline-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: #f6efe4;
+      border-radius: 14px;
+    }
+    
+    .timeline-date {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      min-width: 80px;
+    }
+    
+    .timeline-content {
+      flex: 1;
+    }
+    
+    .timeline-title {
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+    
+    .timeline-desc {
+      font-size: 13px;
+      color: #5c4c3e;
+    }
+    
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>UX Implementation Guide</h1>
+    <p>Step-by-step instructions for implementing UX improvements</p>
+  </div>
+  
+  <div class="container">
+    <!-- Section 1: Onboarding Fix -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">🎨</div>
+        <div>
+          <div class="section-title">Fix Onboarding Branding</div>
+          <div class="section-subtitle">Priority: High | Time: 15 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Update icon in onboarding component</span>
+          <div class="step-desc">Change the logo badge from coffee cup (☕) to WC icon (🚻) in frontend/src/components/onboarding.rs</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Update headline text</span>
+          <div class="step-desc">Change "Good places to take breaks" to "Every good trip needs a clean break"</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Update description text</span>
+          <div class="step-desc">Change body copy to match design mockup: "Find clean, reliable places to rest, eat, and refresh — sorted by what's closest to you."</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/onboarding.rs</span>
+
+<span class="code-keyword">html!</span>{
+    <span class="code-string">&lt;div class="onb"&gt;</span>
+        <span class="code-string">&lt;div class="onb-blob-a"&gt;&lt;/div&gt;</span>
+        <span class="code-string">&lt;div class="onb-blob-b"&gt;&lt;/div&gt;</span>
+        <span class="code-string">&lt;div class="onb-body"&gt;</span>
+            <span class="code-string">&lt;div class="onb-logo"&gt;</span>
+                <span class="code-string">&lt;div class="onb-logo-badge"&gt;</span>
+                    <span class="code-comment">&lt;!-- Change from "coffee" to "wc" --&gt;</span>
+                    <span class="code-string">&lt;span class="mi"&gt;"wc"&lt;/span&gt;</span>
+                <span class="code-string">&lt;/div&gt;</span>
+                <span class="code-string">&lt;div&gt;</span>
+                    <span class="code-string">&lt;div class="onb-app-name"&gt;"Service Break"&lt;/div&gt;</span>
+                    <span class="code-string">&lt;div class="onb-tagline"&gt;"find places for refreshment"&lt;/div&gt;</span>
+                <span class="code-string">&lt;/div&gt;</span>
+            <span class="code-string">&lt;/div&gt;</span>
+            
+            <span class="code-comment">&lt;!-- Update headline --&gt;</span>
+            <span class="code-string">&lt;h1 class="onb-h1"&gt;"Every good trip needs a clean break"&lt;/h1&gt;</span>
+            
+            <span class="code-comment">&lt;!-- Update description --&gt;</span>
+            <span class="code-string">&lt;p class="onb-p"&gt;</span>
+                {"Find clean, reliable places to rest, eat, and refresh — \
+                 sorted by what's closest to you."}
+            <span class="code-string">&lt;/p&gt;</span>
+        <span class="code-string">&lt;/div&gt;</span>
+    <span class="code-string">&lt;/div&gt;</span>
+<span class="code-string">&lt;/div&gt;</span>
+      </div>
+    </div>
+    
+    <!-- Section 2: Add Search to Detail View -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">🔍</div>
+        <div>
+          <div class="section-title">Add Search to Detail View</div>
+          <div class="section-subtitle">Priority: High | Time: 30 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Add search input to detail overlay</span>
+          <div class="step-desc">Include a search bar at the top of the detail view for quick navigation to other places</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Implement search state management</span>
+          <div class="step-desc">Add search query state and filter logic to detail view component</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Show search results dropdown</span>
+          <div class="step-desc">Display filtered places as user types, with distance and rating info</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/detail_view.rs - Add search state</span>
+
+#[function_component(DetailView)]
+pub fn detail_view(props: &DetailViewProps) -> Html {
+    let place = use_state(|| None);
+    let search_query = use_state(|| String::new());
+    let filtered_places = use_state(|| Vec::new());
+    
+    <span class="code-comment">// Add debounced search handler</span>
+    let on_search_change = {
+        let search_query = search_query.clone();
+        Callback::from(move |e: InputEvent| {
+            let value = e.target_value();
+            search_query.set(value);
+            <span class="code-comment">// Debounce for performance</span>
+            setTimeout({
+                let query = search_query.clone();
+                move || {
+                    filtered_places.set(filter_places(&query));
+                }
+            }, 300).unwrap_or_default();
+        })
+    };
+    
+    <span class="code-string">&lt;div class="detail-overlay"&gt;</span>
+        <span class="code-comment">&lt;!-- Add search bar at top --&gt;</span>
+        <span class="code-string">&lt;div class="search-bar"&gt;</span>
+            <span class="code-string">&lt;span class="mi"&gt;"search"&lt;/span&gt;</span>
+            <span class="code-string">&lt;input 
+                type="text" 
+                placeholder="Search nearby places..."
+                value={*search_query}
+                oninput={on_search_change}
+                class="search-input"
+            /&gt;</span>
+        <span class="code-string">&lt;/div&gt;</span>
+        
+        <span class="code-comment">&lt;!-- Existing detail content --&gt;</span>
+        ...
+    <span class="code-string">&lt;/div&gt;</span>
+<span class="code-string">&lt;/div&gt;</span>
+      </div>
+    </div>
+    
+    <!-- Section 3: Add Loading States -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">⏳</div>
+        <div>
+          <div class="section-title">Add Loading Feedback</div>
+          <div class="section-subtitle">Priority: Medium | Time: 20 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Add loading state to async operations</span>
+          <div class="step-desc">Track loading states for place fetching, review submission, and save actions</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Create reusable loading component</span>
+          <div class="step-desc">Build a consistent loading spinner with contextual messaging</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Wire up loading states to UI</span>
+          <div class="step-desc">Show/hide loading indicators based on async operation status</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/ui.rs - Add loading component</span>
+
+#[function_component(LoadingIndicator)]
+pub fn loading_indicator() -> Html {
+    html! {
+        <span class="loading-state">
+            <span class="spinner"></span>
+            <div class="loading-text">{"Finding places near you..."}</div>
+        </span>
+    }
+}
+
+<span class="code-comment">// Usage in list view</span>
+if *is_loading {
+    html! { <LoadingIndicator /> }
+} else if let Some(places) = &*places {
+    html! {
+        <span class="cards">
+            { for places.iter().map(|p| place_card(p)) }
+        </span>
+    }
+} else {
+    html! { <EmptyState /> }
+}
+      </div>
+    </div>
+    
+    <!-- Section 4: Improve Empty States -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">📭</div>
+        <div>
+          <div class="section-title">Enhance Empty States</div>
+          <div class="section-subtitle">Priority: Medium | Time: 25 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Create contextual empty state messages</span>
+          <div class="step-desc">Different messages for saved places, reviews, and search results</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Add clear call-to-action buttons</span>
+          <div class="step-desc">Guide users to next logical action (explore, add place, etc.)</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Include helpful icons and illustrations</span>
+          <div class="step-desc">Visual cues that reinforce the action being suggested</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/ui.rs - Enhanced empty state</span>
+
+#[function_component(SavedEmptyState)]
+pub fn saved_empty_state() -> Html {
+    let on_explore = Callback::from(|_| {
+        <span class="code-comment">// Navigate to map view</span>
+    });
+    
+    html! {
+        <span class="empty-state">
+            <span class="empty-icon">🗺️</span>
+            <div class="empty-title">{"Your saved places will appear here"}</div>
+            <div class="empty-sub">{"Tap the heart icon on any place to save it for quick access later."}</div>
+            <button 
+                class="cta-btn" 
+                onclick={on_explore}
+            >
+                <span class="mi">{"explore"}</span>
+                {"Explore nearby places"}
+            </button>
+        </span>
+    }
+}
+
+<span class="code-comment">// Usage in saved view</span>
+if *saved_places.is_empty() {
+    html! { <SavedEmptyState /> }
+} else {
+    html! {
+        <span class="cards">
+            { for saved_places.iter().map(|p| place_card(p)) }
+        </span>
+    }
+}
+      </div>
+    </div>
+    
+    <!-- Section 5: Review Quality Indicators -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">⭐</div>
+        <div>
+          <div class="section-title">Add Review Quality Indicators</div>
+          <div class="section-subtitle">Priority: Medium | Time: 45 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Add review metadata to API response</span>
+          <div class="step-desc">Include reviewer trust level, review count, and helpful votes in place detail API</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Display trust badges on reviews</span>
+          <div class="step-desc">Show "Trusted Scout" badge for verified reviewers with multiple contributions</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Add helpfulness voting system</span>
+          <div class="step-desc">Allow users to mark reviews as helpful, with visible vote counts</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/review_card.rs - Enhanced review display</span>
+
+#[function_component(ReviewCard)]
+pub fn review_card(review: &Review) -> Html {
+    let is_helpful = use_state(|| false);
+    
+    html! {
+        <span class="review-card">
+            <span class="review-top">
+                <span class="avatar">{&review.initial}</span>
+                <span class="review-who">
+                    <div class="review-name">
+                        {&review.name}
+                        if *is_trusted_scout {
+                            <span style="color: var(--green); font-size: 12px;">✓ Trusted Scout</span>
+                        }
+                    </div>
+                    <div class="review-time">{&review.time} · {review.review_count} reviews</div>
+                </span>
+            </span>
+            
+            <span class="stars">
+                { for (0..5).map(|i| {
+                    let lit = if i < review.rating { "lit" } else { "" };
+                    html! { <span class={format!("mi {}", lit)}>{"star"}</span> }
+                })}
+            </span>
+            
+            <div class="review-text">{&review.text}</div>
+            
+            <span class="review-actions">
+                <button 
+                    class={if *is_helpful { "helpful-btn active" } else { "helpful-btn" }}
+                    onclick={on_helpful_click}
+                >
+                    👍 Helpful ({review.helpful_count})
+                </button>
+            </span>
+        </span>
+    }
+}
+      </div>
+    </div>
+    
+    <!-- Section 6: Accessibility -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">♿</div>
+        <div>
+          <div class="section-title">Improve Accessibility</div>
+          <div class="section-subtitle">Priority: High | Time: 1 hour</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Add ARIA labels to all interactive elements</span>
+          <div class="step-desc">Every button, icon, and link needs descriptive aria-label attributes</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Implement focus management</span>
+          <div class="step-desc">Add visible :focus styles and manage focus order for keyboard navigation</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Fix color contrast issues</span>
+          <div class="step-desc">Ensure all text meets WCAG AA standards (4.5:1 for normal text)</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">4</span>
+          <span class="step-title">Add skip navigation links</span>
+          <div class="step-desc">Provide quick access to main content for keyboard users</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// frontend/src/components/ui.rs - Accessible button example</span>
+
+html! {
+    <button 
+        class="icon-btn"
+        aria-label="Close detail view"
+        onclick={on_close}
+        tabindex="0"
+    >
+        <span class="mi">{"close"}</span>
+    </button>
+}
+
+<span class="code-comment">// frontend/assets/styles.css - Add focus styles</span>
+
+:root {
+  --focus-ring: 2px solid var(--accent);
+}
+
+*:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.icon-btn:focus-visible,
+.chip:focus-visible,
+.card:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+<span class="code-comment">// frontend/index.html - Add skip link</span>
+
+<span class="code-string">&lt;a href="#main-content" class="skip-link"&gt;</span>{"Skip to main content"}<span class="code-string">&lt;/a&gt;</span>
+
+<span class="code-string">&lt;style&gt;</span>
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 16px;
+  z-index: 9999;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+<span class="code-string">&lt;/style&gt;</span>
+      </div>
+    </div>
+    
+    <!-- Section 7: Distance Formatting -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">📏</div>
+        <div>
+          <div class="section-title">Standardize Distance Display</div>
+          <div class="section-subtitle">Priority: Low | Time: 20 minutes</div>
+        </div>
+      </div>
+      
+      <div class="implementation-steps">
+        <div class="step">
+          <span class="step-number">1</span>
+          <span class="step-title">Create centralized distance formatter</span>
+          <div class="step-desc">Single function to handle all distance formatting with consistent units</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">2</span>
+          <span class="step-title">Add unit preference setting</span>
+          <div class="step-desc">Allow users to choose between miles and kilometers in settings</div>
+        </div>
+        
+        <div class="step">
+          <span class="step-number">3</span>
+          <span class="step-title">Update all distance displays</span>
+          <div class="step-desc">Replace inline formatting with centralized formatter calls</div>
+        </div>
+      </div>
+      
+      <div class="code-block">
+<span class="code-comment">// shared/src/lib.rs - Add distance formatting utility</span>
+
+pub fn format_distance(miles: f64, unit: DistanceUnit) -> String {
+    match unit {
+        DistanceUnit::Miles => format!("{:.1} mi", miles),
+        DistanceUnit::Kilometers => format!("{:.2} km", miles * 1.60934),
+    }
+}
+
+<span class="code-comment">// Usage in list view</span>
+let unit = use_state(|| DistanceUnit::Miles);
+
+html! {
+    <span class="card-dist">
+        <div class="dist-num">{format_distance(p.distance_mi, *unit)}</div>
+    </span>
+}
+
+<span class="code-comment">// Usage in map pins</span>
+let unit = use_state(|| DistanceUnit::Miles);
+
+html! {
+    <span class="sb-pin-label">
+        {format_distance(place.distance_mi, *unit)}
+    </span>
+}
+      </div>
+    </div>
+    
+    <!-- Implementation Timeline -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">📅</div>
+        <div>
+          <div class="section-title">Implementation Timeline</div>
+          <div class="section-subtitle">Recommended order for maximum impact</div>
+        </div>
+      </div>
+      
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-date">Day 1</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Onboarding Branding Fix</div>
+            <div class="timeline-desc">Quick win that aligns app with design intent. Update icon and text in onboarding component.</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-date">Day 2</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Accessibility Improvements</div>
+            <div class="timeline-desc">Add ARIA labels, focus styles, and fix contrast issues. Critical for inclusive design.</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-date">Day 3</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Loading States & Empty States</div>
+            <div class="timeline-desc">Add loading feedback and enhance empty states with clear CTAs. Improves perceived performance.</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-date">Day 4-5</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Search & Review Quality</div>
+            <div class="timeline-desc">Add search to detail view and implement review credibility indicators. Higher effort, higher reward.</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-date">Day 6</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Distance Formatting Standardization</div>
+            <div class="timeline-desc">Create centralized formatter and update all displays. Low effort, improves consistency.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Files to Modify -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon">📁</div>
+        <div>
+          <div class="section-title">Files to Modify or Create</div>
+          <div class="section-subtitle">Complete list of changes needed</div>
+        </div>
+      </div>
+      
+      <div class="file-list">
+        <div class="file-title">📝 Existing Files (Edit)</div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/onboarding.rs</span>
+          <span class="priority-badge priority-high">High Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/detail_view.rs</span>
+          <span class="priority-badge priority-high">High Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/list_view.rs</span>
+          <span class="priority-badge priority-medium">Medium Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/saved_view.rs</span>
+          <span class="priority-badge priority-medium">Medium Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/ui.rs</span>
+          <span class="priority-badge priority-high">High Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/assets/styles.css</span>
+          <span class="priority-badge priority-high">High Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">shared/src/lib.rs</span>
+          <span class="priority-badge priority-low">Low Priority</span>
+        </div>
+      </div>
+      
+      <div class="file-list" style="margin-top: 20px;">
+        <div class="file-title">✨ New Files (Create)</div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/loading_indicator.rs</span>
+          <span class="priority-badge priority-medium">Medium Priority</span>
+        </div>
+        
+        <div class="file-item">
+          <span class="file-path">frontend/src/components/empty_state.rs</span>
+          <span class="priority-badge priority-medium">Medium Priority</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>Implementation guide generated from UX analysis of Service Break app</p>
+    <p style="margin-top: 8px; color: var(--accent); font-weight: 700;">Total estimated time: ~3.5 hours for all improvements</p>
+  </div>
+</body>
+</html>

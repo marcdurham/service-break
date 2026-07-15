@@ -537,9 +537,9 @@ button { cursor: pointer; }
 }
 .account-sub { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
 .signout-btn {
-  margin-top: 18px; border: 1.5px solid var(--border); border-radius: 14px;
+  width: 100%; margin-top: 18px; border: 1.5px solid var(--border); border-radius: 14px;
   background: none; color: var(--ink-soft); font-size: 14px; font-weight: 700;
-  padding: 12px 22px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .signout-btn .mi { font-size: 18px; }
 .section-title {
