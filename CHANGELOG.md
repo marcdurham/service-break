@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-14
+
+- 23:07 — Simplified `auth::me` to use `.unwrap_or_default()` instead of match (clippy `manual_unwrap_or_default`).
+
 ## 2026-07-12
 
 - 13:45 — Added a show/hide password toggle to the login form on `/account`, using the same `password_field` helper as the change-password section.
