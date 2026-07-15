@@ -8,6 +8,7 @@ use yew::prelude::*;
 
 use crate::app::FALLBACK_CENTER;
 use crate::components::ui::{self, FilterChips};
+use crate::maps_link::looks_like_google_maps_link;
 use crate::{api, glue};
 
 #[derive(Serialize)]
@@ -41,15 +42,6 @@ pub struct MapViewProps {
     /// place, so the app can open the "Add a place" page prefilled.
     pub on_maps_link: Callback<MapsLinkResult>,
     pub on_toast: Callback<String>,
-}
-
-/// Whether `q` looks like a link to a Google Maps place (a `maps.app.goo.gl`
-/// short link, an older `goo.gl/maps` short link, or a full
-/// `google.com/maps` URL) rather than a place-search query.
-fn looks_like_google_maps_link(q: &str) -> bool {
-    let q = q.trim();
-    (q.starts_with("http://") || q.starts_with("https://"))
-        && (q.contains("maps.app.goo.gl") || q.contains("goo.gl/maps") || q.contains("google.com/maps"))
 }
 
 #[function_component(MapView)]

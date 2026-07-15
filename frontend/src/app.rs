@@ -22,6 +22,7 @@ use crate::components::oauth_complete_view::OauthCompleteView;
 use crate::components::onboarding::Onboarding;
 use crate::components::register_view::RegisterView;
 use crate::components::saved_view::SavedView;
+use crate::components::share_target_view::ShareTargetView;
 use crate::components::tab_bar::TabBar;
 use crate::route::Route;
 use crate::{api, glue};
@@ -589,6 +590,9 @@ pub fn app() -> Html {
                     },
                     Route::OauthComplete => html! {
                         <OauthCompleteView on_login={on_login} on_toast={show_toast.clone()} />
+                    },
+                    Route::ShareTarget => html! {
+                        <ShareTargetView on_maps_link={on_maps_link.clone()} on_toast={show_toast.clone()} />
                     },
                     Route::Admin => html! {
                         <AdminView auth={(*auth).clone()} on_toast={show_toast.clone()} />

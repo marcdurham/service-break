@@ -2,6 +2,7 @@ mod api;
 mod app;
 mod components;
 mod glue;
+mod maps_link;
 mod route;
 
 use yew::prelude::*;
