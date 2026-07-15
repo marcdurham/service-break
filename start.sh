@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 # Starts the 3 services needed to debug this app (Postgres, backend API,
 # frontend dev server), each in its own herdr tab.
+# Usage: ./start.sh [0-99]
+#   If a number between 0 and 99 is given, it's added as a suffix to the
+#   default ports: backend uses 8000+N, frontend uses 8800+N.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+SUFFIX=0
+if [[ $# -ge 1 ]]; then
+  if [[ "$1" =~ ^[0-9]{1,2}$ ]] && (( 10#$1 < 100 )); then
+    SUFFIX="$1"
+  else
+    echo "Error: argument must be a number between 0 and 99." >&2
+    exit 1
+  fi
+fi
+
 # label, cwd, command
 SERVICES=(
   "db|$ROOT|docker compose up"
-  "backend|$ROOT|cargo run -p backend"
-  "frontend|$ROOT/frontend|trunk serve"
+  "backend|$ROOT|BIND_ADDR=127.0.0.1:$((8000 + SUFFIX)) cargo run --bin backend"
+  "frontend|$ROOT/frontend|trunk serve --port $((8800 + SUFFIX))"
 )
 
 for entry in "${SERVICES[@]}"; do
