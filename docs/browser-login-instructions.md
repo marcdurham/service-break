@@ -60,6 +60,16 @@ Run with: `cd browser-tools && node /tmp/type_and_click.js`
 
 ## Admin Panel Features
 
-- View all users (`/users`)
+- View all users (`/users`) → click a user to edit them at `/users/{id}`
 - Export full backup (JSON, excludes password hashes)
 - Import backup (replaces current data)
+
+## Troubleshooting: "could not load user"
+
+If the user edit page shows "could not load user", check:
+
+1. **Backend is running**: `ps aux | grep backend` — if not, start with `cargo run --bin backend`
+2. **API responds**: `curl -s http://127.0.0.1:8081/api/admin/users | head -5`
+3. **UUID format**: The backend returns UUIDs as strings; the frontend parses them with `Uuid::parse_str()`
+
+The most common cause is the backend not running or using stale code — restart it after pulling changes.
