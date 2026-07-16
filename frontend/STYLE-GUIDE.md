@@ -64,7 +64,6 @@ All buttons in the same row must use identical `padding` values so text-length d
 |---------|-------------------|
 | `.directions-btn` inside `.action-row` | `15px 14px` |
 | `.rate-btn` inside `.action-row` | `15px 14px` |
-| Base `.rate-btn` (outside action-row) | `15px 14px` |
 
 **Rule:** When adding a button to an existing row, match the row's horizontal padding exactly. Verify by checking that adjacent buttons with different text lengths (e.g., "Map" vs "Delete") have visually equal internal spacing.
 
