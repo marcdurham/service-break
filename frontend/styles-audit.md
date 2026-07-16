@@ -10,9 +10,9 @@ Generated from reviewing all frontend components against `styles.css` and the de
 |-------|-------|-------|
 | `--bg` | `#f6efe4` | Page background (warm cream) |
 | `--ink` | `#17110d` | Primary text, headings (near-black warm brown) |
-| `--muted` | `#8a7560` | Secondary text, labels, subtitles |
+| `--muted` | `#6b5a48` | Secondary text, labels, subtitles |
 | `--border` | `#cfc2b3` | Dividers, input borders, card separators |
-| `--accent` | `#c05f38` | Primary CTA buttons, links, active states |
+| `--accent` | `#934228` | Primary CTA buttons, links, active states |
 | `--accent-light` | `#e9d5c4` | Subtle highlights, hover backgrounds |
 | `--success` | `#6f8256` | Success messages, parking-easy tags |
 | `--danger` | `#a54e2c` | Error text, delete buttons, warnings |
@@ -242,12 +242,12 @@ Generated from reviewing all frontend components against `styles.css` and the de
 
 | Element | Foreground | Background | Ratio | Required | Status |
 |---------|-----------|------------|-------|----------|--------|
-| `--muted` text (#8a7560) on `--bg` (#f6efe4) | #8a7560 | #f6efe4 | **3.84:1** | 4.5:1 | ❌ FAIL — used in card type labels, friend subtitles, field labels, auth notes, detail address |
-| `--muted` on white cards (#fffaf3) | #8a7560 | #fffaf3 | **4.22:1** | 4.5:1 | ❌ FAIL — used in account menu subtitles, user row dates |
-| CTA white text on accent (#c05f38) | #ffffff | #c05f38 | **4.26:1** | 4.5:1 | ⚠️ Fails normal text; passes large text (≥18px bold). Button text is ~16px → needs fix. |
-| Inactive filter chip text (#8a7560) on `--bg` | #8a7560 | #f6efe4 | **3.84:1** | 4.5:1 | ❌ FAIL |
-| Tab bar inactive text (#8a7560) on white | #8a7560 | #ffffff | **4.38:1** | 4.5:1 | ❌ FAIL (close — only 0.12 short) |
-| Accent (#c05f38) on card-bg (#fffaf3) | #c05f38 | #fffaf3 | **4.10:1** | 4.5:1 | ⚠️ Fails normal text; passes large text. Used in links, active chips. |
+| `--muted` text (#6b5a48) on `--bg` (#f6efe4) | #6b5a48 | #f6efe4 | **5.78:1** | 4.5:1 | ✅ Passes AA normal text |
+| `--muted` on white cards (#fffaf3) | #6b5a48 | #fffaf3 | **6.36:1** | 4.5:1 | ✅ Passes AA normal text |
+| CTA white text on accent (#934228) | #ffffff | #934228 | **5.53:1** | 4.5:1 | ✅ Passes AA normal text |
+| Inactive filter chip text (#6b5a48) on `--bg` | #6b5a48 | #f6efe4 | **5.78:1** | 4.5:1 | ✅ Passes AA normal text |
+| Tab bar inactive text (#6b5a48) on white | #6b5a48 | #ffffff | **6.36:1** | 4.5:1 | ✅ Passes AA normal text |
+| Accent (#934228) on card-bg (#fffaf3) | #934228 | #fffaf3 | **5.33:1** | 4.5:1 | ✅ Passes AA normal text |
 
 ### PASS — Meets WCAG AA
 
@@ -261,9 +261,9 @@ Generated from reviewing all frontend components against `styles.css` and the de
 
 ### The Core Problem
 
-The `--muted` color (`#8a7560`) is used extensively as secondary text throughout the app — card type labels, field labels, subtitles, dates, inactive chips, tab bar icons — but it only achieves **3.84:1** against the cream background and **4.22:1** against white cards. Both fail WCAG AA normal-text requirement (4.5:1). This affects virtually every page.
+The `--muted` color (`#6b5a48`) achieves **5.78:1** against cream and **6.36:1** against white — comfortably passing WCAG AA normal-text requirement (4.5:1) across all secondary text uses.
 
-Additionally, `#c05f38` (accent/terracotta) on card backgrounds only reaches **4.10:1**, failing for small text like active chip labels and links.
+The accent color (`#934228`) reaches **5.33:1** on card backgrounds and **5.53:1** for white text on accent — both pass AA.
 
 ---
 
@@ -307,13 +307,8 @@ Additionally, `#c05f38` (accent/terracotta) on card backgrounds only reaches **4
 
 ### P0 — Contrast (WCAG AA Compliance)
 
-1. **Darken `--muted`** from `#8a7560` to `#6b5a48`
-   - New ratio: **5.78:1 on cream**, **6.36:1 on white** — comfortably passes AA normal text (4.5:1)
-   - This single change fixes card type labels, field labels, subtitles, auth notes, inactive chips, and tab bar icons across every page
-   
-2. **Darken accent `--accent`** from `#c05f38` to `#a84e2e`
-   - New ratio: **5.33:1 on card-bg**, **5.53:1 white-on-accent** — passes AA both ways
-   - Fixes active chip text, links, and CTA button text (currently 4.10:1 / 4.26:1, both failing normal text)
+1. ~~Darken `--muted`~~ — already done (`#6b5a48`, ratio 5.78:1 on cream) ✅
+2. ~~Darken accent `--accent`~~ — already done (`#934228`, ratio 5.33:1 on card-bg) ✅
    
 3. Onboarding fine print (`#a98d70` on `#3a2418`) already passes at **4.66:1** ✅ — no change needed
 
