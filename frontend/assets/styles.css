@@ -688,8 +688,10 @@ button { cursor: pointer; }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding-bottom: 2px;
   flex-wrap: wrap;
+}
+.action-row::after {
+  content: ""; flex-shrink: 0; width: 2px; height: 1px;
 }
 .action-row::-webkit-scrollbar { display: none; }
 .action-row .directions-btn { margin-top: 0; flex: 1 0 120px; min-width: 0; padding: 15px 14px; }
