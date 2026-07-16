@@ -34,6 +34,8 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let food_pick = use_state(|| None::<i16>);
     let text = use_state(String::new);
     let editing = use_state(|| false);
+    let show_confirm = use_state(|| false);
+    let deleting = use_state(|| false);
     let edits = use_state(Vec::<PlaceEdit>::new);
     // Bumped after each save so the change history below refetches.
     let edits_refresh = use_state(|| 0u32);
@@ -116,21 +118,37 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
             on_toast.emit("Changes saved".to_owned());
         })
     };
-    let delete_place = {
+    let request_delete = {
+        let show_confirm = show_confirm.clone();
+        Callback::from(move |_| show_confirm.set(true))
+    };
+    let cancel_delete = {
+        let show_confirm = show_confirm.clone();
+        Callback::from(move |_| show_confirm.set(false))
+    };
+    let confirm_delete = {
         let id = p.id;
         let logged_in = props.logged_in;
         let require_login = props.on_require_login.clone();
         let on_close = props.on_close.clone();
         let on_deleted = props.on_deleted.clone();
         let on_toast = props.on_toast.clone();
+        let show_confirm = show_confirm.clone();
+        let deleting = deleting.clone();
         Callback::from(move |_| {
             if !logged_in {
                 require_login.emit(());
+                show_confirm.set(false);
                 return;
             }
+            if *deleting {
+                return;
+            }
+            deleting.set(true);
             let on_toast = on_toast.clone();
             let on_close = on_close.clone();
             let on_deleted = on_deleted.clone();
+            let err_deleting = deleting.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match api::delete_place(id).await {
                     Ok(()) => {
@@ -138,7 +156,10 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         on_deleted.emit(());
                         on_close.emit(());
                     }
-                    Err(msg) => on_toast.emit(msg),
+                    Err(msg) => {
+                        err_deleting.set(false);
+                        on_toast.emit(msg);
+                    }
                 }
             });
         })
@@ -267,7 +288,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         <button class="rate-btn" onclick={share_place}>
                             <span class="mi">{"share"}</span>{"Share"}
                         </button>
-                        <button class="rate-btn delete-btn" onclick={delete_place}>
+                        <button class="rate-btn delete-btn" onclick={request_delete}>
                             <span class="mi">{"delete_forever"}</span>{"Delete"}
                         </button>
                     </div>
@@ -475,6 +496,29 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     on_saved={on_saved}
                     on_toast={props.on_toast.clone()}
                 />
+            }
+
+            if *show_confirm {
+                <div class="confirm-scrim" onclick={cancel_delete.clone()}>
+                    <div class="confirm-dialog" onclick={|e: MouseEvent| e.stop_propagation()}>
+                        <div class="confirm-title">{"Delete place?"}</div>
+                        <div class="confirm-body">
+                            {"This removes "}{&p.name}{" and all its reviews. This can't be undone."}
+                        </div>
+                        <div class="confirm-actions">
+                            <button class="confirm-cancel" onclick={cancel_delete}>
+                                {"Cancel"}
+                            </button>
+                            <button
+                                class="confirm-ok"
+                                disabled={*deleting}
+                                onclick={confirm_delete}
+                            >
+                                {if *deleting { "Deleting..." } else { "Delete" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             }
         </div>
     }
