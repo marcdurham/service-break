@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set (see .cargo/config.toml)");
-    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8081".to_owned());
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8020".to_owned());
     let nominatim_url =
         std::env::var("NOMINATIM_URL").unwrap_or_else(|_| DEFAULT_NOMINATIM_URL.to_owned());
     let google = backend::google_auth::GoogleConfig::from_env();

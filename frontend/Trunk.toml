@@ -2,5 +2,5 @@
 target = "index.html"
 
 [serve]
-port = 8020
-proxy = [{ from = "/api", to = "http://127.0.0.1:8081" }]
+port = 8820
+proxy = [{ from = "/api", to = "http://127.0.0.1:8020" }]
