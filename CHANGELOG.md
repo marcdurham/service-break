@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-16
+
+- 03:05 — Fixed Users and Edit User pages layout: back button and title were squished inline; now matches /change-password with title on its own line and "Back to users" button below.
+
 ## 2026-07-15
 
 - 11:11 — Added UX improvement analysis with three HTML files documenting issues found by comparing current implementation against design mockup. Includes visual comparisons, step-by-step implementation guide, and exact code changes reference.
