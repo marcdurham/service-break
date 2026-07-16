@@ -56,6 +56,18 @@ Use utility classes from `styles.css`, not inline styles:
 
 **Rule:** Never invent a new button class. Reuse one of the four above. If a button needs to be wider/narrower, adjust padding — not the class.
 
+## Button Padding (Consistent)
+
+All buttons in the same row must use identical `padding` values so text-length differences don't create optical inconsistency:
+
+| Context | Horizontal Padding |
+|---------|-------------------|
+| `.directions-btn` inside `.action-row` | `15px 14px` |
+| `.rate-btn` inside `.action-row` | `15px 14px` |
+| Base `.rate-btn` (outside action-row) | `15px 14px` |
+
+**Rule:** When adding a button to an existing row, match the row's horizontal padding exactly. Verify by checking that adjacent buttons with different text lengths (e.g., "Map" vs "Delete") have visually equal internal spacing.
+
 ## Typography Scale
 
 | Context | Size / Weight | Class or element |
@@ -137,12 +149,14 @@ Icons are `<span class="mi">{"icon_name"}</span>`. Material Symbols Rounded fill
 
 Always allow horizontal overflow on narrow screens:
 ```css
-/* For button rows with fixed-count items */
-.row { display: flex; gap: 9px; overflow-x: auto; scrollbar-width: none; }
+/* For button rows with fixed-count items — allows wrapping when no horizontal room */
+.row { display: flex; gap: 9px; overflow-x: auto; scrollbar-width: none; flex-wrap: wrap; }
 .row::-webkit-scrollbar { display: none; }
 /* For tag/chip rows that should wrap */
 .tag-row { display: flex; gap: 7px; flex-wrap: wrap; }
 ```
+
+**Rule:** Button rows must use `flex-wrap: wrap` so buttons can float down to the next line when there is no horizontal room. Never force a single row with `nowrap` — it creates horizontal scroll on narrow screens.
 
 ## What Not To Do
 
