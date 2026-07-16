@@ -606,8 +606,16 @@ button { cursor: pointer; }
   cursor: pointer;
 }
 .user-row:last-child { border-bottom: none; }
-.friend-name { font-weight: 600; font-size: 14.5px; color: var(--ink); }
-.friend-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.friend-name {
+  font-weight: 600; font-size: 14.5px; color: var(--ink);
+  min-width: 0; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.friend-sub {
+  font-size: 12px; color: var(--muted); margin-top: 2px;
+  min-width: 0; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
 .friend-status {
   font-size: 11.5px; font-weight: 700; padding: 4px 10px;
   border-radius: 999px; white-space: nowrap;
@@ -673,9 +681,18 @@ button { cursor: pointer; }
 .rating-num { font-size: 13.5px; color: #5c4c3e; font-weight: 700; }
 .rating-count { font-size: 13px; color: var(--muted2); }
 
-.action-row { display: flex; gap: 9px; margin-top: 16px; }
-.action-row .directions-btn { margin-top: 0; flex: 1; padding: 15px 12px; }
-.action-row .rate-btn { padding: 15px 13px; }
+.action-row {
+  display: flex;
+  gap: 9px;
+  margin-top: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.action-row::-webkit-scrollbar { display: none; }
+.action-row .directions-btn { margin-top: 0; flex: 1 0 120px; min-width: 0; padding: 15px 12px; }
+.action-row .rate-btn { flex: 1 0 90px; min-width: 0; padding: 15px 13px; }
 .rate-btn {
   border: 1.5px solid #e0d3bf; border-radius: 15px; padding: 15px 17px;
   background: #fff; color: #8a5a3c; font-size: 15px; font-weight: 700;

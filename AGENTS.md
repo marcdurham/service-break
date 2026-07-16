@@ -8,6 +8,12 @@ Actix Web backend, PostgreSQL. The visual design follows the prototype
 mockup `service-break.dc.html` kept at the repo root — treat it as the
 design reference when adding UI.
 
+## Design
+
+- **Style guide:** `frontend/STYLE-GUIDE.md` — design tokens, spacing system, button sizes, typography scale, contrast requirements (WCAG AA), and component patterns. Read it before adding or modifying UI.
+- **Full audit:** `frontend/styles-audit.md` — page-by-page style inventory, contrast analysis, and consistency issues found during the last pass.
+- The prototype mockup `service-break.dc.html` at the repo root is the source of truth for visual design; the style guide summarises it into actionable rules.
+
 ## Layout
 
 | Path        | What it is                                                            |

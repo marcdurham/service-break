@@ -6,6 +6,7 @@ short description.
 
 ## 2026-07-16
 
+- 21:30 — Fixed mobile overflow on /place action-row (Share/Delete buttons going off-screen): added `overflow-x: auto` with hidden scrollbar to `.action-row`, flex-basis constraints to button children, and text-overflow ellipsis for friend names/subtitles in account view. Added frontend style guide (`frontend/STYLE-GUIDE.md`) covering design tokens, spacing system, button sizes, typography scale, contrast requirements (WCAG AA), and component patterns; referenced it in `AGENTS.md`.
 - 20:50 — Made Add tab button match other tabs (icon + label, no circle wrapper); removed dead `.tab-add-btn` CSS.
 - 20:43 — Frontend style audit fixes: darken --muted (#8a7863→#6b5a48) and --accent (#c05f38→#934228) to pass WCAG AA 4.5:1 contrast; add icon size (.mi-sm/md/lg), avatar scale, and spacing utility classes; standardize .screen-title (28px), .screen-sub margin, .submit-btn / .alt-auth-btn heights; replace inline style="margin-*" across all component views with CSS classes.
 - 03:05 — Fixed Users and Edit User pages layout: back button and title were squished inline; now matches /change-password with title on its own line and "Back to users" button below.
