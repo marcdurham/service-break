@@ -12,6 +12,7 @@ short description.
 
 - 11:11 — Added UX improvement analysis with three HTML files documenting issues found by comparing current implementation against design mockup. Includes visual comparisons, step-by-step implementation guide, and exact code changes reference.
 - 17:00 — Removed `[[proxy]]` block from Trunk.toml; it conflicted with `--proxy-backend` by registering `/api/*` twice and panicking axum on startup.
+- 20:17 — Fixed button text that didn't match its destination: Users page "Back to users" now says "Back to admin", and Account page's duplicate "Your name" section title is now "Your invitation name".
 - 16:30 — Fixed EditUserView panic when navigating back from the edit page. The component was panicking because Yew hooks (use_state, Callback::from) were defined after an early return when not on the UserEdit route. Restructured so all hooks are initialized first, then check user_id_opt and return early if None.
 
 ## 2026-07-14

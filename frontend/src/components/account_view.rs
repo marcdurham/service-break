@@ -307,7 +307,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                 <button class="name-save-btn" onclick={save_profile} style="margin-top:8px">{"Save profile"}</button>
 
                 if overview.as_ref().is_some_and(|o| o.my_invite_code.is_some()) {
-                    <div class="section-title">{"Your name"}</div>
+                    <div class="section-title">{"Your invitation name"}</div>
                     <div class="name-edit-row">
                         <input
                             class="input"

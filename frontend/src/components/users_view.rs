@@ -49,7 +49,7 @@ pub fn users_view() -> Html {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Users"}</div>
             <button class="alt-auth-btn" onclick={go_back}>
-                <span class="mi">{"arrow_back"}</span>{"Back to users"}
+                <span class="mi">{"arrow_back"}</span>{"Back to admin"}
             </button>
 
             if !error.is_empty() {
