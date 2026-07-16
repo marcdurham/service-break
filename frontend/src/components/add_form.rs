@@ -468,9 +468,9 @@ fn requirement_row(
 ) -> Html {
     let current = get(form);
     html! {
-        <div style="margin-top:18px">
+        <div class="mt-md">
             <div class="toggle-title">{title}</div>
-            <div class="toggle-sub" style="margin-bottom:8px">{sub}</div>
+            <div class="toggle-sub mb-sm">{sub}</div>
             <div class="pick-grid-3">
                 { for Requirement::ALL.into_iter().map(|r| {
                     let on = current == r;

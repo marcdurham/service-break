@@ -239,7 +239,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Account"}</div>
             if let Some(session) = &props.auth {
-                <div class="screen-sub" style="margin-bottom:18px">
+                <div class="screen-sub mb-md">
                     {"You're signed in and ready to scout."}
                 </div>
                 <div class="account-card">
@@ -275,7 +275,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                 <div class="name-edit-row">
                     <input
                         class="input"
-                        style="margin-bottom:0; flex: 1 1 auto"
+                        style="flex:1 1 auto;margin-bottom:0"
                         placeholder="Given name (optional)"
                         value={(*given_name).clone()}
                         oninput={{
@@ -291,7 +291,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                 <div class="name-edit-row">
                     <input
                         class="input"
-                        style="margin-bottom:0; flex: 1 1 auto"
+                        style="flex:1 1 auto;margin-bottom:0"
                         placeholder="Family name (optional)"
                         value={(*family_name).clone()}
                         oninput={{
@@ -304,7 +304,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                         }}
                     />
                 </div>
-                <button class="name-save-btn" onclick={save_profile} style="margin-top:8px">{"Save profile"}</button>
+                <button class="name-save-btn mb-sm" onclick={save_profile}>{"Save profile"}</button>
 
                 if overview.as_ref().is_some_and(|o| o.my_invite_code.is_some()) {
                     <div class="section-title">{"Your invitation name"}</div>
@@ -350,7 +350,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     </div>
                 }
             } else {
-                <div class="screen-sub" style="margin-bottom:6px">
+                <div class="screen-sub mb-sm">
                     {"Sign in to add places, post reviews and save favorites."}
                 </div>
 

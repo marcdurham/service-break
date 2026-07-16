@@ -299,32 +299,29 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
             } else {
                 <div class="field-label">{"Username"}</div>
                 <input
-                    class="input"
+                    class="input mb-md"
                     type="text"
                     value={(*username).clone()}
                     oninput={on_username_input}
-                    style="margin-bottom:14px"
                 />
 
                 <div class="field-label">{"Given name"}</div>
                 <input
-                    class="input"
+                    class="input mb-md"
                     type="text"
                     value={(*given_name).clone()}
                     oninput={on_given_name_input}
-                    style="margin-bottom:14px"
                 />
 
                 <div class="field-label">{"Family name"}</div>
                 <input
-                    class="input"
+                    class="input mb-md"
                     type="text"
                     value={(*family_name).clone()}
                     oninput={on_family_name_input}
-                    style="margin-bottom:14px"
                 />
 
-                <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
+                <label class="mb-md" style="display:flex;align-items:center;gap:8px">
                     <input
                         type="checkbox"
                         checked={*is_admin}
@@ -334,7 +331,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                 </label>
 
                 <div class="field-label">{"Reset password"}</div>
-                <div class="auth-note" style="margin-bottom:8px">
+                <div class="auth-note mb-sm">
                     {"Leave blank to keep the current password."}
                 </div>
                 <input
@@ -343,7 +340,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                     placeholder={if password.is_empty() { "New password" } else { "" }}
                     value={(*password).clone()}
                     oninput={on_password_input}
-                    style="margin-bottom:8px"
+                    class="mb-sm"
                 />
                 <input
                     class="input"
@@ -363,9 +360,9 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                     {if *busy { "One moment…" } else { "Save changes" }}
                 </button>
 
-                <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)">
+                <div class="mt-md" style="padding-top:18px;border-top:1px solid var(--border)">
                     <div class="field-label" style="color:var(--danger)">{"Danger zone"}</div>
-                    <div class="auth-note" style="margin-bottom:12px">
+                    <div class="auth-note mb-md">
                         {"Deleting this account removes all places, reviews and saved lists \
                          tied to it. The invitation history stays for audit purposes."}
                     </div>
@@ -373,7 +370,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                         class="alt-auth-btn"
                         onclick={delete}
                         disabled={*busy}
-                        style={"color:var(--danger);border-color:var(--danger)"}
+                        style="color:var(--danger);border-color:var(--danger)"
                     >
                         <span class="mi">{"delete_forever"}</span>{"Delete account"}
                     </button>

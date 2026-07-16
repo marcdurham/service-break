@@ -59,12 +59,12 @@ pub fn users_view() -> Html {
             if *busy {
                 <div class="auth-note">{"Loading…"}</div>
             } else {
-                <div class="screen-sub" style="margin-bottom:14px">{header}</div>
+                <div class="screen-sub mb-md">{header}</div>
 
                 if users.is_empty() {
                     <div class="auth-note">{"No accounts yet."}</div>
                 } else {
-                    <div style="margin-top:4px">
+                    <div class="mt-sm">
                         { for users.iter().enumerate().map(|(i, u)| {
                             let color = AVATAR_COLORS[i % AVATAR_COLORS.len()];
                             let initial = u.username.chars().next().unwrap_or('S').to_ascii_uppercase();
@@ -86,7 +86,7 @@ pub fn users_view() -> Html {
                             };
                             html! {
                                 <div
-                                    style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer"
+                                    class="user-row"
                                     onclick={go_to_edit}
                                 >
                                     <div
