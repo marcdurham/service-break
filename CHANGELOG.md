@@ -6,6 +6,9 @@ short description.
 
 ## 2026-07-16
 
+- 23:45 — Added a confirmation dialog modal to the Delete button on /page. Clicking Delete now shows a centered "Delete place?" dialog with Cancel and Delete actions instead of deleting immediately; the Delete action is disabled while the request is in flight.
+
+
 - 21:51 — Aligned `.composer-actions` gap to `9px` to match `.action-row`; both are button rows and should use the same spacing.
 - 21:51 — Moved `.action-row` scrollbar-hiding `padding-bottom: 2px` to a zero-height `::after` pseudo-element so it doesn't create stray whitespace when buttons wrap to multiple lines.
 - 21:50 — Removed speculative "Base .rate-btn (outside action-row)" row from STYLE-GUIDE button padding table; no .rate-btn exists outside .action-row in the codebase.
