@@ -832,17 +832,10 @@ button { cursor: pointer; }
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 4px 0;
 }
-.tab .mi { font-size: 25px; color: #a99b87; }
-.tab span:last-child { font-size: 10px; font-weight: 600; color: #a99b87; }
+.tab .mi { font-size: 25px; color: var(--muted); }
+.tab span:last-child { font-size: 10px; font-weight: 600; color: var(--muted); }
 .tab.on .mi, .tab.on span:last-child { color: var(--accent); }
-.tab-add-btn {
-  width: 52px; height: 40px; border-radius: 15px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--accent);
-  box-shadow: 0 8px 18px -6px rgba(147, 66, 40, .7);
-  margin-top: -2px;
-}
-.tab-add-btn .mi { font-size: 26px; color: #fff; }
+
 
 /* ---------- toast ---------- */
 
@@ -876,7 +869,6 @@ button { cursor: pointer; }
   .rail-logo .mi { font-size: 26px; color: var(--dark); }
   .tab { flex: 0 0 auto; padding: 11px 0; border-radius: 14px; }
   .tab.on { background: #f4ead9; }
-  .tab-add-btn { width: 48px; height: 44px; margin-top: 0; }
 
   /* content sits to the right of the rail */
   .map-screen, .screen, .detail-overlay, .picker-overlay { left: 88px; }
