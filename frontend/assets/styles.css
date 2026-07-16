@@ -695,7 +695,7 @@ button { cursor: pointer; }
 .action-row .directions-btn { margin-top: 0; flex: 1 0 120px; min-width: 0; padding: 15px 14px; }
 .action-row .rate-btn { flex: 1 0 90px; min-width: 0; padding: 15px 14px; }
 .rate-btn {
-  border: 1.5px solid #e0d3bf; border-radius: 15px; padding: 15px 14px;
+  border: 1.5px solid #e0d3bf; border-radius: 15px;
   background: #fff; color: #8a5a3c; font-size: 15px; font-weight: 700;
   display: flex; align-items: center; gap: 7px;
 }
