@@ -6,6 +6,7 @@ short description.
 
 ## 2026-07-16
 
+- 21:51 — Aligned `.composer-actions` gap to `9px` to match `.action-row`; both are button rows and should use the same spacing.
 - 21:51 — Moved `.action-row` scrollbar-hiding `padding-bottom: 2px` to a zero-height `::after` pseudo-element so it doesn't create stray whitespace when buttons wrap to multiple lines.
 - 21:50 — Removed speculative "Base .rate-btn (outside action-row)" row from STYLE-GUIDE button padding table; no .rate-btn exists outside .action-row in the codebase.
 - 21:49 — Removed dead `padding: 15px 14px` from base `.rate-btn`; the action-row selector already sets it and every rate-btn lives inside an action-row.

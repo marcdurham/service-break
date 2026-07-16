@@ -754,7 +754,7 @@ button { cursor: pointer; }
 .composer .clean-pick { padding: 9px 0; }
 .composer .clean-pick .mi { font-size: 20px; }
 .composer textarea { height: 64px; }
-.composer-actions { display: flex; gap: 8px; margin-top: 10px; }
+.composer-actions { display: flex; gap: 9px; margin-top: 10px; }
 .composer-send {
   flex: 1; border: none; border-radius: 12px; padding: 12px;
   background: var(--accent); color: #fff; font-weight: 700; font-size: 15px;
