@@ -3,4 +3,6 @@ target = "index.html"
 
 [serve]
 port = 8820
-proxy = [{ from = "/api", to = "http://127.0.0.1:8020" }]
+
+[[proxy]]
+backend = "http://127.0.0.1:8020/api"
