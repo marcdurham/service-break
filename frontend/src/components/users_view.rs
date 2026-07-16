@@ -75,12 +75,12 @@ pub fn users_view() -> Html {
                             if id == Uuid::nil() {
                                 web_sys::console::error_1(&format!("Failed to parse UUID for user {}: '{}'", u.username, u.id).into());
                             } else {
-                                web_sys::console::log_1(&format!("Parsed UUID: {}", id).into());
+                                web_sys::console::log_1(&format!("Parsed UUID: {id}").into());
                             }
                             let go_to_edit = {
                                 let navigator = navigator.clone();
                                 Callback::from(move |_| {
-                                    web_sys::console::log_1(&format!("Navigating to /users/{}", id).into());
+                                    web_sys::console::log_1(&format!("Navigating to /users/{id}").into());
                                     navigator.push(&Route::UserEdit { id })
                                 })
                             };

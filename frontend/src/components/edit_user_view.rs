@@ -21,7 +21,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     let route = use_route::<Route>().unwrap_or(Route::Users);
 
     // Debug: log the current route.
-    web_sys::console::log_1(&format!("EditUserView route: {:?}", route).into());
+    web_sys::console::log_1(&format!("EditUserView route: {route:?}").into());
 
     // Form state. `initial_username` is captured once so we can detect the
     // "same as before" case and skip sending it (which would trigger a
@@ -42,7 +42,7 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
     // are initialized so Yew's hook counter stays in sync.
     let user_id_opt: Option<uuid::Uuid> = match &route {
         Route::UserEdit { id } => {
-            web_sys::console::log_1(&format!("Extracted user ID: {}", id).into());
+            web_sys::console::log_1(&format!("Extracted user ID: {id}").into());
             Some(*id)
         }
         _ => {
