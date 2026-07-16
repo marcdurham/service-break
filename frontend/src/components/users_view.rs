@@ -47,12 +47,10 @@ pub fn users_view() -> Html {
 
     html! {
         <div class="screen sb-scroll">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                <button class="alt-auth-btn" onclick={go_back}>
-                    <span class="mi">{"arrow_back"}</span>{"Back"}
-                </button>
-                <div class="screen-title" style="font-size:24px">{"Users"}</div>
-            </div>
+            <div class="screen-title">{"Users"}</div>
+            <button class="alt-auth-btn" onclick={go_back}>
+                <span class="mi">{"arrow_back"}</span>{"Back to admin"}
+            </button>
 
             if !error.is_empty() {
                 <div class="auth-note" style="color:var(--danger);margin-bottom:12px">{(*error).clone()}</div>
