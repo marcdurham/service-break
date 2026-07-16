@@ -34,19 +34,11 @@ pub fn tab_bar(props: &TabBarProps) -> Html {
                         }
                     })
                 };
-                if r == Route::Add {
-                    html! {
-                        <button class="tab" {onclick}>
-                            <div class="tab-add-btn"><span class="mi">{"add"}</span></div>
-                        </button>
-                    }
-                } else {
-                    html! {
-                        <button class={if on { "tab on" } else { "tab" }} {onclick}>
-                            <span class="mi">{icon}</span>
-                            <span>{label}</span>
-                        </button>
-                    }
+                html! {
+                    <button class={if on { "tab on" } else { "tab" }} {onclick}>
+                        <span class="mi">{icon}</span>
+                        <span>{label}</span>
+                    </button>
                 }
             }) }
         </div>

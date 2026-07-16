@@ -59,12 +59,12 @@ pub fn users_view() -> Html {
             if *busy {
                 <div class="auth-note">{"Loading…"}</div>
             } else {
-                <div class="screen-sub" style="margin-bottom:14px">{header}</div>
+                <div class="screen-sub mb-md">{header}</div>
 
                 if users.is_empty() {
                     <div class="auth-note">{"No accounts yet."}</div>
                 } else {
-                    <div style="margin-top:4px">
+                    <div class="mt-sm">
                         { for users.iter().enumerate().map(|(i, u)| {
                             let color = AVATAR_COLORS[i % AVATAR_COLORS.len()];
                             let initial = u.username.chars().next().unwrap_or('S').to_ascii_uppercase();
@@ -75,18 +75,18 @@ pub fn users_view() -> Html {
                             if id == Uuid::nil() {
                                 web_sys::console::error_1(&format!("Failed to parse UUID for user {}: '{}'", u.username, u.id).into());
                             } else {
-                                web_sys::console::log_1(&format!("Parsed UUID: {}", id).into());
+                                web_sys::console::log_1(&format!("Parsed UUID: {id}").into());
                             }
                             let go_to_edit = {
                                 let navigator = navigator.clone();
                                 Callback::from(move |_| {
-                                    web_sys::console::log_1(&format!("Navigating to /users/{}", id).into());
+                                    web_sys::console::log_1(&format!("Navigating to /users/{id}").into());
                                     navigator.push(&Route::UserEdit { id })
                                 })
                             };
                             html! {
                                 <div
-                                    style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer"
+                                    class="user-row"
                                     onclick={go_to_edit}
                                 >
                                     <div

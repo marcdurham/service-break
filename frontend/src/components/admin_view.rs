@@ -33,7 +33,7 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
         return html! {
             <div class="screen sb-scroll">
                 <div class="screen-title">{"Admin"}</div>
-                <div class="screen-sub" style="margin-bottom:18px">
+                <div class="screen-sub mb-md">
                     {"This page is for admin accounts only."}
                 </div>
                 <button class="alt-auth-btn" onclick={go_to_account}>
@@ -107,20 +107,19 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
     html! {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Admin"}</div>
-            <div class="screen-sub" style="margin-bottom:18px">
+            <div class="screen-sub mb-md">
                 {"Back up all data, or restore a backup after a re-deploy."}
             </div>
 
             <button
-                class="alt-auth-btn"
+                class="alt-auth-btn mb-md"
                 onclick={go_to_users}
-                style="margin-bottom:18px"
             >
                 <span class="mi">{"people"}</span>{"View users"}
             </button>
 
             <div class="field-label">{"Export"}</div>
-            <div class="auth-note" style="margin-bottom:8px">
+            <div class="auth-note mb-sm">
                 {"Downloads everything — places, reviews, saved lists, invitations \
                   and accounts — as one JSON file. Password hashes are never included."}
             </div>
@@ -129,16 +128,15 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
                 {if *busy { "One moment…" } else { "Export backup" }}
             </button>
 
-            <div class="field-label" style="margin-top:18px">{"Import"}</div>
-            <div class="auth-note" style="margin-bottom:8px">
+            <div class="field-label mt-md">{"Import"}</div>
+            <div class="auth-note mb-sm">
                 {"Paste the contents of a backup file and import it. This replaces \
                   the current data. Accounts that don't exist yet are recreated with \
                   new random passwords, shown below afterwards — passwords are never \
                   part of the backup itself."}
             </div>
             <textarea
-                class="input"
-                style="min-height:140px;font-family:monospace;font-size:12px"
+                class="textarea textarea-mono"
                 placeholder={"{ \"format_version\": 1, ... }"}
                 value={(*import_text).clone()}
                 oninput={on_import_input}
@@ -153,7 +151,7 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
             </button>
 
             if let Some(s) = &*summary {
-                <div class="field-label" style="margin-top:18px">{"Import result"}</div>
+                <div class="field-label mt-md">{"Import result"}</div>
                 <div class="auth-note">
                     {format!(
                         "Restored {} accounts, {} places, {} reviews, {} saved places \
@@ -162,12 +160,12 @@ pub fn admin_view(props: &AdminViewProps) -> Html {
                     )}
                 </div>
                 if !s.new_passwords.is_empty() {
-                    <div class="auth-note" style="margin-top:8px">
+                    <div class="auth-note mt-sm">
                         {"New passwords for recreated accounts — this is the only time \
                           they're shown, so pass them on now (or reset them later with \
                           scripts/change-password.sh):"}
                     </div>
-                    <div style="font-family:monospace;font-size:13px;margin-top:8px">
+                    <div class="mt-sm" style="font-family:'DM Mono','Courier New',monospace;font-size:13px">
                         { for s.new_passwords.iter().map(|(user, pass)| html! {
                             <div style="padding:2px 0">{format!("{user}: {pass}")}</div>
                         }) }

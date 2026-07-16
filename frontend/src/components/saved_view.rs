@@ -15,7 +15,7 @@ pub fn saved_view(props: &SavedViewProps) -> Html {
     html! {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Saved"}</div>
-            <div class="screen-sub" style="margin-bottom:18px">
+            <div class="screen-sub mb-md">
                 {format!("{} spots you can count on.", props.places.len())}
             </div>
             if props.places.is_empty() {
@@ -55,7 +55,7 @@ fn saved_card(p: &PlaceSummary, props: &SavedViewProps) -> Html {
             { ui::badge(p.place_type) }
             <div class="card-main">
                 <div class="card-name">{&p.name}</div>
-                <div class="card-type" style="margin-top:2px">{sub}</div>
+                <div class="card-type">{sub}</div>
             </div>
             <span class="card-dir-btn" onclick={directions} role="button">
                 <span class="mi">{"directions"}</span>

@@ -184,14 +184,14 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Create an account"}</div>
             if props.auth.is_some() {
-                <div class="screen-sub" style="margin-bottom:18px">
+                <div class="screen-sub mb-md">
                     {"You're already signed in."}
                 </div>
                 <button class="alt-auth-btn" onclick={go_to_account}>
                     <span class="mi">{"person"}</span>{"Go to Account"}
                 </button>
             } else {
-                <div class="screen-sub" style="margin-bottom:6px">
+                <div class="screen-sub mb-sm">
                     {"Registration is invite-only — you'll need a code from a friend \
                       who's already a scout."}
                 </div>

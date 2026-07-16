@@ -6,6 +6,15 @@ short description.
 
 ## 2026-07-16
 
+- 21:51 — Aligned `.composer-actions` gap to `9px` to match `.action-row`; both are button rows and should use the same spacing.
+- 21:51 — Moved `.action-row` scrollbar-hiding `padding-bottom: 2px` to a zero-height `::after` pseudo-element so it doesn't create stray whitespace when buttons wrap to multiple lines.
+- 21:50 — Removed speculative "Base .rate-btn (outside action-row)" row from STYLE-GUIDE button padding table; no .rate-btn exists outside .action-row in the codebase.
+- 21:49 — Removed dead `padding: 15px 14px` from base `.rate-btn`; the action-row selector already sets it and every rate-btn lives inside an action-row.
+- 21:49 — Updated styles-audit.md token table and contrast analysis to reflect current `--muted` (#6b5a48) and `--accent` (#934228) values; marked WCAG AA fixes as resolved.
+- 21:45 — Standardized /place action-row button padding to `15px 14px` for all buttons (directions-btn and rate-btn) so Share/Delete buttons have consistent internal spacing with Map/Rate/Edit. Added `flex-wrap: wrap` to `.action-row` so buttons can float down to next line when no horizontal room. Documented both rules in STYLE-GUIDE.md.
+- 21:30 — Fixed mobile overflow on /place action-row (Share/Delete buttons going off-screen): added `overflow-x: auto` with hidden scrollbar to `.action-row`, flex-basis constraints to button children, and text-overflow ellipsis for friend names/subtitles in account view. Added frontend style guide (`frontend/STYLE-GUIDE.md`) covering design tokens, spacing system, button sizes, typography scale, contrast requirements (WCAG AA), and component patterns; referenced it in `AGENTS.md`.
+- 20:50 — Made Add tab button match other tabs (icon + label, no circle wrapper); removed dead `.tab-add-btn` CSS.
+- 20:43 — Frontend style audit fixes: darken --muted (#8a7863→#6b5a48) and --accent (#c05f38→#934228) to pass WCAG AA 4.5:1 contrast; add icon size (.mi-sm/md/lg), avatar scale, and spacing utility classes; standardize .screen-title (28px), .screen-sub margin, .submit-btn / .alt-auth-btn heights; replace inline style="margin-*" across all component views with CSS classes.
 - 03:05 — Fixed Users and Edit User pages layout: back button and title were squished inline; now matches /change-password with title on its own line and "Back to users" button below.
 
 ## 2026-07-15

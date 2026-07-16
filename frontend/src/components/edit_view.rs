@@ -130,8 +130,8 @@ pub fn edit_view(props: &EditViewProps) -> Html {
     html! {
         <div class="detail-overlay">
             <div class="detail-scroll sb-scroll">
-                <div class="detail-body" style="padding-top:18px">
-                    <div class="reviews-head" style="margin:0 0 4px">
+                <div class="detail-body pt-18">
+                    <div class="reviews-head">
                         <div class="screen-title">{"Edit place"}</div>
                         <button class="hero-btn" onclick={close.clone()}>
                             <span class="mi">{"close"}</span>
@@ -245,7 +245,7 @@ pub fn edit_view(props: &EditViewProps) -> Html {
                         <span class="mi">{"save"}</span>
                         {if *submitting { "Saving…" } else { "Save changes" }}
                     </button>
-                    <div class="composer-actions" style="padding-bottom:24px">
+                    <div class="composer-actions pb-24">
                         <button class="composer-cancel" onclick={close}>{"Cancel"}</button>
                     </div>
                 </div>

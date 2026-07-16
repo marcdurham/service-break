@@ -148,7 +148,7 @@ pub fn invite_view(props: &InviteViewProps) -> Html {
     html! {
         <div class="screen sb-scroll">
             <div class="screen-title">{"Invite"}</div>
-            <div class="screen-sub" style="margin-bottom:18px">
+            <div class="screen-sub mb-md">
                 {"Every scout makes the map better."}
             </div>
             <div class="invite-card">

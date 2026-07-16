@@ -404,7 +404,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                         </div>
                     }
 
-                    <div class="cards" style="padding-bottom:24px">
+                    <div class="cards pb-24">
                         { for d.reviews.iter().enumerate().map(|(i, r)| html! {
                             <div class="review-card" key={r.id.to_string()}>
                                 <div class="review-top">
@@ -444,10 +444,10 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
                     </div>
 
                     if !edits.is_empty() {
-                        <div class="reviews-head" style="margin-top:0">
+                        <div class="reviews-head">
                             <div class="reviews-title">{"Change history"}</div>
                         </div>
-                        <div class="cards" style="padding-bottom:24px">
+                        <div class="cards pb-24">
                             { for edits.iter().map(|e| html! {
                                 <div class="review-card">
                                     <div class="review-name">
