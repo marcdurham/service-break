@@ -33,8 +33,8 @@ pub fn onboarding(props: &OnboardingProps) -> Html {
             <div class="onb-foot">
                 <div class="onb-features">
                     <div class="onb-feature">
-                        <span class="mi">{"mop"}</span>
-                        <div class="onb-feature-text">{"Cleanliness ratings"}</div>
+                        <span class="mi">{"clean_hands"}</span>
+                        <div class="onb-feature-text">{"Clean, comfortable places"}</div>
                     </div>
                     <div class="onb-feature">
                         <span class="mi">{"near_me"}</span>

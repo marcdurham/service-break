@@ -194,7 +194,7 @@ pub fn edit_view(props: &EditViewProps) -> Html {
                         }) }
                     </div>
 
-                    <div class="field-label">{"Bathroom distance from door (ft)"}</div>
+                    <div class="field-label">{"Distance to restroom (ft)"}</div>
                     <input
                         class="input"
                         type="number"

@@ -22,8 +22,15 @@ design reference when adding UI.
 | `backend/`  | Actix Web API, sqlx/Postgres, Nominatim geocoding, `migrations/`, `seed.sql` |
 | `frontend/` | Yew app served by Trunk; yew-router URL per page; Leaflet/OSM map via JS glue in `index.html`; styles in `assets/styles.css` |
 
-Ports: frontend (Trunk) **8020**, backend API **8081**, Postgres (docker)
-**127.0.0.1:5433**. `DATABASE_URL` is set in `.cargo/config.toml`.
+Run all three services with `./start.sh <N>` where N is a random 2-digit
+number (0–99). This launches Postgres, backend (port **8000+N**), and frontend
+(port **8800+N**) each in its own herdr tab labeled `db`, `backend`, and
+`frontend`. `DATABASE_URL` is set in `.cargo/config.toml`.
+
+After starting, check the herdr tabs to see service status — the `backend`
+tab shows migration/seed output and the listening port; the `frontend` tab
+shows the dev server URL. If something fails to start, read that tab's
+output for errors.
 
 Identity: username/password accounts (Argon2 hashes, 30-day bearer-token
 sessions; see `backend/src/auth.rs`). All writes — adding places, posting
@@ -35,9 +42,7 @@ pre-account reviews. Place cleanliness is the average of its reviews'
 ## Commands
 
 ```sh
-docker compose up -d            # Postgres (required for backend + its tests)
-cargo run -p backend            # API on 127.0.0.1:8081; migrates + seeds on start
-cd frontend && trunk serve      # app on http://127.0.0.1:8020, proxies /api
+./start.sh 47                   # starts db + backend + frontend in herdr tabs
 cargo test --workspace          # all tests
 cargo clippy --workspace --all-targets
 cargo clippy -p frontend --target wasm32-unknown-unknown

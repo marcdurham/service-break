@@ -386,7 +386,7 @@ pub fn add_form(props: &AddFormProps) -> Html {
                 })
             }) }
 
-            <div class="field-label">{"How far is bathroom from the door?"}</div>
+            <div class="field-label">{"How far is the restroom from the door?"}</div>
             <div class="pick-grid-2">
                 { for Door::ALL.into_iter().map(|d| {
                     let on = form.door == d;
