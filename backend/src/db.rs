@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail, PlaceEdit,
-    PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
+    ActivityEntry, Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
+    PlaceEdit, PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
     INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
 };
 use sqlx::postgres::PgRow;
@@ -450,6 +450,172 @@ pub async fn list_place_edits(pool: &PgPool, place_id: Uuid) -> Result<Vec<Place
             })
         })
         .collect()
+}
+
+/// Records one row in the account-activity audit log: a login, a failed
+/// login, or a field changed on the account (by the account itself or an
+/// admin). `field`/`old_value`/`new_value` stay empty for login events.
+pub async fn record_activity(
+    pool: &PgPool,
+    user_id: Uuid,
+    activity_type: &str,
+    field: &str,
+    old_value: &str,
+    new_value: &str,
+    actor_id: Option<Uuid>,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        "INSERT INTO user_activity (user_id, activity_type, field, old_value, new_value, actor_id) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(user_id)
+    .bind(activity_type)
+    .bind(field)
+    .bind(old_value)
+    .bind(new_value)
+    .bind(actor_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// The last `limit` activity events for one account, newest first: logins,
+/// failed logins, profile changes (by the account or an admin), place
+/// edits, and ratings (reviews) posted. Each source is queried
+/// independently (capped at `limit` rows each — enough for a correct
+/// n-way merge), combined, and truncated to `limit`.
+pub async fn list_user_activity(
+    pool: &PgPool,
+    user_id: Uuid,
+    username: &str,
+    limit: i64,
+) -> Result<Vec<ActivityEntry>, ApiError> {
+    let now = Utc::now();
+    let mut combined: Vec<(DateTime<Utc>, ActivityEntry)> = Vec::new();
+
+    let account_rows = sqlx::query(
+        "SELECT a.activity_type, a.field, a.old_value, a.new_value, a.created_at, \
+         actor.username AS actor_username \
+         FROM user_activity a LEFT JOIN users actor ON actor.id = a.actor_id \
+         WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    for row in account_rows {
+        let activity_type: String = row.try_get("activity_type")?;
+        let field: String = row.try_get("field")?;
+        let old_value: String = row.try_get("old_value")?;
+        let new_value: String = row.try_get("new_value")?;
+        let created_at: DateTime<Utc> = row.try_get("created_at")?;
+        let actor_username: Option<String> = row.try_get("actor_username")?;
+        let actor = actor_username.unwrap_or_else(|| username.to_owned());
+        let (kind, summary) = match activity_type.as_str() {
+            "login" => ("login", "Signed in".to_owned()),
+            "failed_login" => ("failed_login", "Failed sign-in attempt".to_owned()),
+            _ if field == "password" => ("profile_change", "Password reset".to_owned()),
+            _ if field == "is_admin" => (
+                "profile_change",
+                format!(
+                    "Admin status changed: {} → {}",
+                    shared::bool_label(&old_value),
+                    shared::bool_label(&new_value),
+                ),
+            ),
+            _ => (
+                "profile_change",
+                format!(
+                    "{}: {} → {}",
+                    shared::user_field_label(&field),
+                    shared::edit_value_display(&old_value),
+                    shared::edit_value_display(&new_value),
+                ),
+            ),
+        };
+        combined.push((
+            created_at,
+            ActivityEntry {
+                kind: kind.to_owned(),
+                summary,
+                actor,
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            },
+        ));
+    }
+
+    let place_rows = sqlx::query(
+        "SELECT e.field, e.old_value, e.new_value, e.created_at, p.name AS place_name \
+         FROM place_edits e JOIN places p ON p.id = e.place_id \
+         WHERE e.user_id = $1 ORDER BY e.created_at DESC LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    for row in place_rows {
+        let field: String = row.try_get("field")?;
+        let old_value: String = row.try_get("old_value")?;
+        let new_value: String = row.try_get("new_value")?;
+        let created_at: DateTime<Utc> = row.try_get("created_at")?;
+        let place_name: String = row.try_get("place_name")?;
+        let summary = format!(
+            "Edited {}: {} changed from {} to {}",
+            place_name,
+            shared::edit_field_label(&field),
+            shared::edit_value_display(&old_value),
+            shared::edit_value_display(&new_value),
+        );
+        combined.push((
+            created_at,
+            ActivityEntry {
+                kind: "place_change".to_owned(),
+                summary,
+                actor: username.to_owned(),
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            },
+        ));
+    }
+
+    let review_rows = sqlx::query(
+        "SELECT r.clean, r.coffee, r.food, r.created_at, p.name AS place_name \
+         FROM reviews r JOIN places p ON p.id = r.place_id \
+         WHERE r.user_id = $1 ORDER BY r.created_at DESC LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    for row in review_rows {
+        let clean: i16 = row.try_get("clean")?;
+        let coffee: Option<i16> = row.try_get("coffee")?;
+        let food: Option<i16> = row.try_get("food")?;
+        let created_at: DateTime<Utc> = row.try_get("created_at")?;
+        let place_name: String = row.try_get("place_name")?;
+        let mut summary = format!("Rated {place_name} — cleanliness {clean}/5");
+        if let Some(c) = coffee {
+            summary.push_str(&format!(", coffee {c}/5"));
+        }
+        if let Some(f) = food {
+            summary.push_str(&format!(", food {f}/5"));
+        }
+        combined.push((
+            created_at,
+            ActivityEntry {
+                kind: "rating".to_owned(),
+                summary,
+                actor: username.to_owned(),
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            },
+        ));
+    }
+
+    combined.sort_by(|a, b| b.0.cmp(&a.0));
+    combined.truncate(limit.max(0) as usize);
+    Ok(combined.into_iter().map(|(_, e)| e).collect())
 }
 
 pub struct UserRow {

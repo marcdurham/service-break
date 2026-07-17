@@ -523,6 +523,41 @@ pub fn edit_value_display(value: &str) -> &str {
     }
 }
 
+/// One entry in an account's activity log, from `GET /api/auth/activity` or
+/// `GET /api/admin/users/{id}/activity`: a login, failed login, profile
+/// change, place edit, or rating — merged from several tables and sorted
+/// newest first. `summary` and `actor` are pre-formatted server-side since
+/// the underlying sources have very different shapes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ActivityEntry {
+    /// "login" | "failed_login" | "profile_change" | "place_change" | "rating"
+    pub kind: String,
+    pub summary: String,
+    pub actor: String,
+    pub created_at: String,
+    pub time_ago: String,
+}
+
+/// Human-readable label for a field name recorded in the account activity
+/// log — as opposed to [`edit_field_label`], which covers place fields.
+pub fn user_field_label(field: &str) -> &str {
+    match field {
+        "username" => "Username",
+        "given_name" => "Given name",
+        "family_name" => "Family name",
+        other => other,
+    }
+}
+
+/// "Yes"/"No" for a stringified boolean recorded in the activity log.
+pub fn bool_label(value: &str) -> &str {
+    if value == "true" {
+        "Yes"
+    } else {
+        "No"
+    }
+}
+
 /// Username + password sent to `POST /api/auth/register` and `/login`.
 /// `invite_code` is required for registration (ignored, and safe to omit,
 /// on login).

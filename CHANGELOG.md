@@ -6,6 +6,8 @@ short description.
 
 ## 2026-07-16
 
+- 21:30 — Added an account activity log: the last 50 logins, failed logins, profile changes (username/password/admin flag/name — by the account or an admin), place edits, and ratings for a user. Admins reach it via a "View activity" button on the Edit user page (`/users/:id/activity`); users reach their own via "My activity" on the Account page (`/activity`). New `user_activity` table plus `GET /api/auth/activity` and `GET /api/admin/users/{id}/activity` endpoints; place edits and reviews are merged in from their existing tables rather than duplicated.
+
 - 20:24 — Softened bathroom-focused UI text across the app: manifest description now leads with "breaks" not "pit stop", onboarding feature icon/text changed to clean_hands + "Clean, comfortable places", edit form label shortened from "Bathroom distance from door (ft)" to "Distance to restroom (ft)", add form label softened from "How far is bathroom from the door?" to "How far is the restroom from the door?"
 
 - 23:45 — Added a confirmation dialog modal to the Delete button on /page. Clicking Delete now shows a centered "Delete place?" dialog with Cancel and Delete actions instead of deleting immediately; the Delete action is disabled while the request is in flight.

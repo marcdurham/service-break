@@ -12,8 +12,8 @@ use actix_web::App;
 use backend::{handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
-    AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
-    PlaceEdit, PlaceSummary, PlaceType, Requirement,
+    ActivityEntry, AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking,
+    PlaceDetail, PlaceEdit, PlaceSummary, PlaceType, Requirement,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -2207,4 +2207,166 @@ async fn token_user_id(pool: &PgPool, username: &str) -> Uuid {
         .fetch_one(pool)
         .await
         .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn login_activity_records_successes_and_failures(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-activity").await;
+
+    // Wrong password against a real account.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "scout-activity", "password": "not-the-password" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // Correct password.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "scout-activity", "password": TEST_PASSWORD }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    let kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+    // Newest first: the successful login, then the earlier failed attempt.
+    assert_eq!(kinds, vec!["login", "failed_login"]);
+    assert_eq!(entries[0].summary, "Signed in");
+    assert_eq!(entries[1].summary, "Failed sign-in attempt");
+    assert!(entries.iter().all(|e| e.actor == "scout-activity"));
+}
+
+/// A login attempt against a username that matches no account has no
+/// account page to attribute it to, so it isn't recorded anywhere.
+#[sqlx::test(migrations = "./migrations")]
+async fn login_with_unknown_username_records_nothing(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-known").await;
+
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": "totally-unknown", "password": "whatever" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    assert!(entries.is_empty());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_and_password_changes_are_logged(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-profile").await;
+
+    let req = TestRequest::patch()
+        .uri("/api/auth/profile")
+        .insert_header(auth(&token))
+        .set_json(json!({ "given_name": "Ada" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    let req = TestRequest::put()
+        .uri("/api/auth/password")
+        .insert_header(auth(&token))
+        .set_json(json!({
+            "current_password": TEST_PASSWORD,
+            "new_password": "a-new-strong-password",
+        }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().all(|e| e.kind == "profile_change"));
+    assert!(entries.iter().all(|e| e.actor == "scout-profile"));
+    // Newest first: the password reset, then the earlier name change.
+    assert_eq!(entries[0].summary, "Password reset");
+    assert_eq!(entries[1].summary, "Given name: (empty) → Ada");
+}
+
+/// The account activity feed merges place edits and ratings made by that
+/// account, and shows admin-initiated profile changes attributed to the
+/// admin who made them.
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_activity_endpoint_merges_place_and_rating_history(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let (editor, place_id) = place_for_editing(&app, &pool).await;
+    let editor_id = token_user_id(&pool, "scout-two").await;
+
+    let mut body = update_place_json();
+    body["name"] = json!("Camber Coffee House");
+    let req = TestRequest::put()
+        .uri(&format!("/api/places/{place_id}"))
+        .insert_header(auth(&editor))
+        .set_json(body)
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    let req = TestRequest::post()
+        .uri(&format!("/api/places/{place_id}/reviews"))
+        .insert_header(auth(&editor))
+        .set_json(json!({ "device_id": "test-device-2", "clean": 3, "text": "meh" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    let admin = login_admin(&app, &pool).await;
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{editor_id}/activity"))
+        .insert_header(auth(&admin.token))
+        .to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    let mut kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+    kinds.sort_unstable();
+    assert_eq!(kinds, vec!["place_change", "rating"]);
+    assert!(entries.iter().all(|e| e.actor == "scout-two"));
+    let rating = entries.iter().find(|e| e.kind == "rating").unwrap();
+    assert_eq!(rating.summary, "Rated Camber Coffee House — cleanliness 3/5");
+
+    // Admin promotes the editor; the target's log attributes it to the admin.
+    let req = TestRequest::patch()
+        .uri(&format!("/api/admin/users/{editor_id}"))
+        .insert_header(auth(&admin.token))
+        .set_json(json!({ "is_admin": true }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{editor_id}/activity"))
+        .insert_header(auth(&admin.token))
+        .to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    let promoted = entries.iter().find(|e| e.kind == "profile_change").unwrap();
+    assert_eq!(promoted.summary, "Admin status changed: No → Yes");
+    assert_eq!(promoted.actor, admin.username);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn activity_endpoints_require_login_and_admin(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "no-peeking").await;
+    let target_id = token_user_id(&pool, "no-peeking").await;
+
+    // Self activity requires a session.
+    let req = TestRequest::get().uri("/api/auth/activity").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+
+    // A non-admin can't view another account's activity.
+    let other_token = register(&app, &pool, "nosy-neighbor").await;
+    let req = TestRequest::get()
+        .uri(&format!("/api/admin/users/{target_id}/activity"))
+        .insert_header(auth(&other_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+
+    // Sanity: the owner can read their own via /api/auth/activity.
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
 }

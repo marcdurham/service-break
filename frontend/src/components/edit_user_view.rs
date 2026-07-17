@@ -251,6 +251,15 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
         Callback::from(move |_| show_delete_confirm.set(false))
     };
 
+    let go_to_activity = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            if let Some(id) = user_id_opt {
+                navigator.push(&Route::UserActivity { id });
+            }
+        })
+    };
+
     let delete_navigator = navigator.clone();
     // Delete handler, run after the confirm modal is accepted.
     let confirm_delete = {
@@ -303,6 +312,9 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
             <div class="screen-title">{"Edit user"}</div>
             <button class="alt-auth-btn" onclick={go_back}>
                 <span class="mi">{"arrow_back"}</span>{"Back to users"}
+            </button>
+            <button class="alt-auth-btn" onclick={go_to_activity}>
+                <span class="mi">{"history"}</span>{"View activity"}
             </button>
 
             if !error.is_empty() {

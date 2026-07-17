@@ -32,6 +32,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(me)
         .service(change_password)
         .service(update_profile)
+        .service(my_activity)
         .service(create_invite)
         .service(list_invites)
         .service(rename_invite)
@@ -171,21 +172,30 @@ async fn register(
 async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpResponse, ApiError> {
     let creds = body.into_inner();
     let bad = || ApiError::Unauthorized("wrong username or password".to_owned());
+    // An unknown username has no account to log the attempt against — only
+    // failures against a real account (wrong password) reach the activity
+    // log, which is always viewed scoped to one account.
     let user = db::find_user(&state.pool, creds.username.trim())
         .await?
         .ok_or_else(bad)?;
+    let user_id = user.id;
 
     let Some(hash) = user.password_hash else {
         // Google-only account: no password to check against. Same generic
         // error as a wrong password, so this endpoint can't be used to
         // probe which accounts exist or how they sign in.
+        db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
+            .await?;
         return Err(bad());
     };
     let password = creds.password;
     let ok = run_blocking(move || Ok(verify_password(&password, &hash))).await?;
     if !ok {
+        db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
+            .await?;
         return Err(bad());
     }
+    db::record_activity(&state.pool, user_id, "login", "", "", "", Some(user_id)).await?;
     let session = start_session(&state.pool, user.id, user.username, user.is_admin).await?;
     Ok(HttpResponse::Ok().json(session))
 }
@@ -233,6 +243,10 @@ async fn update_profile(
         validate_name(name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     }
 
+    let before = db::find_user_by_id(&state.pool, user.id)
+        .await?
+        .ok_or_else(|| ApiError::Internal("user disappeared from under us".to_owned()))?;
+
     db::update_user_names(
         &state.pool,
         user.id,
@@ -240,6 +254,35 @@ async fn update_profile(
         profile.family_name.as_deref(),
     )
     .await?;
+
+    if let Some(new_given) = &profile.given_name {
+        if *new_given != before.given_name {
+            db::record_activity(
+                &state.pool,
+                user.id,
+                "profile_change",
+                "given_name",
+                &before.given_name,
+                new_given,
+                Some(user.id),
+            )
+            .await?;
+        }
+    }
+    if let Some(new_family) = &profile.family_name {
+        if *new_family != before.family_name {
+            db::record_activity(
+                &state.pool,
+                user.id,
+                "profile_change",
+                "family_name",
+                &before.family_name,
+                new_family,
+                Some(user.id),
+            )
+            .await?;
+        }
+    }
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -275,7 +318,18 @@ async fn change_password(
 
     let new_hash = run_blocking(move || hash_password(&creds.new_password)).await?;
     db::update_user_password(&state.pool, user.id, &new_hash).await?;
+    db::record_activity(&state.pool, user.id, "profile_change", "password", "", "", Some(user.id))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
+}
+
+/// The signed-in user's own activity log — logins, failed logins, profile
+/// changes, place edits, and ratings they've posted. Newest first, capped
+/// at 50.
+#[get("/api/auth/activity")]
+async fn my_activity(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
+    let entries = db::list_user_activity(&state.pool, user.id, &user.username, 50).await?;
+    Ok(HttpResponse::Ok().json(entries))
 }
 
 /// Issues a fresh invite code the signed-in user can hand to a friend,

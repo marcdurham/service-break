@@ -1,4 +1,5 @@
 pub mod account_view;
+pub mod activity_view;
 pub mod change_password_view;
 pub mod add_form;
 pub mod admin_view;

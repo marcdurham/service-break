@@ -17,6 +17,10 @@ pub enum Route {
     Invite,
     #[at("/account")]
     Account,
+    /// The signed-in user's own activity log: logins, failed logins,
+    /// profile changes, place edits and ratings.
+    #[at("/activity")]
+    Activity,
     #[at("/change-password")]
     ChangePassword,
     #[at("/register")]
@@ -39,6 +43,9 @@ pub enum Route {
     /// Admin-only: edit a single account (reached from /users).
     #[at("/users/:id")]
     UserEdit { id: Uuid },
+    /// Admin-only: one account's activity log (reached from /users/:id).
+    #[at("/users/:id/activity")]
+    UserActivity { id: Uuid },
     #[at("/place/:id")]
     Place { id: Uuid },
     #[not_found]

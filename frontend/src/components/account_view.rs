@@ -291,6 +291,13 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                     }}>
                         <span class="mi">{"lock_reset"}</span>{"Change password"}
                     </button>
+
+                    <button class="alt-auth-btn" onclick={{
+                        let navigator = navigator.clone();
+                        Callback::from(move |_| navigator.push(&Route::Activity))
+                    }}>
+                        <span class="mi">{"history"}</span>{"My activity"}
+                    </button>
                 </div>
 
                 <button class="submit-btn" onclick={go_to_invite}>
