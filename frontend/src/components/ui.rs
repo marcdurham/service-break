@@ -190,6 +190,53 @@ pub fn filter_chips(props: &FilterChipsProps) -> Html {
 }
 
 #[derive(Properties, PartialEq)]
+pub struct ConfirmModalProps {
+    pub title: AttrValue,
+    pub body: AttrValue,
+    #[prop_or("Delete".into())]
+    pub confirm_label: AttrValue,
+    #[prop_or("Cancel".into())]
+    pub cancel_label: AttrValue,
+    /// Shown on the confirm button (and disables it) while the action runs.
+    #[prop_or_default]
+    pub busy: bool,
+    #[prop_or("Working…".into())]
+    pub busy_label: AttrValue,
+    pub on_confirm: Callback<()>,
+    pub on_cancel: Callback<()>,
+}
+
+/// Shared destructive-action confirmation dialog. Used for every delete
+/// button in the app so the prompt looks and behaves the same everywhere.
+#[function_component(ConfirmModal)]
+pub fn confirm_modal(props: &ConfirmModalProps) -> Html {
+    let cancel = {
+        let cb = props.on_cancel.clone();
+        Callback::from(move |_| cb.emit(()))
+    };
+    let confirm = {
+        let cb = props.on_confirm.clone();
+        Callback::from(move |_| cb.emit(()))
+    };
+    html! {
+        <div class="confirm-scrim" onclick={cancel.clone()}>
+            <div class="confirm-dialog" onclick={|e: MouseEvent| e.stop_propagation()}>
+                <div class="confirm-title">{props.title.clone()}</div>
+                <div class="confirm-body">{props.body.clone()}</div>
+                <div class="confirm-actions">
+                    <button class="confirm-cancel" onclick={cancel}>
+                        {props.cancel_label.clone()}
+                    </button>
+                    <button class="confirm-ok" disabled={props.busy} onclick={confirm}>
+                        {if props.busy { props.busy_label.clone() } else { props.confirm_label.clone() }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+#[derive(Properties, PartialEq)]
 pub struct PlaceCardProps {
     pub place: PlaceSummary,
     pub on_open: Callback<uuid::Uuid>,

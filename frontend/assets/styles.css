@@ -22,6 +22,8 @@
   --green: #6f8256;
   --green-dark: #5c7a4a;
   --star: #e0a53c;
+  --danger: #b83a3a;
+  --danger-border: #d46a6a;
 }
 
 html, body {
@@ -623,6 +625,13 @@ button { cursor: pointer; }
 .status-pending { background: #f4e9d8; color: #8a6a3a; }
 .status-joined { background: #e2eeda; color: #4a6b35; }
 .status-expired { background: #ececec; color: #8a8a8a; }
+.revoke-btn {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid var(--danger-border); background: #fbeceb; color: var(--danger);
+  display: flex; align-items: center; justify-content: center;
+}
+.revoke-btn .mi { font-size: 18px; }
+.revoke-btn:hover { background: var(--danger); color: #fff; }
 .auth-note {
   font-size: 13px; color: var(--muted); text-align: center;
   margin-top: 14px; line-height: 1.5;
@@ -711,7 +720,7 @@ button { cursor: pointer; }
   display: flex; align-items: center; gap: 7px;
 }
 .rate-btn .mi { font-size: 20px; }
-.delete-btn { border-color: #d46a6a; color: #b83a3a; }
+.delete-btn { border-color: var(--danger-border); color: var(--danger); }
 
 .breakdown {
   background: #fff; border-radius: 18px; padding: 6px 16px; margin-top: 18px;
@@ -875,7 +884,7 @@ button { cursor: pointer; }
 }
 .confirm-ok {
   flex: 1; border: none; border-radius: 13px;
-  background: #b83a3a; color: #fff; font-weight: 700; font-size: 15px;
+  background: var(--danger); color: #fff; font-weight: 700; font-size: 15px;
   padding: 12px;
 }
 .confirm-ok:disabled {
