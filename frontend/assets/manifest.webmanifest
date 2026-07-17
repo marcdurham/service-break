@@ -1,7 +1,7 @@
 {
   "name": "Service Break",
   "short_name": "Service Break",
-  "description": "Find a clean pit stop: real bathroom ratings at coffee shops, groceries, parks, gas stations & more.",
+  "description": "Find good places to take a break — rate the coffee, food, cleanliness and more at nearby spots.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
