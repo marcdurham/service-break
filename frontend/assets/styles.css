@@ -707,6 +707,7 @@ button { cursor: pointer; }
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   flex-wrap: wrap;
+  padding: 0 4px;
 }
 .action-row::after {
   content: ""; flex-shrink: 0; width: 2px; height: 1px;
