@@ -480,10 +480,10 @@ pub async fn record_activity(
 }
 
 /// The last `limit` activity events for one account, newest first: logins,
-/// failed logins, profile changes (by the account or an admin), place
-/// edits, and ratings (reviews) posted. Each source is queried
-/// independently (capped at `limit` rows each — enough for a correct
-/// n-way merge), combined, and truncated to `limit`.
+/// failed logins, profile changes (by the account or an admin), invitations
+/// removed, place edits, and ratings (reviews) posted. Each source is
+/// queried independently (capped at `limit` rows each — enough for a
+/// correct n-way merge), combined, and truncated to `limit`.
 pub async fn list_user_activity(
     pool: &PgPool,
     user_id: Uuid,
@@ -514,6 +514,9 @@ pub async fn list_user_activity(
         let (kind, summary) = match activity_type.as_str() {
             "login" => ("login", "Signed in".to_owned()),
             "failed_login" => ("failed_login", "Failed sign-in attempt".to_owned()),
+            "invite_deleted" => {
+                ("invite_change", format!("Removed invitation for {old_value}"))
+            }
             _ if field == "password" => ("profile_change", "Password reset".to_owned()),
             _ if field == "is_admin" => (
                 "profile_change",
@@ -1103,7 +1106,7 @@ pub async fn invites_overview(pool: &PgPool, user_id: Uuid) -> Result<InvitesOve
          (i.created_at <= now() - make_interval(days => $2) OR i.is_expired) AS expired, \
          u.username AS joined_username \
          FROM invitations i LEFT JOIN users u ON u.id = i.redeemed_by \
-         WHERE i.inviter_id = $1 ORDER BY i.created_at DESC",
+         WHERE i.inviter_id = $1 AND i.deleted_at IS NULL ORDER BY i.created_at DESC",
     )
     .bind(user_id)
     .bind(INVITE_EXPIRY_DAYS)
@@ -1173,15 +1176,47 @@ pub async fn rename_invitation(
     Ok(())
 }
 
-/// Revokes (expires) an invitation. Only the inviter can revoke pending codes;
-/// redeemed invitations cannot be revoked.
+/// What [`revoke_invitation`] actually did, so the caller can decide
+/// whether an activity-log entry is warranted.
+pub enum InvitationRemoval {
+    /// An already-expired invitation was soft-deleted (hidden from the
+    /// list). Carries its display name for the activity log.
+    Deleted { name: String },
+    /// A still-pending invitation was marked expired so it can no longer
+    /// be redeemed.
+    Revoked,
+}
+
+/// Removes an invitation. Only the inviter can act on their own codes, and
+/// redeemed invitations can't be touched. An already-expired invitation is
+/// soft-deleted (kept in the database, just hidden from the list) since
+/// there's nothing left to preserve it for; a still-pending one is
+/// soft-revoked by marking it expired instead, so an in-flight signup
+/// can't redeem it out from under the inviter.
 pub async fn revoke_invitation(
     pool: &PgPool,
     user_id: Uuid,
     code: &str,
-) -> Result<(), ApiError> {
+) -> Result<InvitationRemoval, ApiError> {
+    let row = sqlx::query(
+        "UPDATE invitations SET deleted_at = now(), deleted_by = $2 \
+         WHERE code = $1 AND inviter_id = $2 AND redeemed_at IS NULL AND deleted_at IS NULL \
+         AND (is_expired OR created_at <= now() - make_interval(days => $3)) \
+         RETURNING name",
+    )
+    .bind(code)
+    .bind(user_id)
+    .bind(INVITE_EXPIRY_DAYS)
+    .fetch_optional(pool)
+    .await?;
+    if let Some(row) = row {
+        let name: String = row.try_get("name")?;
+        let name = if name.trim().is_empty() { code.to_owned() } else { name };
+        return Ok(InvitationRemoval::Deleted { name });
+    }
     let res = sqlx::query(
-        "UPDATE invitations SET is_expired = true WHERE code = $1 AND inviter_id = $2 AND redeemed_at IS NULL",
+        "UPDATE invitations SET is_expired = true \
+         WHERE code = $1 AND inviter_id = $2 AND redeemed_at IS NULL AND deleted_at IS NULL",
     )
     .bind(code)
     .bind(user_id)
@@ -1190,7 +1225,7 @@ pub async fn revoke_invitation(
     if res.rows_affected() == 0 {
         return Err(ApiError::NotFound);
     }
-    Ok(())
+    Ok(InvitationRemoval::Revoked)
 }
 
 /// Looks a user up by username, case-insensitively.

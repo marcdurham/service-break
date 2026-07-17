@@ -38,7 +38,7 @@ fn invite_row(inv: &Invitation, on_request_revoke: Callback<(String, String)>) -
         InviteStatus::Joined => "friend-status status-joined",
     };
     let code = inv.code.clone();
-    let is_pending = inv.status == InviteStatus::Pending;
+    let is_removable = matches!(inv.status, InviteStatus::Pending | InviteStatus::Expired);
     html! {
         <div class="friend-row" key={code.clone()}>
             <div>
@@ -46,7 +46,7 @@ fn invite_row(inv: &Invitation, on_request_revoke: Callback<(String, String)>) -
                 <div class="friend-sub">{sub}</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-                if is_pending {
+                if is_removable {
                     <button
                         class="revoke-btn"
                         onclick={{
@@ -54,7 +54,7 @@ fn invite_row(inv: &Invitation, on_request_revoke: Callback<(String, String)>) -
                             let title = title.clone();
                             Callback::from(move |_| on_request_revoke.emit((code.clone(), title.clone())))
                         }}
-                        title="Revoke this invitation"
+                        title="Remove this invitation"
                     >
                         <span class="mi">{"delete"}</span>
                     </button>
@@ -156,7 +156,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 match api::revoke_invite(&code).await {
                     Ok(()) => {
-                        on_toast.emit("Invitation revoked".to_owned());
+                        on_toast.emit("Invitation removed".to_owned());
                         // Refresh the overview to update the list.
                         if let Ok(o) = api::list_invites().await {
                             overview.set(Some(o));
@@ -431,10 +431,10 @@ pub fn account_view(props: &AccountViewProps) -> Html {
 
                 if let Some((_, name)) = &*revoke_target {
                     <ui::ConfirmModal
-                        title="Revoke invitation?"
-                        body={format!("This revokes the invitation for {name}. This can't be undone.")}
-                        confirm_label="Revoke"
-                        busy_label="Revoking…"
+                        title="Remove invitation?"
+                        body={format!("This removes the invitation for {name}. This can't be undone.")}
+                        confirm_label="Remove"
+                        busy_label="Removing…"
                         busy={*revoking}
                         on_confirm={confirm_revoke}
                         on_cancel={cancel_revoke}

@@ -525,12 +525,12 @@ pub fn edit_value_display(value: &str) -> &str {
 
 /// One entry in an account's activity log, from `GET /api/auth/activity` or
 /// `GET /api/admin/users/{id}/activity`: a login, failed login, profile
-/// change, place edit, or rating — merged from several tables and sorted
-/// newest first. `summary` and `actor` are pre-formatted server-side since
-/// the underlying sources have very different shapes.
+/// change, invitation removal, place edit, or rating — merged from several
+/// tables and sorted newest first. `summary` and `actor` are pre-formatted
+/// server-side since the underlying sources have very different shapes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActivityEntry {
-    /// "login" | "failed_login" | "profile_change" | "place_change" | "rating"
+    /// "login" | "failed_login" | "profile_change" | "invite_change" | "place_change" | "rating"
     pub kind: String,
     pub summary: String,
     pub actor: String,

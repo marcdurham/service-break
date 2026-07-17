@@ -24,16 +24,17 @@ fn icon_for(kind: &str) -> &'static str {
         "login" => "login",
         "failed_login" => "gpp_maybe",
         "profile_change" => "manage_accounts",
+        "invite_change" => "person_remove",
         "place_change" => "edit_location_alt",
         "rating" => "star_rate",
         _ => "history",
     }
 }
 
-/// Shows the last 50 logins, failed logins, profile changes, place edits
-/// and ratings for an account — either the signed-in user's own (reached
-/// from the Account page) or, for admins, any account's (reached from the
-/// Edit user page).
+/// Shows the last 50 logins, failed logins, profile changes, invitation
+/// removals, place edits and ratings for an account — either the
+/// signed-in user's own (reached from the Account page) or, for admins,
+/// any account's (reached from the Edit user page).
 #[function_component(ActivityView)]
 pub fn activity_view(props: &ActivityViewProps) -> Html {
     let entries = use_state(Vec::<ActivityEntry>::new);
