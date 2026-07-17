@@ -124,6 +124,9 @@ pub fn app() -> Html {
     // Add page for one-time prefill; see `on_maps_link` below.
     let prefill = use_state(|| None::<MapsLinkResult>);
     let toast = use_state(|| None::<String>);
+    // A persistent (non-auto-dismissing) banner for the Register page, set
+    // when a Google login fails because no account is linked yet.
+    let register_notice = use_state(|| None::<String>);
     let refresh = use_state(|| 0u32);
     let auth = use_state(api::stored_auth);
     let google_enabled = use_state(|| false);
@@ -149,6 +152,15 @@ pub fn app() -> Html {
                 toast.set(None);
             });
         })
+    };
+
+    let set_register_notice = {
+        let register_notice = register_notice.clone();
+        Callback::from(move |msg: String| register_notice.set(Some(msg)))
+    };
+    let on_register_notice_shown = {
+        let register_notice = register_notice.clone();
+        Callback::from(move |()| register_notice.set(None))
     };
 
     // Keep `background` in sync with the URL: any nav route becomes the new
@@ -587,10 +599,16 @@ pub fn app() -> Html {
                             on_login={on_login}
                             on_toast={show_toast.clone()}
                             google_enabled={*google_enabled}
+                            notice={(*register_notice).clone()}
+                            on_notice_shown={on_register_notice_shown.clone()}
                         />
                     },
                     Route::OauthComplete => html! {
-                        <OauthCompleteView on_login={on_login} on_toast={show_toast.clone()} />
+                        <OauthCompleteView
+                            on_login={on_login}
+                            on_toast={show_toast.clone()}
+                            on_register_notice={set_register_notice.clone()}
+                        />
                     },
                     Route::ShareTarget => html! {
                         <ShareTargetView on_maps_link={on_maps_link.clone()} on_toast={show_toast.clone()} />

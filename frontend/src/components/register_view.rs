@@ -18,6 +18,16 @@ pub struct RegisterViewProps {
     /// Whether the server has a Google OAuth client configured.
     #[prop_or_default]
     pub google_enabled: bool,
+    /// A persistent banner to show once, e.g. "no account is linked to that
+    /// Google login yet" — set by `OauthCompleteView` after a failed Google
+    /// login, unlike `on_toast` this doesn't auto-dismiss.
+    #[prop_or_default]
+    pub notice: Option<String>,
+    /// Fired once this component has captured `notice` into its own state,
+    /// so the parent can clear its copy and the banner won't reappear on a
+    /// later, unrelated visit to this page.
+    #[prop_or_default]
+    pub on_notice_shown: Callback<()>,
 }
 
 /// The `code` query parameter of the current URL, e.g. from a shared
@@ -108,6 +118,20 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
     let show_pw = use_state(|| false);
     let show_confirm = use_state(|| false);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
+    let notice = use_state(|| None::<String>);
+
+    {
+        let notice = notice.clone();
+        let incoming = props.notice.clone();
+        let on_notice_shown = props.on_notice_shown.clone();
+        use_effect_with((), move |()| {
+            if let Some(message) = incoming {
+                notice.set(Some(message));
+                on_notice_shown.emit(());
+            }
+            || ()
+        });
+    }
 
     let create_account = {
         let username = username.clone();
@@ -191,6 +215,11 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
                     <span class="mi">{"person"}</span>{"Go to Account"}
                 </button>
             } else {
+                if let Some(message) = (*notice).clone() {
+                    <div class="auth-banner">
+                        <span class="mi">{"info"}</span>{message}
+                    </div>
+                }
                 <div class="screen-sub mb-sm">
                     {"Registration is invite-only — you'll need a code from a friend \
                       who's already a scout."}

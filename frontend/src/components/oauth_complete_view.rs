@@ -15,6 +15,10 @@ use crate::route::Route;
 pub struct OauthCompleteViewProps {
     pub on_login: Callback<AuthSession>,
     pub on_toast: Callback<String>,
+    /// Fired instead of `on_toast` when the backend reports "no account is
+    /// linked yet" — the message becomes a persistent banner on `/register`
+    /// rather than a toast that vanishes before most people act on it.
+    pub on_register_notice: Callback<String>,
 }
 
 fn fragment() -> String {
@@ -29,11 +33,16 @@ pub fn oauth_complete_view(props: &OauthCompleteViewProps) -> Html {
     {
         let on_login = props.on_login.clone();
         let on_toast = props.on_toast.clone();
+        let on_register_notice = props.on_register_notice.clone();
         let navigator = navigator.clone();
         use_effect_with((), move |()| {
             let frag = fragment();
             let frag = frag.trim_start_matches('#');
-            if let Some(message) = query_param(frag, "error") {
+            let mut destination = Route::Account;
+            if let Some(message) = query_param(frag, "register_required") {
+                on_register_notice.emit(message);
+                destination = Route::Register;
+            } else if let Some(message) = query_param(frag, "error") {
                 on_toast.emit(message);
             } else if let Some(token) = query_param(frag, "token") {
                 on_login.emit(AuthSession {
@@ -46,7 +55,7 @@ pub fn oauth_complete_view(props: &OauthCompleteViewProps) -> Html {
             } else {
                 on_toast.emit("Google sign-in didn't complete".to_owned());
             }
-            navigator.replace(&Route::Account);
+            navigator.replace(&destination);
             || ()
         });
     }
