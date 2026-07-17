@@ -707,20 +707,22 @@ button { cursor: pointer; }
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   flex-wrap: wrap;
+  padding: 0 4px;
 }
 .action-row::after {
   content: ""; flex-shrink: 0; width: 2px; height: 1px;
 }
 .action-row::-webkit-scrollbar { display: none; }
-.action-row .directions-btn { margin-top: 0; flex: 1 0 120px; min-width: 0; padding: 15px 14px; }
-.action-row .rate-btn { flex: 1 0 90px; min-width: 0; padding: 15px 14px; }
+.action-row .directions-btn { margin-top: 0; flex: 1 1 auto; min-width: 0; padding: 15px 14px; white-space: nowrap; }
+.action-row .rate-btn { flex: 1 1 auto; min-width: 0; padding: 15px 14px; white-space: nowrap; }
 .rate-btn {
   border: 1.5px solid #e0d3bf; border-radius: 15px;
   background: #fff; color: #8a5a3c; font-size: 15px; font-weight: 700;
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 15px 14px;
 }
 .rate-btn .mi { font-size: 20px; }
-.delete-btn { border-color: var(--danger-border); color: var(--danger); }
+.delete-btn { border-color: var(--danger-border); color: var(--danger); padding: 15px 14px; }
 
 .breakdown {
   background: #fff; border-radius: 18px; padding: 6px 16px; margin-top: 18px;
