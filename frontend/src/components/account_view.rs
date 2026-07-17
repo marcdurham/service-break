@@ -78,6 +78,9 @@ pub fn account_view(props: &AccountViewProps) -> Html {
     let my_name = use_state(String::new);
     let given_name = use_state(String::new);
     let family_name = use_state(String::new);
+    let has_password = use_state(|| true);
+    let has_google = use_state(|| false);
+    let linking_google = use_state(|| false);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
     let show_login_pw = use_state(|| false);
@@ -88,17 +91,25 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         let my_name = my_name.clone();
         let given_name = given_name.clone();
         let family_name = family_name.clone();
+        let has_password = has_password.clone();
+        let has_google = has_google.clone();
         let signed_in = props.auth.is_some();
         use_effect_with(signed_in, move |signed_in| {
             if *signed_in {
                 wasm_bindgen_futures::spawn_local(async move {
-                    // Load profile (given/family name) from /me.
+                    // Load profile (given/family name, sign-in methods) from /me.
                     if let Ok(profile) = api::get_me().await {
                         if let Some(given) = profile.get("given_name").and_then(|v| v.as_str()) {
                             given_name.set(given.to_owned());
                         }
                         if let Some(family) = profile.get("family_name").and_then(|v| v.as_str()) {
                             family_name.set(family.to_owned());
+                        }
+                        if let Some(v) = profile.get("has_password").and_then(|v| v.as_bool()) {
+                            has_password.set(v);
+                        }
+                        if let Some(v) = profile.get("has_google").and_then(|v| v.as_bool()) {
+                            has_google.set(v);
                         }
                     }
                     // Load invitations overview.
@@ -205,6 +216,27 @@ pub fn account_view(props: &AccountViewProps) -> Html {
 
     let continue_with_google = Callback::from(move |_| api::start_google_auth("login", ""));
 
+    let link_google = {
+        let linking_google = linking_google.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            if *linking_google {
+                return;
+            }
+            linking_google.set(true);
+            let linking_google = linking_google.clone();
+            let on_toast = on_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Err(msg) = api::start_google_link().await {
+                    on_toast.emit(msg);
+                    linking_google.set(false);
+                }
+                // On success the page navigates away to Google, so there's
+                // nothing left to reset `linking_google` for.
+            });
+        })
+    };
+
     let go_to_invite = {
         let navigator = navigator.clone();
         Callback::from(move |_| navigator.push(&Route::Invite))
@@ -289,8 +321,22 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                         let navigator = navigator.clone();
                         Callback::from(move |_| navigator.push(&Route::ChangePassword))
                     }}>
-                        <span class="mi">{"lock_reset"}</span>{"Change password"}
+                        <span class="mi">{"lock_reset"}</span>
+                        {if *has_password { "Change password" } else { "Set a password" }}
                     </button>
+
+                    if props.google_enabled {
+                        if *has_google {
+                            <div class="account-sub">
+                                <span class="mi">{"check_circle"}</span>{"Google account linked"}
+                            </div>
+                        } else {
+                            <button class="alt-auth-btn" onclick={link_google} disabled={*linking_google}>
+                                <span class="mi">{"link"}</span>
+                                {if *linking_google { "One moment…" } else { "Link Google account" }}
+                            </button>
+                        }
+                    }
 
                     <button class="alt-auth-btn" onclick={{
                         let navigator = navigator.clone();

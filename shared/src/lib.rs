@@ -576,6 +576,14 @@ pub struct ChangePassword {
     pub new_password: String,
 }
 
+/// Body for `POST /api/auth/password/set`: adds a password to an account
+/// that doesn't have one yet (a Google-only account). No current password
+/// to verify, since there isn't one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SetPassword {
+    pub new_password: String,
+}
+
 /// Body for `PATCH /api/auth/profile`: optional given and family name fields.
 /// Only fields present in the JSON are updated; omitting a field leaves it
 /// unchanged on the server.
