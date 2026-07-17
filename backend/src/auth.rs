@@ -17,7 +17,7 @@ use argon2::Argon2;
 use serde_json::json;
 use shared::{
     validate_invite_name, validate_name, validate_password, validate_username, AuthSession,
-    ChangePassword, Credentials, InviteNameUpdate, NewInvite, UpdateProfile,
+    ChangePassword, Credentials, InviteNameUpdate, NewInvite, SetPassword, UpdateProfile,
 };
 use uuid::Uuid;
 
@@ -31,6 +31,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(logout)
         .service(me)
         .service(change_password)
+        .service(set_password)
         .service(update_profile)
         .service(my_activity)
         .service(create_invite)
@@ -211,18 +212,22 @@ async fn logout(state: Data<AppState>, req: HttpRequest) -> Result<HttpResponse,
 /// Lets the frontend check whether its stored token is still valid.
 #[get("/api/auth/me")]
 async fn me(state: Data<AppState>, user: AuthUser) -> HttpResponse {
-    let (given, family): (Option<String>, Option<String>) = sqlx::query_as(
-        "SELECT given_name, family_name FROM users WHERE id = $1",
+    let row: Option<(Option<String>, Option<String>, bool, bool)> = sqlx::query_as(
+        "SELECT given_name, family_name, password_hash IS NOT NULL, google_sub IS NOT NULL \
+         FROM users WHERE id = $1",
     )
     .bind(user.id)
-    .fetch_one(&state.pool)
+    .fetch_optional(&state.pool)
     .await
     .unwrap_or_default();
+    let (given, family, has_password, has_google) = row.unwrap_or_default();
     HttpResponse::Ok().json(json!({
         "username": user.username,
         "is_admin": user.is_admin,
         "given_name": given,
         "family_name": family,
+        "has_password": has_password,
+        "has_google": has_google,
     }))
 }
 
@@ -317,6 +322,34 @@ async fn change_password(
     }
 
     let new_hash = run_blocking(move || hash_password(&creds.new_password)).await?;
+    db::update_user_password(&state.pool, user.id, &new_hash).await?;
+    db::record_activity(&state.pool, user.id, "profile_change", "password", "", "", Some(user.id))
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Adds a password to a Google-only account (the "vice versa" of linking a
+/// Google identity onto a password account) — there's no current password
+/// to verify, so this only succeeds while the account has none yet.
+#[post("/api/auth/password/set")]
+async fn set_password(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<SetPassword>,
+) -> Result<HttpResponse, ApiError> {
+    let body = body.into_inner();
+    validate_password(&body.new_password).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
+
+    let user_row = db::find_user_by_id(&state.pool, user.id)
+        .await?
+        .ok_or_else(|| ApiError::Internal("user disappeared from under us".to_owned()))?;
+    if user_row.password_hash.is_some() {
+        return Err(ApiError::BadRequest(
+            "this account already has a password — use change password instead".to_owned(),
+        ));
+    }
+
+    let new_hash = run_blocking(move || hash_password(&body.new_password)).await?;
     db::update_user_password(&state.pool, user.id, &new_hash).await?;
     db::record_activity(&state.pool, user.id, "profile_change", "password", "", "", Some(user.id))
         .await?;

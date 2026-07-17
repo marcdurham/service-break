@@ -44,6 +44,10 @@ pub fn oauth_complete_view(props: &OauthCompleteViewProps) -> Html {
                 destination = Route::Register;
             } else if let Some(message) = query_param(frag, "error") {
                 on_toast.emit(message);
+            } else if query_param(frag, "linked").is_some() {
+                // Linking doesn't issue a new session — the existing one
+                // (already in local storage) is still valid.
+                on_toast.emit("Google account linked".to_owned());
             } else if let Some(token) = query_param(frag, "token") {
                 on_login.emit(AuthSession {
                     token,

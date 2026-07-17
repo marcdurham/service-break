@@ -6,6 +6,17 @@ use yew_router::hooks::use_navigator;
 use crate::api;
 use crate::route::Route;
 
+/// Whether the signed-in account has a password to verify before setting a
+/// new one. Google-only accounts don't, so they get the "set" flow instead
+/// of "change".
+async fn fetch_has_password() -> bool {
+    api::get_me()
+        .await
+        .ok()
+        .and_then(|p| p.get("has_password").and_then(|v| v.as_bool()))
+        .unwrap_or(true)
+}
+
 #[derive(Properties, PartialEq)]
 pub struct ChangePasswordViewProps {
     pub auth: Option<AuthSession>,
@@ -54,7 +65,20 @@ pub fn change_password_view(props: &ChangePasswordViewProps) -> Html {
     let show_cur = use_state(|| false);
     let show_new = use_state(|| false);
     let show_confirm = use_state(|| false);
+    let has_password = use_state(|| true);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
+
+    {
+        let has_password = has_password.clone();
+        let signed_in = props.auth.is_some();
+        use_effect_with(signed_in, move |signed_in| {
+            if *signed_in {
+                wasm_bindgen_futures::spawn_local(async move {
+                    has_password.set(fetch_has_password().await);
+                });
+            }
+        });
+    }
 
     if props.auth.is_none() {
         // Not signed in — bounce back to account so they can sign in.
@@ -90,6 +114,7 @@ pub fn change_password_view(props: &ChangePasswordViewProps) -> Html {
             let cur_pw_local = cur_pw.clone();
             let new_pw_local = new_pw.clone();
             let on_toast = on_toast.clone();
+            let pw_busy = pw_busy.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match api::change_password(&ChangePassword {
                     current_password: (*cur).clone(),
@@ -105,13 +130,56 @@ pub fn change_password_view(props: &ChangePasswordViewProps) -> Html {
                     }
                     Err(msg) => on_toast.emit(msg),
                 }
+                pw_busy.set(false);
+            });
+        })
+    };
+
+    let set_password = {
+        let new_pw = new_pw.clone();
+        let confirm_pw = confirm_pw.clone();
+        let pw_busy = pw_busy.clone();
+        let on_toast = props.on_toast.clone();
+        let has_password = has_password.clone();
+        Callback::from(move |_| {
+            if (*new_pw).is_empty() || (*confirm_pw).is_empty() {
+                on_toast.emit("Fill in both fields".to_owned());
+                return;
+            }
+            if !(*new_pw).eq(&*confirm_pw) {
+                on_toast.emit("New passwords don't match".to_owned());
+                return;
+            }
+            if *pw_busy {
+                return;
+            }
+            pw_busy.set(true);
+            let new_p = new_pw.clone();
+            let confirm_pw_local = confirm_pw.clone();
+            let new_pw_local = new_pw.clone();
+            let on_toast = on_toast.clone();
+            let pw_busy = pw_busy.clone();
+            let has_password = has_password.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::set_password(&new_p).await {
+                    Ok(()) => {
+                        new_pw_local.set(String::new());
+                        confirm_pw_local.set(String::new());
+                        has_password.set(true);
+                        on_toast.emit("Password set".to_owned());
+                    }
+                    Err(msg) => on_toast.emit(msg),
+                }
+                pw_busy.set(false);
             });
         })
     };
 
     html! {
         <div class="screen sb-scroll">
-            <div class="screen-title">{"Change password"}</div>
+            <div class="screen-title">
+                {if *has_password { "Change password" } else { "Set a password" }}
+            </div>
             <button class="alt-auth-btn" onclick={{
                 let navigator = navigator.clone();
                 Callback::from(move |_| navigator.push(&Route::Account))
@@ -119,20 +187,39 @@ pub fn change_password_view(props: &ChangePasswordViewProps) -> Html {
                 <span class="mi">{"arrow_back"}</span>{"Back to account"}
             </button>
 
-            <div class="field-label">{"Current password"}</div>
-            {password_field(cur_pw.clone(), *show_cur, toggle_show_cur)}
-            <div class="field-label">{"New password"}</div>
-            {password_field(new_pw.clone(), *show_new, toggle_show_new)}
-            <div class="field-label">{"Confirm new password"}</div>
-            {password_field(confirm_pw.clone(), *show_confirm, toggle_show_confirm)}
-            <button
-                class="submit-btn"
-                onclick={change_password}
-                disabled={*pw_busy}
-            >
-                <span class="mi">{"lock_reset"}</span>
-                {if *pw_busy { "One moment…" } else { "Update password" }}
-            </button>
+            if *has_password {
+                <div class="field-label">{"Current password"}</div>
+                {password_field(cur_pw.clone(), *show_cur, toggle_show_cur)}
+                <div class="field-label">{"New password"}</div>
+                {password_field(new_pw.clone(), *show_new, toggle_show_new)}
+                <div class="field-label">{"Confirm new password"}</div>
+                {password_field(confirm_pw.clone(), *show_confirm, toggle_show_confirm)}
+                <button
+                    class="submit-btn"
+                    onclick={change_password}
+                    disabled={*pw_busy}
+                >
+                    <span class="mi">{"lock_reset"}</span>
+                    {if *pw_busy { "One moment…" } else { "Update password" }}
+                </button>
+            } else {
+                <div class="screen-sub mb-sm">
+                    {"Your account signs in with Google. Set a password to also sign in \
+                      with your username."}
+                </div>
+                <div class="field-label">{"New password"}</div>
+                {password_field(new_pw.clone(), *show_new, toggle_show_new)}
+                <div class="field-label">{"Confirm new password"}</div>
+                {password_field(confirm_pw.clone(), *show_confirm, toggle_show_confirm)}
+                <button
+                    class="submit-btn"
+                    onclick={set_password}
+                    disabled={*pw_busy}
+                >
+                    <span class="mi">{"lock_reset"}</span>
+                    {if *pw_busy { "One moment…" } else { "Set password" }}
+                </button>
+            }
         </div>
     }
 }

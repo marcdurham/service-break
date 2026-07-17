@@ -705,15 +705,39 @@ pub async fn create_oauth_state(
     Ok(())
 }
 
+/// Like [`create_oauth_state`], but for the "link an existing account to a
+/// Google identity" flow: mode is always `"link"` and `user_id` (the
+/// already-signed-in user doing the linking) rides along instead of an
+/// invite code, so the callback knows which account to attach the Google
+/// identity to.
+pub async fn create_oauth_link_state(
+    pool: &PgPool,
+    state: &str,
+    user_id: Uuid,
+) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM oauth_states WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query(
+        "INSERT INTO oauth_states (state, mode, invite_code, user_id, expires_at) \
+         VALUES ($1, 'link', '', $2, now() + make_interval(mins => $3))",
+    )
+    .bind(state)
+    .bind(user_id)
+    .bind(OAUTH_STATE_MINUTES)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Consumes a `state` value: deletes it (so it can never be replayed) and
-/// returns its `(mode, invite_code)` if it existed and hadn't expired.
+/// returns its `(mode, invite_code, linking_user_id)` if it existed and
+/// hadn't expired. `linking_user_id` is only ever set for `mode == "link"`.
 pub async fn take_oauth_state(
     pool: &PgPool,
     state: &str,
-) -> Result<Option<(String, String)>, ApiError> {
+) -> Result<Option<(String, String, Option<Uuid>)>, ApiError> {
     let row = sqlx::query(
         "DELETE FROM oauth_states WHERE state = $1 \
-         RETURNING mode, invite_code, expires_at > now() AS still_valid",
+         RETURNING mode, invite_code, user_id, expires_at > now() AS still_valid",
     )
     .bind(state)
     .fetch_optional(pool)
@@ -723,7 +747,7 @@ pub async fn take_oauth_state(
         if !still_valid {
             return None;
         }
-        Some((r.try_get("mode").ok()?, r.try_get("invite_code").ok()?))
+        Some((r.try_get("mode").ok()?, r.try_get("invite_code").ok()?, r.try_get("user_id").ok()?))
     }))
 }
 
@@ -751,6 +775,61 @@ pub async fn find_user_by_google_sub(
         })
     })
     .transpose()
+}
+
+/// Attaches a Google identity to an already-signed-in user's account (the
+/// "link" flow, as opposed to `upsert_google_user`'s register/login-only
+/// flow). A no-op if that Google identity is already linked to this same
+/// user; an error if it's linked to a different one, or if its email
+/// collides with a different account's.
+pub async fn link_google_account(
+    pool: &PgPool,
+    user_id: Uuid,
+    google_sub: &str,
+    email: &str,
+    given_name: &str,
+    family_name: &str,
+) -> Result<(), ApiError> {
+    if let Some(existing_id) =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE google_sub = $1")
+            .bind(google_sub)
+            .fetch_optional(pool)
+            .await?
+    {
+        return if existing_id == user_id {
+            Ok(())
+        } else {
+            Err(ApiError::Conflict(
+                "that Google account is already linked to a different user".to_owned(),
+            ))
+        };
+    }
+
+    let result = sqlx::query(
+        "UPDATE users SET google_sub = $2, email = $3, \
+         given_name = CASE WHEN given_name = '' THEN $4 ELSE given_name END, \
+         family_name = CASE WHEN family_name = '' THEN $5 ELSE family_name END \
+         WHERE id = $1",
+    )
+    .bind(user_id)
+    .bind(google_sub)
+    .bind(email)
+    .bind(given_name)
+    .bind(family_name)
+    .execute(pool)
+    .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(sqlx::Error::Database(e))
+            if e.is_unique_violation() && e.constraint() == Some("idx_users_email") =>
+        {
+            Err(ApiError::Conflict(
+                "that Google account's email is already used by a different account".to_owned(),
+            ))
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// A username candidate derived from the local part of an email address:

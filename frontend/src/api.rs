@@ -5,8 +5,8 @@ use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, ActivityEntry, AuthSession, ChangePassword, Credentials,
     ImportSummary, Invitation, InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite,
-    NewPlace, NewReview, PlaceDetail, PlaceEdit, PlaceSummary, PlacesQuery, UpdatePlace,
-    UpdateProfile, UserSummary,
+    NewPlace, NewReview, PlaceDetail, PlaceEdit, PlaceSummary, PlacesQuery, SetPassword,
+    UpdatePlace, UpdateProfile, UserSummary,
 };
 use uuid::Uuid;
 
@@ -264,6 +264,41 @@ pub async fn change_password(creds: &ChangePassword) -> ApiResult<()> {
         .map_err(err)?;
     if res.status() >= 400 {
         return Err(error_message(res, "could not change password").await);
+    }
+    Ok(())
+}
+
+/// Adds a password to an account that doesn't have one yet (a Google-only
+/// account) — the "vice versa" of linking Google onto a password account.
+pub async fn set_password(new_password: &str) -> ApiResult<()> {
+    let res = with_auth(Request::post("/api/auth/password/set"))
+        .json(&SetPassword { new_password: new_password.to_owned() })
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not set a password").await);
+    }
+    Ok(())
+}
+
+/// Starts the "link my Google account" flow: asks the server for a
+/// consent-screen URL (over `fetch`, so the bearer token goes in a header
+/// rather than a URL) and navigates the whole page there. `mode == "link"`
+/// on the backend, distinct from `start_google_auth`'s login/register modes.
+pub async fn start_google_link() -> ApiResult<()> {
+    let res = with_auth(Request::post("/api/auth/google/link/start"))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not start linking your Google account").await);
+    }
+    let body: serde_json::Value = res.json().await.map_err(err)?;
+    let url = body["url"].as_str().unwrap_or_default().to_owned();
+    if let Some(window) = web_sys::window() {
+        let _ = window.location().set_href(&url);
     }
     Ok(())
 }

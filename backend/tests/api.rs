@@ -710,10 +710,11 @@ async fn google_callback_surfaces_denied_consent(pool: PgPool) {
 async fn oauth_state_round_trips_once_then_is_gone(pool: PgPool) {
     backend::db::create_oauth_state(&pool, "state-once", "register", "INVITE1").await.unwrap();
 
-    let (mode, invite) =
+    let (mode, invite, link_user_id) =
         backend::db::take_oauth_state(&pool, "state-once").await.unwrap().unwrap();
     assert_eq!(mode, "register");
     assert_eq!(invite, "INVITE1");
+    assert!(link_user_id.is_none());
 
     // Single-use: a replay of the same state finds nothing.
     assert!(backend::db::take_oauth_state(&pool, "state-once").await.unwrap().is_none());
@@ -854,6 +855,153 @@ async fn google_only_account_cannot_change_a_password(pool: PgPool) {
         .set_json(json!({ "current_password": "whatever", "new_password": "new-password-123" }))
         .to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn set_password_adds_a_password_to_a_google_only_account(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let code = seed_invite(&pool).await;
+    let (user_id, username, _) = backend::db::upsert_google_user(
+        &pool,
+        "sub-set-pw",
+        "set-pw@example.com",
+        "",
+        "",
+        &code,
+    )
+    .await
+    .unwrap();
+    let token = "test-set-password-session".to_owned();
+    backend::db::create_session(&pool, &token, user_id).await.unwrap();
+
+    // No password yet: /me reports it, and vice versa also reports Google.
+    let req = TestRequest::get().uri("/api/auth/me").insert_header(auth(&token)).to_request();
+    let res = call_service(&app, req).await;
+    let profile: serde_json::Value = read_body_json(res).await;
+    assert_eq!(profile["has_password"], json!(false));
+    assert_eq!(profile["has_google"], json!(true));
+
+    let req = TestRequest::post()
+        .uri("/api/auth/password/set")
+        .insert_header(auth(&token))
+        .set_json(json!({ "new_password": "brand-new-password-1" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    // Now signs in with a plain username/password too.
+    let req = TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({ "username": username, "password": "brand-new-password-1" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn set_password_rejected_when_account_already_has_one(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-has-pw").await;
+
+    let req = TestRequest::post()
+        .uri("/api/auth/password/set")
+        .insert_header(auth(&token))
+        .set_json(json!({ "new_password": "some-other-password" }))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_link_start_requires_auth(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+    let req = TestRequest::post().uri("/api/auth/google/link/start").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn google_link_start_returns_consent_url_and_stores_state(pool: PgPool) {
+    let app = app_with_google(pool.clone()).await;
+    let token = register(&app, &pool, "scout-linking").await;
+
+    let req = TestRequest::post()
+        .uri("/api/auth/google/link/start")
+        .insert_header(auth(&token))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(res).await;
+    let url = body["url"].as_str().unwrap();
+    assert!(url.starts_with("https://accounts.google.com/o/oauth2/v2/auth?"));
+
+    let (mode, user_id): (String, Option<Uuid>) =
+        sqlx::query_as("SELECT mode, user_id FROM oauth_states")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(mode, "link");
+    assert!(user_id.is_some());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn link_google_account_attaches_identity_to_existing_user(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-to-link").await;
+    let req = TestRequest::get().uri("/api/auth/me").insert_header(auth(&token)).to_request();
+    let res = call_service(&app, req).await;
+    let profile: serde_json::Value = read_body_json(res).await;
+    let username = "scout-to-link";
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = $1")
+        .bind(username)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(profile["has_google"], json!(false));
+
+    backend::db::link_google_account(
+        &pool,
+        user_id,
+        "sub-linked-1",
+        "linked@example.com",
+        "Given",
+        "Family",
+    )
+    .await
+    .unwrap();
+
+    let linked = backend::db::find_user_by_google_sub(&pool, "sub-linked-1").await.unwrap().unwrap();
+    assert_eq!(linked.id, user_id);
+    assert_eq!(linked.username, username);
+    // Still has their original password — linking doesn't clear it.
+    assert!(linked.password_hash.is_some());
+
+    // Re-linking the same identity to the same user is a no-op, not an error.
+    backend::db::link_google_account(&pool, user_id, "sub-linked-1", "linked@example.com", "", "")
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn link_google_account_rejects_identity_already_linked_elsewhere(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token_a = register(&app, &pool, "scout-a").await;
+    let _token_b = register(&app, &pool, "scout-b").await;
+    let user_a: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'scout-a'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let user_b: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE username = 'scout-b'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let _ = token_a;
+
+    backend::db::link_google_account(&pool, user_a, "sub-shared", "a@example.com", "", "")
+        .await
+        .unwrap();
+
+    let err =
+        backend::db::link_google_account(&pool, user_b, "sub-shared", "b@example.com", "", "")
+            .await
+            .unwrap_err();
+    assert!(matches!(err, backend::error::ApiError::Conflict(_)));
 }
 
 #[sqlx::test(migrations = "./migrations")]
