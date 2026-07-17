@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Suggestion: Reducing the Permission Wall</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f7f6; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .problem { color: #c0392b; font-weight: bold; }
+        .solution { color: #27ae60; font-weight: bold; }
+        code { background: #eee; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; }
+        .mockup { background: #e0e0e0; border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; text-align: center; border-radius: 4px; }
+    </string>
+    </style>
+</head>
+<body>
+    <h1>UX Improvement: Removing the "Permission Wall"</h1>
+    
+    <div class="card">
+        <p class="problem"><strong>Problem:</strong> The current onboarding requires immediate location permission to proceed. Users are highly likely to deny permissions when faced with an unexpected system prompt, leading to a broken or empty experience.</p>
+        
+        <p class="solution"><strong>Solution:</strong> Implement a "Browse without Location" fallback. Allow users to explore the app using a default city (e.					  e.g., Seattle) or search for a different location <em>before</em> prompting for GPS access.</p>
+    </div>
+
+    <div class="card">
+        <h2>Proposed Flow</h2>
+        <ol>
+            <li><strong>Landing:</strong> Show the same beautiful onboarding, but with two buttons: <code>"Enable Location & Explore"</code> (Primary) and <code>"Explore Seattle"</code> (Secondary).</li>
+            <li><strong>Low Friction:</strong> If they click "Explore Seattle", load the map at <code>FALLBACK_CENTER</code> without triggering a browser permission dialog.</li>
+            <li><strong>Value First:</strong> Once the user sees how great the app is, use a subtle UI prompt later (e.g., a banner on the map) to suggest enabling location for better accuracy.</li>
+        </ol>
+
+        <div class="mockup">
+            [Mockup: Onboarding Screen] <br>
+            <br>
+            <button style="background:#3498db; color:white; padding:10px 20px; border:none; border-raise:2px;">Enable Location & Explore</button>
+            <p style='font-size: 0.8rem; margin-top:10px;'>or</p>
+            <button style="background:transparent; color:#3498db; padding:10px 20px; border:1px solid #3498db;">Explore Seattle, WA</button>
+        </div>
+    </div>
+</body>
+</html>

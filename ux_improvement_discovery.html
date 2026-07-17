@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Suggestion: Discovery & Feature Engagement</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacTL; line-height: 1.6; color: #333; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f7f6; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .problem { color: #c0392b; font-weight: bold; }
+        .solution { color: #27ae60; font-weight: bold; }
+        code { background: #eee; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; }
+        .mockup { background: #e0e0e0; border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; text-align: center; border-radius: 4px; }
+    </string>
+    </style>
+</head>
+<body>
+    <h1>UX Improvement: Discovery & Feature Engagement</h1>
+    
+    <div class="card">
+        <p class="problem"><strong class="problem">Problem:</strong> The app lacks immediate "Value Realization." After onboarding, the user is dropped onto a map. While powerful, it requires the user to perform an action (scrolling/clicking) before they see why the app is useful.</p>
+        
+        <p class="solution"><strong class="solution">Solution:</strong> Implement a "Quick Start" or "Trending Nearby" tray. Upon first launch, present a small, swipeable card carousel at the bottom of the map showing top-rated bathrooms in the current area.</p>
+    </div>
+
+    <div class="card">
+        <h2>Proposed Flow</h2>
+        <ol>
+            <li><strong>Zero-Click Value:</strong> Instead of just a map with pins, show 3 cards for "Highest Rated Nearby" directly on the `MapView` overlay.</li>
+            <li><strong>Feature Discovery:</strong> Use these cards to highlight the features mentioned in onboarding (e.g., a card showing a "5/5 Cleanliness" badge).</li>
+            <li><strong>Transition to Search:</strong> Once the user interacts with a card, transition them into the full `ListView` or `DetailView`.</li>
+        </ol>
+
+        <div class="mockup">
+            [Mockup: Map Overlay Tray] <br>
+            <br>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+                <div style="width: 120px; height: 160px; background: white; border-radius: 8px; padding: 5px; font-size: 0.7rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                    <strong>Starbucks</strong><br>
+                    ⭐ 4.8<br>
+                    <span style="color: green;">Very Clean</span>
+                </div>
+                <div style="width: 120px; height: 160px; background: white; border-radius: 8px; padding: 5px; font-size: 0.7rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                    <strong>Park Center</strong><br>
+                    ⭐ 3.2<br>
+                    <span style="color: orange;">Average</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
