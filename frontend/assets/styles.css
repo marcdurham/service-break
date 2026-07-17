@@ -720,7 +720,7 @@ button { cursor: pointer; }
   display: flex; align-items: center; gap: 7px;
 }
 .rate-btn .mi { font-size: 20px; }
-.delete-btn { border-color: var(--danger-border); color: var(--danger); }
+.delete-btn { border-color: var(--danger-border); color: var(--danger); padding: 15px 14px; }
 
 .breakdown {
   background: #fff; border-radius: 18px; padding: 6px 16px; margin-top: 18px;
