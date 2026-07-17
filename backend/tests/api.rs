@@ -15,7 +15,7 @@ use shared::{
     ActivityEntry, AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking,
     PlaceDetail, PlaceEdit, PlaceSummary, PlaceType, Requirement,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 async fn app(
@@ -1691,6 +1691,61 @@ async fn revoked_invite_cannot_be_redeemed(pool: PgPool) {
         .to_request();
     let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
     assert_eq!(overview.invites[0].status, InviteStatus::Expired);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn deleting_an_expired_invite_soft_deletes_it(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let inviter_token = register(&app, &pool, "inviter-expired").await;
+
+    let req = TestRequest::post()
+        .uri("/api/invites")
+        .insert_header(auth(&inviter_token))
+        .set_json(json!({ "name": "Dana" }))
+        .to_request();
+    let issued: Invitation = read_body_json(call_service(&app, req).await).await;
+
+    sqlx::query("UPDATE invitations SET created_at = now() - interval '8 days' WHERE code = $1")
+        .bind(&issued.code)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Deleting an already-expired invite hides it from the list...
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", issued.code))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+
+    let req = TestRequest::get().uri("/api/invites").insert_header(auth(&inviter_token)).to_request();
+    let overview: InvitesOverview = read_body_json(call_service(&app, req).await).await;
+    assert!(overview.invites.is_empty());
+
+    // ...but the row is kept in the database, marked deleted rather than removed.
+    let row = sqlx::query("SELECT deleted_at, deleted_by FROM invitations WHERE code = $1")
+        .bind(&issued.code)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let deleted_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("deleted_at").unwrap();
+    assert!(deleted_at.is_some());
+    let deleted_by: Option<Uuid> = row.try_get("deleted_by").unwrap();
+    assert!(deleted_by.is_some());
+
+    // The removal shows up in the inviter's activity log.
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&inviter_token)).to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(entries[0].kind, "invite_change");
+    assert_eq!(entries[0].summary, "Removed invitation for Dana");
+
+    // ...so deleting it again reports not found.
+    let req = TestRequest::delete()
+        .uri(&format!("/api/invites/{}", issued.code))
+        .insert_header(auth(&inviter_token))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test(migrations = "./migrations")]

@@ -401,7 +401,9 @@ async fn rename_invite(
     Ok(HttpResponse::NoContent().finish())
 }
 
-/// Revokes (expires) a pending invitation. Only the inviter can revoke.
+/// Removes an invitation: soft-deletes an expired one (hidden from the
+/// list, kept in the database), or soft-revokes a pending one. Only the
+/// inviter can act on their own codes.
 #[delete("/api/invites/{code}")]
 async fn delete_invite(
     state: Data<AppState>,
@@ -409,7 +411,12 @@ async fn delete_invite(
     path: Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let code = path.into_inner();
-    db::revoke_invitation(&state.pool, user.id, &code).await?;
+    if let db::InvitationRemoval::Deleted { name } =
+        db::revoke_invitation(&state.pool, user.id, &code).await?
+    {
+        db::record_activity(&state.pool, user.id, "invite_deleted", "", &name, "", Some(user.id))
+            .await?;
+    }
     Ok(HttpResponse::NoContent().finish())
 }
 
