@@ -37,7 +37,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(list_users)
         .service(get_user_detail)
         .service(update_user)
-        .service(delete_user);
+        .service(delete_user)
+        .service(get_user_activity);
 }
 
 /// Creates the `admin` account with [`DEFAULT_ADMIN_PASSWORD`] if no user
@@ -551,6 +552,78 @@ async fn update_user(
 
     tx.commit().await?;
 
+    // Log each changed field to the target's activity log, attributed to
+    // the admin who made the change.
+    let actor_id = Some(admin.0.id);
+    if let Some(name) = &new.username {
+        if *name != user.username {
+            db::record_activity(
+                &state.pool,
+                target_id,
+                "profile_change",
+                "username",
+                &user.username,
+                name,
+                actor_id,
+            )
+            .await?;
+        }
+    }
+    if new.password.is_some() {
+        db::record_activity(
+            &state.pool,
+            target_id,
+            "profile_change",
+            "password",
+            "",
+            "",
+            actor_id,
+        )
+        .await?;
+    }
+    if let Some(is_admin_new) = new.is_admin {
+        if is_admin_new != user.is_admin {
+            db::record_activity(
+                &state.pool,
+                target_id,
+                "profile_change",
+                "is_admin",
+                &user.is_admin.to_string(),
+                &is_admin_new.to_string(),
+                actor_id,
+            )
+            .await?;
+        }
+    }
+    if let Some(g) = &new.given_name {
+        if *g != user.given_name {
+            db::record_activity(
+                &state.pool,
+                target_id,
+                "profile_change",
+                "given_name",
+                &user.given_name,
+                g,
+                actor_id,
+            )
+            .await?;
+        }
+    }
+    if let Some(f) = &new.family_name {
+        if *f != user.family_name {
+            db::record_activity(
+                &state.pool,
+                target_id,
+                "profile_change",
+                "family_name",
+                &user.family_name,
+                f,
+                actor_id,
+            )
+            .await?;
+        }
+    }
+
     // Return the refreshed summary so the frontend can update the list in
     // place without a full reload.
     let updated = db::find_user_by_id(&state.pool, target_id).await?;
@@ -593,6 +666,20 @@ async fn delete_user(
         .await?;
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+/// `GET /api/admin/users/{id}/activity` — an account's activity log: logins,
+/// failed logins, profile changes, place edits and ratings. Newest first,
+/// capped at 50.
+#[get("/api/admin/users/{id}/activity")]
+async fn get_user_activity(
+    state: Data<AppState>,
+    _admin: AdminUser,
+    path: Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let user = db::find_user_by_id(&state.pool, *path).await?.ok_or(ApiError::NotFound)?;
+    let entries = db::list_user_activity(&state.pool, user.id, &user.username, 50).await?;
+    Ok(HttpResponse::Ok().json(entries))
 }
 
 fn generate_password() -> String {

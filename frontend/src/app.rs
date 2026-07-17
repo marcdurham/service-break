@@ -9,6 +9,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::account_view::AccountView;
+use crate::components::activity_view::ActivityView;
 use crate::components::change_password_view::ChangePasswordView;
 use crate::components::add_form::AddForm;
 use crate::components::admin_view::AdminView;
@@ -619,6 +620,10 @@ pub fn app() -> Html {
                     Route::Users => html! {<UsersView />},
                     Route::UserEdit { .. } => html! {
                         <EditUserView auth={(*auth).clone()} on_toast={show_toast.clone()} />
+                    },
+                    Route::Activity => html! { <ActivityView /> },
+                    Route::UserActivity { id } => html! {
+                        <ActivityView user_id={Some(id)} back_route={Some(Route::UserEdit { id })} />
                     },
                     _ => html! {
                         <MapView

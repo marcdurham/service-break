@@ -3,9 +3,10 @@
 use gloo_net::http::{Request, RequestBuilder, Response};
 use gloo_storage::{LocalStorage, Storage};
 use shared::{
-    encode_query_component, AuthSession, ChangePassword, Credentials, ImportSummary, Invitation,
-    InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite, NewPlace, NewReview, PlaceDetail,
-    PlaceEdit, PlaceSummary, PlacesQuery, UpdatePlace, UpdateProfile, UserSummary,
+    encode_query_component, ActivityEntry, AuthSession, ChangePassword, Credentials,
+    ImportSummary, Invitation, InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite,
+    NewPlace, NewReview, PlaceDetail, PlaceEdit, PlaceSummary, PlacesQuery, UpdatePlace,
+    UpdateProfile, UserSummary,
 };
 use uuid::Uuid;
 
@@ -279,6 +280,28 @@ pub async fn update_profile(profile: &UpdateProfile) -> ApiResult<()> {
         return Err(error_message(res, "could not update profile").await);
     }
     Ok(())
+}
+
+/// The signed-in user's own activity log — logins, failed logins, profile
+/// changes, place edits and ratings, newest first.
+pub async fn fetch_my_activity() -> ApiResult<Vec<ActivityEntry>> {
+    let res = with_auth(Request::get("/api/auth/activity")).send().await.map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load activity").await);
+    }
+    res.json().await.map_err(err)
+}
+
+/// One account's activity log — admin only.
+pub async fn fetch_user_activity(id: Uuid) -> ApiResult<Vec<ActivityEntry>> {
+    let res = with_auth(Request::get(&format!("/api/admin/users/{id}/activity")))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not load activity").await);
+    }
+    res.json().await.map_err(err)
 }
 
 /// Best-effort server-side session invalidation.
