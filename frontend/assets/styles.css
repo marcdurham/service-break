@@ -628,6 +628,15 @@ button { cursor: pointer; }
   margin-top: 14px; line-height: 1.5;
 }
 
+/* Persistent explanation banner, e.g. why a Google sign-in bounced here. */
+.auth-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: #fbeee6; border: 1px solid var(--accent); border-radius: 13px;
+  color: var(--accent-dark); font-size: 13.5px; line-height: 1.5;
+  padding: 12px 14px; margin-bottom: 16px;
+}
+.auth-banner .mi { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
 /* Sign-in prompt shown in place of login-only content. */
 .gate-card {
   background: #fff; border: 1px solid var(--border); border-radius: 22px;

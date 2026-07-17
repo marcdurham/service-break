@@ -181,6 +181,17 @@ fn redirect_with_error(app_base_url: &str, message: &str) -> HttpResponse {
     HttpResponse::Found().append_header(("Location", url)).finish()
 }
 
+/// Redirects to the frontend's `/oauth-complete` route with `message` in
+/// the URL fragment under a distinct key from `redirect_with_error`, so the
+/// frontend can route the user straight to `/register` (with a persistent
+/// banner) instead of dropping them back on the login page with a toast
+/// that vanishes before most people act on it.
+fn redirect_to_register(app_base_url: &str, message: &str) -> HttpResponse {
+    let url =
+        format!("{app_base_url}/oauth-complete#register_required={}", encode_query_component(message));
+    HttpResponse::Found().append_header(("Location", url)).finish()
+}
+
 /// Redirects to the frontend's `/oauth-complete` route with the new
 /// session in the URL fragment, for it to store and treat as a login.
 fn redirect_with_session(app_base_url: &str, session: &shared::AuthSession) -> HttpResponse {
@@ -250,9 +261,10 @@ async fn google_callback(state: Data<AppState>, query: Query<CallbackQuery>) -> 
         match db::find_user_by_google_sub(&state.pool, &profile.sub).await {
             Ok(Some(u)) => Ok((u.id, u.username, u.is_admin)),
             Ok(None) => {
-                return redirect_with_error(
+                return redirect_to_register(
                     &cfg.app_base_url,
-                    "no account is linked to that Google login yet — create one with an invite code first",
+                    "No account is linked to that Google login yet. Enter an invite code below, \
+                     then tap Continue with Google to finish creating your account.",
                 );
             }
             Err(e) => Err(e),
