@@ -4,6 +4,7 @@ use yew::prelude::*;
 use yew_router::hooks::{use_navigator, use_route};
 
 use crate::api;
+use crate::components::ui;
 use crate::route::Route;
 
 #[derive(Properties, PartialEq)]
@@ -240,23 +241,37 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
         })
     };
 
+    let show_delete_confirm = use_state(|| false);
+    let request_delete = {
+        let show_delete_confirm = show_delete_confirm.clone();
+        Callback::from(move |_| show_delete_confirm.set(true))
+    };
+    let cancel_delete_confirm = {
+        let show_delete_confirm = show_delete_confirm.clone();
+        Callback::from(move |_| show_delete_confirm.set(false))
+    };
+
     let delete_navigator = navigator.clone();
-    // Delete handler.
-    let delete = {
+    // Delete handler, run after the confirm modal is accepted.
+    let confirm_delete = {
         let busy = busy.clone();
         let on_toast = props.on_toast.clone();
+        let show_delete_confirm = show_delete_confirm.clone();
         Callback::from(move |_| {
             if *busy {
                 return;
             }
+            busy.set(true);
             let user_id = user_id_opt.unwrap();
             let busy = busy.clone();
             let on_toast = on_toast.clone();
             let delete_navigator = delete_navigator.clone();
+            let show_delete_confirm = show_delete_confirm.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 match api::delete_user(user_id).await {
                     Ok(_) => {
                         on_toast.emit("Account deleted".to_owned());
+                        show_delete_confirm.set(false);
                         delete_navigator.push(&Route::Users);
                     }
                     Err(msg) => {
@@ -368,13 +383,24 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
                     </div>
                     <button
                         class="alt-auth-btn"
-                        onclick={delete}
+                        onclick={request_delete}
                         disabled={*busy}
                         style="color:var(--danger);border-color:var(--danger)"
                     >
                         <span class="mi">{"delete_forever"}</span>{"Delete account"}
                     </button>
                 </div>
+
+                if *show_delete_confirm {
+                    <ui::ConfirmModal
+                        title="Delete this account?"
+                        body="This removes all places, reviews and saved lists tied to this account. This can't be undone."
+                        busy={*busy}
+                        busy_label="Deleting…"
+                        on_confirm={confirm_delete}
+                        on_cancel={cancel_delete_confirm}
+                    />
+                }
             }
         </div>
     }

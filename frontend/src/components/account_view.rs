@@ -5,6 +5,7 @@ use yew_router::hooks::use_navigator;
 
 use crate::api;
 use crate::components::change_password_view::password_field;
+use crate::components::ui;
 use crate::route::Route;
 
 #[derive(Properties, PartialEq)]
@@ -19,7 +20,7 @@ pub struct AccountViewProps {
 }
 
 /// One row in the friends & invitations list.
-fn invite_row(inv: &Invitation, on_revoke: Callback<String>) -> Html {
+fn invite_row(inv: &Invitation, on_request_revoke: Callback<(String, String)>) -> Html {
     let title = if !inv.name.is_empty() {
         inv.name.clone()
     } else if let Some(u) = &inv.joined_username {
@@ -37,12 +38,11 @@ fn invite_row(inv: &Invitation, on_revoke: Callback<String>) -> Html {
         InviteStatus::Joined => "friend-status status-joined",
     };
     let code = inv.code.clone();
-    let on_revoke = on_revoke.clone();
     let is_pending = inv.status == InviteStatus::Pending;
     html! {
         <div class="friend-row" key={code.clone()}>
             <div>
-                <div class="friend-name">{title}</div>
+                <div class="friend-name">{title.clone()}</div>
                 <div class="friend-sub">{sub}</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
@@ -51,11 +51,12 @@ fn invite_row(inv: &Invitation, on_revoke: Callback<String>) -> Html {
                         class="revoke-btn"
                         onclick={{
                             let code = code.clone();
-                            Callback::from(move |_| on_revoke.emit(code.clone()))
+                            let title = title.clone();
+                            Callback::from(move |_| on_request_revoke.emit((code.clone(), title.clone())))
                         }}
                         title="Revoke this invitation"
                     >
-                        <span class="mi">{"cancel"}</span>
+                        <span class="mi">{"delete"}</span>
                     </button>
                 }
                 <span class={chip_class}>{inv.status.label()}</span>
@@ -112,10 +113,33 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         });
     }
 
-    let revoke_invite = {
+    // (code, display name) of the invite pending revoke confirmation.
+    let revoke_target = use_state(|| None::<(String, String)>);
+    let revoking = use_state(|| false);
+
+    let request_revoke = {
+        let revoke_target = revoke_target.clone();
+        Callback::from(move |target: (String, String)| revoke_target.set(Some(target)))
+    };
+    let cancel_revoke = {
+        let revoke_target = revoke_target.clone();
+        Callback::from(move |_| revoke_target.set(None))
+    };
+    let confirm_revoke = {
+        let revoke_target = revoke_target.clone();
+        let revoking = revoking.clone();
         let overview = overview.clone();
         let on_toast = props.on_toast.clone();
-        Callback::from(move |code: String| {
+        Callback::from(move |_| {
+            let Some((code, _)) = (*revoke_target).clone() else {
+                return;
+            };
+            if *revoking {
+                return;
+            }
+            revoking.set(true);
+            let revoke_target = revoke_target.clone();
+            let revoking = revoking.clone();
             let overview = overview.clone();
             let on_toast = on_toast.clone();
             wasm_bindgen_futures::spawn_local(async move {
@@ -126,11 +150,13 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                         if let Ok(o) = api::list_invites().await {
                             overview.set(Some(o));
                         }
+                        revoke_target.set(None);
                     }
                     Err(msg) => {
                         on_toast.emit(msg);
                     }
                 }
+                revoking.set(false);
             });
         })
     };
@@ -339,7 +365,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                                 <span class="friend-status status-joined">{"Friend"}</span>
                             </div>
                         }
-                        { for o.invites.iter().map(|inv| invite_row(inv, revoke_invite.clone())) }
+                        { for o.invites.iter().map(|inv| invite_row(inv, request_revoke.clone())) }
                         if o.invites.is_empty() && o.invited_by.is_none() {
                             <div class="friend-row">
                                 <div class="friend-sub">
@@ -348,6 +374,18 @@ pub fn account_view(props: &AccountViewProps) -> Html {
                             </div>
                         }
                     </div>
+                }
+
+                if let Some((_, name)) = &*revoke_target {
+                    <ui::ConfirmModal
+                        title="Revoke invitation?"
+                        body={format!("This revokes the invitation for {name}. This can't be undone.")}
+                        confirm_label="Revoke"
+                        busy_label="Revoking…"
+                        busy={*revoking}
+                        on_confirm={confirm_revoke}
+                        on_cancel={cancel_revoke}
+                    />
                 }
             } else {
                 <div class="screen-sub mb-sm">

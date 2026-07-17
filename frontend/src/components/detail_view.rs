@@ -499,26 +499,14 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
             }
 
             if *show_confirm {
-                <div class="confirm-scrim" onclick={cancel_delete.clone()}>
-                    <div class="confirm-dialog" onclick={|e: MouseEvent| e.stop_propagation()}>
-                        <div class="confirm-title">{"Delete place?"}</div>
-                        <div class="confirm-body">
-                            {"This removes "}{&p.name}{" and all its reviews. This can't be undone."}
-                        </div>
-                        <div class="confirm-actions">
-                            <button class="confirm-cancel" onclick={cancel_delete}>
-                                {"Cancel"}
-                            </button>
-                            <button
-                                class="confirm-ok"
-                                disabled={*deleting}
-                                onclick={confirm_delete}
-                            >
-                                {if *deleting { "Deleting..." } else { "Delete" }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <ui::ConfirmModal
+                    title="Delete place?"
+                    body={format!("This removes {} and all its reviews. This can't be undone.", p.name)}
+                    busy={*deleting}
+                    busy_label="Deleting…"
+                    on_confirm={confirm_delete}
+                    on_cancel={cancel_delete}
+                />
             }
         </div>
     }
