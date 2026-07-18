@@ -25,6 +25,7 @@ fn icon_for(kind: &str) -> &'static str {
         "failed_login" => "gpp_maybe",
         "profile_change" => "manage_accounts",
         "invite_change" => "person_remove",
+        "place_created" => "add_location",
         "place_change" => "edit_location_alt",
         "rating" => "star_rate",
         _ => "history",
@@ -83,7 +84,7 @@ pub fn activity_view(props: &ActivityViewProps) -> Html {
             </button>
 
             <div class="screen-sub mb-md">
-                {"The last 50 logins, failed logins, profile changes, place edits and ratings."}
+                {"The last 50 logins, failed logins, profile changes, places added, place edits and ratings."}
             </div>
 
             if !error.is_empty() {

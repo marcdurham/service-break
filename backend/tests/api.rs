@@ -2550,6 +2550,35 @@ async fn admin_activity_endpoint_merges_place_and_rating_history(pool: PgPool) {
     assert_eq!(promoted.actor, admin.username);
 }
 
+/// Submitting a new place (which bundles an initial rating) logs both the
+/// place creation and the rating in the submitter's activity feed.
+#[sqlx::test(migrations = "./migrations")]
+async fn creating_a_place_logs_place_created_and_rating(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-founder").await;
+
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(new_place_json("Camber Coffee"))
+        .to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    let req =
+        TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
+    let entries: Vec<ActivityEntry> = read_body_json(call_service(&app, req).await).await;
+    let mut kinds: Vec<&str> = entries.iter().map(|e| e.kind.as_str()).collect();
+    kinds.sort_unstable();
+    assert_eq!(kinds, vec!["place_created", "rating"]);
+
+    let created = entries.iter().find(|e| e.kind == "place_created").unwrap();
+    assert_eq!(created.summary, "Added Camber Coffee");
+    assert_eq!(created.actor, "scout-founder");
+
+    let rating = entries.iter().find(|e| e.kind == "rating").unwrap();
+    assert_eq!(rating.summary, "Rated Camber Coffee — cleanliness 5/5, coffee 4/5");
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn activity_endpoints_require_login_and_admin(pool: PgPool) {
     let app = app(pool.clone()).await;
