@@ -51,9 +51,42 @@ find_or_create_tab() {
   echo "$root_pane"
 }
 
+# Check if docker compose is already running in the db tab.
+# Looks for container names or "Attaching" text in recent output.
+is_db_running() {
+  local pane_id="$1"
+  local output
+  output=$(herdr pane read "$pane_id" --source recent --lines 20 2>/dev/null || true)
+  if echo "$output" | grep -qE '(Attaching to|service-break-.*-1|\[.*\] Started)'; then
+    return 0
+  fi
+  return 1
+}
+
+# Stop whatever is running in a pane (Ctrl+C), wait, then run new command.
+restart_service() {
+  local label="$1" pane_id="$2" cmd="$3"
+  echo "Stopping existing $label service..."
+  herdr pane send-keys "$pane_id" CtrlC
+  sleep 1
+  herdr pane run "$pane_id" "$cmd"
+  echo "Started $label on new port (pane $pane_id): $cmd"
+}
+
 for entry in "${SERVICES[@]}"; do
   IFS='|' read -r label cwd cmd <<<"$entry"
   pane_id=$(find_or_create_tab "$label" "$cwd")
-  herdr pane run "$pane_id" "$cmd"
-  echo "Running '$label': $cmd (pane $pane_id)"
+
+  if [[ "$label" == "db" ]]; then
+    # DB: only start if not already running (docker compose is long-lived)
+    if is_db_running "$pane_id"; then
+      echo "DB already running, skipping."
+    else
+      herdr pane run "$pane_id" "$cmd"
+      echo "Started $label in tab (pane $pane_id): $cmd"
+    fi
+  else
+    # Backend/frontend: always stop old process and start with new port
+    restart_service "$label" "$pane_id" "$cmd"
+  fi
 done
