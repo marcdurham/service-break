@@ -481,9 +481,9 @@ pub async fn record_activity(
 
 /// The last `limit` activity events for one account, newest first: logins,
 /// failed logins, profile changes (by the account or an admin), invitations
-/// removed, place edits, and ratings (reviews) posted. Each source is
-/// queried independently (capped at `limit` rows each — enough for a
-/// correct n-way merge), combined, and truncated to `limit`.
+/// removed, places created, place edits, and ratings (reviews) posted. Each
+/// source is queried independently (capped at `limit` rows each — enough
+/// for a correct n-way merge), combined, and truncated to `limit`.
 pub async fn list_user_activity(
     pool: &PgPool,
     user_id: Uuid,
@@ -542,6 +542,29 @@ pub async fn list_user_activity(
                 kind: kind.to_owned(),
                 summary,
                 actor,
+                created_at: created_at.to_rfc3339(),
+                time_ago: time_ago(created_at, now),
+            },
+        ));
+    }
+
+    let created_place_rows = sqlx::query(
+        "SELECT name, created_at FROM places \
+         WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    for row in created_place_rows {
+        let place_name: String = row.try_get("name")?;
+        let created_at: DateTime<Utc> = row.try_get("created_at")?;
+        combined.push((
+            created_at,
+            ActivityEntry {
+                kind: "place_created".to_owned(),
+                summary: format!("Added {place_name}"),
+                actor: username.to_owned(),
                 created_at: created_at.to_rfc3339(),
                 time_ago: time_ago(created_at, now),
             },
