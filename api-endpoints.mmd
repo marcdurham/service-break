@@ -1,0 +1,90 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1a365d', 'primaryTextColor': '#fff', 'lineColor': '#4a90d9', 'secondaryColor': '#2c5282', 'tertiaryColor': '#ebf4ff'}}}%%
+graph TD
+    subgraph Health["🩺 Health"]
+        H1["GET /api/health"]
+    end
+
+    subgraph Auth["🔐 Authentication"]
+        A1["POST /api/auth/register"]
+        A2["POST /api/auth/login"]
+        A3["POST /api/auth/logout"]
+        A4["GET /api/auth/me"]
+        A5["PATCH /api/auth/profile"]
+        A6["PUT /api/auth/password"]
+        A7["POST /api/auth/password/set"]
+        A8["GET /api/auth/activity"]
+    end
+
+    subgraph GoogleAuth["🔗 Google OAuth"]
+        G1["GET /api/auth/google/enabled"]
+        G2["GET /api/auth/google/start"]
+        G3["POST /api/auth/google/link/start"]
+        G4["GET /api/auth/google/callback"]
+    end
+
+    subgraph Invites["📨 Invites"]
+        I1["POST /api/invites"]
+        I2["GET /api/invites"]
+        I3["PUT /api/invites/{code}/name"]
+        I4["DELETE /api/invites/{code}"]
+    end
+
+    subgraph Places["📍 Places"]
+        P1["GET /api/places — list/search"]
+        P2["GET /api/places/{id}"]
+        P3["POST /api/places — add place"]
+        P4["PUT /api/places/{id} — edit"]
+        P5["DELETE /api/places/{id}"]
+        P6["GET /api/places/{id}/edits — edit history"]
+        P7["POST /api/places/{id}/reviews — post review"]
+    end
+
+    subgraph Devices["📱 Device Saves"]
+        D1["GET /api/devices/{device_id}/saved"]
+        D2["PUT /api/devices/{device_id}/saved/{place_id} — save"]
+        D3["DELETE /api/devices/{device_id}/saved/{place_id} — unsave"]
+    end
+
+    subgraph Admin["🛡️ Admin"]
+        AD1["GET /api/admin/export"]
+        AD2["GET /api/admin/users"]
+        AD3["GET /api/admin/users/{id}"]
+        AD4["POST /api/admin/import"]
+        AD5["PATCH /api/admin/users/{id} — edit user"]
+        AD6["DELETE /api/admin/users/{id}"]
+        AD7["GET /api/admin/users/{id}/activity"]
+    end
+
+    subgraph Other["🌐 Utilities"]
+        O1["GET /api/geocode — Nominatim geocoding"]
+        O2["GET /api/maps-link — Google Maps deep link"]
+    end
+
+    A4 -.->|bearer token| Auth
+    A5 -.->|bearer token| Auth
+    A6 -.->|bearer token| Auth
+    A7 -.->|bearer token| Auth
+    A8 -.->|bearer token| Auth
+    G1 --> GoogleAuth
+    G2 --> GoogleAuth
+    G3 -.->|bearer token| GoogleAuth
+    G4 --> GoogleAuth
+    I1 -.->|bearer token| Invites
+    I2 -.->|bearer token| Invites
+    I3 -.->|bearer token| Invites
+    I4 -.->|bearer token| Invites
+    P3 -.->|bearer token| Places
+    P4 -.->|bearer token| Places
+    P5 -.->|bearer token| Places
+    P6 -.->|bearer token| Places
+    P7 -.->|bearer token| Places
+    D1 --> Devices
+    D2 -.->|bearer token| Devices
+    D3 -.->|bearer token| Devices
+    AD1 -.->|admin bearer| Admin
+    AD2 -.->|admin bearer| Admin
+    AD3 -.->|admin bearer| Admin
+    AD4 -.->|admin bearer| Admin
+    AD5 -.->|admin bearer| Admin
+    AD6 -.->|admin bearer| Admin
+    AD7 -.->|admin bearer| Admin

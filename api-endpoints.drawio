@@ -1,0 +1,159 @@
+<mxfile host="app.diagrams.net" modified="2025-01-01T00:00:00.000Z" agent="service-break" version="24.0.0">
+  <diagram name="API Endpoints" id="api-endpoints">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ==================== HEALTH ==================== -->
+        <mxCell id="health_group" value="🩺 Health" style="swimlane;startSize=30;fillColor=#fef3c7;strokeColor=#f59e0b;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="280" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="h1" value="GET /api/health" style="rounded=1;whiteSpace=wrap;fillColor=#fffbeb;strokeColor=#f59e0b;fontSize=11;" vertex="1" parent="health_group">
+          <mxGeometry x="20" y="35" width="240" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== AUTH ==================== -->
+        <mxCell id="auth_group" value="🔐 Authentication" style="swimlane;startSize=30;fillColor=#dbeafe;strokeColor=#3b82f6;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="100" width="500" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="a1" value="POST /api/auth/register" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2" value="POST /api/auth/login" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3" value="POST /api/auth/logout" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4" value="GET /api/auth/me" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="125" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a5" value="PATCH /api/auth/profile" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="155" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a6" value="PUT /api/auth/password" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="185" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a7" value="POST /api/auth/password/set" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="215" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="a8" value="GET /api/auth/activity" style="rounded=1;whiteSpace=wrap;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=11;" vertex="1" parent="auth_group">
+          <mxGeometry x="20" y="245" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== GOOGLE AUTH ==================== -->
+        <mxCell id="google_group" value="🔗 Google OAuth" style="swimlane;startSize=30;fillColor=#ede9fe;strokeColor=#8b5cf6;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="380" width="500" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="g1" value="GET /api/auth/google/enabled" style="rounded=1;whiteSpace=wrap;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=11;" vertex="1" parent="google_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="g2" value="GET /api/auth/google/start" style="rounded=1;whiteSpace=wrap;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=11;" vertex="1" parent="google_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="g3" value="POST /api/auth/google/link/start" style="rounded=1;whiteSpace=wrap;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=11;" vertex="1" parent="google_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="g4" value="GET /api/auth/google/callback" style="rounded=1;whiteSpace=wrap;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=11;" vertex="1" parent="google_group">
+          <mxGeometry x="20" y="125" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== INVITES ==================== -->
+        <mxCell id="invites_group" value="📨 Invites" style="swimlane;startSize=30;fillColor=#d1fae5;strokeColor=#10b981;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="540" width="500" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="i1" value="POST /api/invites" style="rounded=1;whiteSpace=wrap;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=11;" vertex="1" parent="invites_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="i2" value="GET /api/invites" style="rounded=1;whiteSpace=wrap;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=11;" vertex="1" parent="invites_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="i3" value="PUT /api/invites/{code}/name" style="rounded=1;whiteSpace=wrap;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=11;" vertex="1" parent="invites_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="i4" value="DELETE /api/invites/{code}" style="rounded=1;whiteSpace=wrap;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=11;" vertex="1" parent="invites_group">
+          <mxGeometry x="20" y="125" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== PLACES ==================== -->
+        <mxCell id="places_group" value="📍 Places" style="swimlane;startSize=30;fillColor=#fee2e2;strokeColor=#ef4444;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="560" y="20" width="500" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1" value="GET /api/places — list/search" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2" value="GET /api/places/{id}" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3" value="POST /api/places — add place" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4" value="PUT /api/places/{id} — edit" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="125" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5" value="DELETE /api/places/{id}" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="155" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6" value="GET /api/places/{id}/edits — edit history" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="185" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7" value="POST /api/places/{id}/reviews — post review" style="rounded=1;whiteSpace=wrap;fillColor=#fef2f2;strokeColor=#ef4444;fontSize=11;" vertex="1" parent="places_group">
+          <mxGeometry x="20" y="215" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== DEVICE SAVES ==================== -->
+        <mxCell id="devices_group" value="📱 Device Saves" style="swimlane;startSize=30;fillColor=#cffafe;strokeColor=#06b6d4;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="560" y="260" width="500" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1" value="GET /api/devices/{device_id}/saved" style="rounded=1;whiteSpace=wrap;fillColor=#ecfeff;strokeColor=#06b6d4;fontSize=11;" vertex="1" parent="devices_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2" value="PUT /api/devices/{device_id}/saved/{place_id} — save" style="rounded=1;whiteSpace=wrap;fillColor=#ecfeff;strokeColor=#06b6d4;fontSize=11;" vertex="1" parent="devices_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3" value="DELETE /api/devices/{device_id}/saved/{place_id} — unsave" style="rounded=1;whiteSpace=wrap;fillColor=#ecfeff;strokeColor=#06b6d4;fontSize=11;" vertex="1" parent="devices_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== ADMIN ==================== -->
+        <mxCell id="admin_group" value="🛡️ Admin" style="swimlane;startSize=30;fillColor=#f3e8ff;strokeColor=#7c3aed;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="560" y="420" width="500" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad1" value="GET /api/admin/export" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad2" value="GET /api/admin/users" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad3" value="GET /api/admin/users/{id}" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="95" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad4" value="POST /api/admin/import" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="125" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad5" value="PATCH /api/admin/users/{id} — edit user" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="155" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad6" value="DELETE /api/admin/users/{id}" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="185" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="ad7" value="GET /api/admin/users/{id}/activity" style="rounded=1;whiteSpace=wrap;fillColor=#faf5ff;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="admin_group">
+          <mxGeometry x="20" y="215" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== UTILITIES ==================== -->
+        <mxCell id="other_group" value="🌐 Utilities" style="swimlane;startSize=30;fillColor=#f0fdf4;strokeColor=#22c55e;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="700" width="500" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="o1" value="GET /api/geocode — Nominatim geocoding" style="rounded=1;whiteSpace=wrap;fillColor=#f0fdfa;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="other_group">
+          <mxGeometry x="20" y="35" width="460" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="o2" value="GET /api/maps-link — Google Maps deep link" style="rounded=1;whiteSpace=wrap;fillColor=#f0fdfa;strokeColor=#22c55e;fontSize=11;" vertex="1" parent="other_group">
+          <mxGeometry x="20" y="65" width="460" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "drawio-skill": {
+      "source": "Agents365-ai/drawio-skill",
+      "sourceType": "github",
+      "skillPath": "skills/drawio-skill/SKILL.md",
+      "computedHash": "40d2339f8cf0910343bbb361aab26ed7eb6cc640f9f69a675219b1b7a43e4084"
+    }
+  }
+}
