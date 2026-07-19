@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use gloo_storage::{LocalStorage, Storage};
 use serde::Serialize;
 use shared::{
     Amenity, BBox, MapsLinkResult, OverpassPoi, PlaceSource, PlaceSummary, PlacesQuery,
@@ -55,6 +56,9 @@ pub struct MapViewProps {
     pub on_recenter: Callback<()>,
     /// Fired when the "Discover" button is tapped, flipping `show_unvisited`.
     pub on_toggle_unvisited: Callback<()>,
+    /// Fired when the featured card is dismissed -- its close button, or a
+    /// tap on empty map -- so the app can clear the current selection.
+    pub on_deselect: Callback<()>,
     /// Fired when a pasted Google Maps link resolved, so the app can open
     /// the "Add a place" page prefilled.
     pub on_maps_link: Callback<MapsLinkResult>,
@@ -71,6 +75,19 @@ pub fn map_view(props: &MapViewProps) -> Html {
     let results = use_state(|| None::<Vec<PlaceSummary>>);
     // Bumped on every keystroke so stale debounced fetches drop themselves.
     let search_gen = use_mut_ref(|| 0u32);
+    // Explicitly dismissed (close button or empty-map tap) -- hides the
+    // featured card even though `selected`/`places.first()` would otherwise
+    // still resolve to one. Cleared as soon as a new place is picked.
+    let dismissed = use_state(|| false);
+    // One-time tip bubble pointing at the Discover button, shown until the
+    // user interacts with anything (dismissed via a window-level click
+    // listener below, so any tap dismisses it, not just its own controls).
+    let show_tip = use_state(|| !LocalStorage::get::<bool>("sb_seen_discover_tip").unwrap_or(false));
+    // Whether the current search has been submitted (Enter, or tapping the
+    // search icon) -- while true, the map's pins are narrowed to just the
+    // matches instead of showing the live-suggestion dropdown. Editing the
+    // query again drops back to live suggestions.
+    let submitted = use_state(|| false);
 
     {
         let results = results.clone();
@@ -132,18 +149,44 @@ pub fn map_view(props: &MapViewProps) -> Html {
 
     let on_search_input = {
         let query = query.clone();
+        let submitted = submitted.clone();
         Callback::from(move |e: InputEvent| {
             if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
                 query.set(el.value());
+            }
+            submitted.set(false);
+        })
+    };
+    let submit_search: Callback<()> = {
+        let query = query.clone();
+        let submitted = submitted.clone();
+        Callback::from(move |()| {
+            if !query.trim().is_empty() {
+                submitted.set(true);
+            }
+        })
+    };
+    let submit_search_click = {
+        let submit_search = submit_search.clone();
+        Callback::from(move |_: MouseEvent| submit_search.emit(()))
+    };
+    let on_search_keydown = {
+        let submit_search = submit_search.clone();
+        Callback::from(move |e: KeyboardEvent| {
+            if e.key() == "Enter" {
+                e.prevent_default();
+                submit_search.emit(());
             }
         })
     };
     let clear_search = {
         let query = query.clone();
         let results = results.clone();
+        let submitted = submitted.clone();
         Callback::from(move |_| {
             query.set(String::new());
             results.set(None);
+            submitted.set(false);
         })
     };
     let pick_result = {
@@ -180,6 +223,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
     } else {
         Vec::new()
     };
+    let search_places = (*results).clone().unwrap_or_default();
+    // Total match count for the badge near the search box; `None` while a
+    // debounced fetch is still pending, so the count doesn't flash to 0.
+    let search_count = searching.then(|| results.as_ref().map(|r| r.len() + poi_matches.len())).flatten();
 
     // The pin-tap and bounds-changed callbacks must survive re-renders; the
     // JS side holds one function each for the map's lifetime, reading the
@@ -193,18 +240,25 @@ pub fn map_view(props: &MapViewProps) -> Html {
     *overpass_lookup_ref.borrow_mut() = props.overpass_places.clone();
     let bounds_ref = use_mut_ref(|| props.on_bounds_changed.clone());
     *bounds_ref.borrow_mut() = props.on_bounds_changed.clone();
+    let deselect_ref = use_mut_ref(|| props.on_deselect.clone());
+    *deselect_ref.borrow_mut() = props.on_deselect.clone();
     let closure_slot = use_mut_ref(|| None::<Closure<dyn Fn(String)>>);
     let bounds_closure_slot = use_mut_ref(|| None::<Closure<dyn Fn(f64, f64, f64, f64)>>);
+    let empty_click_closure_slot = use_mut_ref(|| None::<Closure<dyn Fn()>>);
 
     {
         let closure_slot = closure_slot.clone();
         let bounds_closure_slot = bounds_closure_slot.clone();
+        let empty_click_closure_slot = empty_click_closure_slot.clone();
+        let dismissed_for_select = dismissed.clone();
+        let dismissed_for_empty_click = dismissed.clone();
         let (center, zoom) = match props.focus {
             Some(f) => (f, 16.0),
             None => (props.origin.unwrap_or(FALLBACK_CENTER), 14.0),
         };
         use_effect_with((), move |()| {
             let closure = Closure::<dyn Fn(String)>::new(move |id: String| {
+                dismissed_for_select.set(false);
                 match Uuid::parse_str(&id) {
                     Ok(id) => select_ref.borrow().emit(id),
                     Err(_) => {
@@ -220,6 +274,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 Closure::<dyn Fn(f64, f64, f64, f64)>::new(move |min_lat, min_lng, max_lat, max_lng| {
                     bounds_ref.borrow().emit(BBox { min_lat, min_lng, max_lat, max_lng });
                 });
+            let empty_click_closure = Closure::<dyn Fn()>::new(move || {
+                dismissed_for_empty_click.set(true);
+                deselect_ref.borrow().emit(());
+            });
             glue::sb_init_map(
                 "sb-map",
                 center.0,
@@ -227,9 +285,11 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 zoom,
                 closure.as_ref().unchecked_ref(),
                 bounds_closure.as_ref().unchecked_ref(),
+                empty_click_closure.as_ref().unchecked_ref(),
             );
             *closure_slot.borrow_mut() = Some(closure);
             *bounds_closure_slot.borrow_mut() = Some(bounds_closure);
+            *empty_click_closure_slot.borrow_mut() = Some(empty_click_closure);
             || glue::sb_destroy_map()
         });
     }
@@ -242,8 +302,25 @@ pub fn map_view(props: &MapViewProps) -> Html {
             props.show_unvisited,
             props.marker_density,
             props.bounds,
+            *submitted,
+            search_places.clone(),
+            poi_matches.clone(),
         ),
-        |(places, selected, overpass_places, show_unvisited, marker_density, bounds)| {
+        |(
+            places,
+            selected,
+            overpass_places,
+            show_unvisited,
+            marker_density,
+            bounds,
+            submitted,
+            search_places,
+            poi_matches,
+        )| {
+            // A submitted search narrows the map to just its matches instead
+            // of the full place/Overpass layers.
+            let places = if *submitted { search_places } else { places };
+            let overpass_places = if *submitted { poi_matches } else { overpass_places };
             let mut pins: Vec<Pin> = places
                 .iter()
                 .map(|p| Pin {
@@ -296,10 +373,56 @@ pub fn map_view(props: &MapViewProps) -> Html {
         }
     });
 
-    let featured = props
-        .selected
-        .and_then(|id| props.places.iter().find(|p| p.id == id))
-        .or_else(|| props.places.first());
+    // While the Discover tip is visible, any click anywhere dismisses it
+    // (and remembers that in localStorage) -- including a tap on the
+    // Discover button itself, which also runs its own toggle handler.
+    {
+        let show_tip_state = show_tip.clone();
+        use_effect_with(*show_tip, move |visible| {
+            let window = web_sys::window();
+            let listener = visible.then(|| {
+                Closure::<dyn FnMut()>::new(move || {
+                    let _ = LocalStorage::set("sb_seen_discover_tip", true);
+                    show_tip_state.set(false);
+                })
+            });
+            if let (Some(win), Some(cl)) = (window.as_ref(), listener.as_ref()) {
+                let _ = win.add_event_listener_with_callback("click", cl.as_ref().unchecked_ref());
+            }
+            move || {
+                if let (Some(win), Some(cl)) = (window.as_ref(), listener.as_ref()) {
+                    let _ =
+                        win.remove_event_listener_with_callback("click", cl.as_ref().unchecked_ref());
+                }
+            }
+        });
+    }
+
+    let featured = if *dismissed {
+        None
+    } else {
+        props
+            .selected
+            .and_then(|id| props.places.iter().find(|p| p.id == id))
+            .or_else(|| props.places.first())
+    };
+
+    let close_card = {
+        let dismissed = dismissed.clone();
+        let cb = props.on_deselect.clone();
+        Callback::from(move |_| {
+            dismissed.set(true);
+            cb.emit(());
+        })
+    };
+
+    let dismiss_tip = {
+        let show_tip = show_tip.clone();
+        Callback::from(move |_| {
+            let _ = LocalStorage::set("sb_seen_discover_tip", true);
+            show_tip.set(false);
+        })
+    };
 
     let open_filters = {
         let cb = props.on_open_filters.clone();
@@ -309,7 +432,6 @@ pub fn map_view(props: &MapViewProps) -> Html {
         let cb = props.on_recenter.clone();
         Callback::from(move |_| cb.emit(()))
     };
-    let search_places = (*results).clone().unwrap_or_default();
 
     html! {
         <div class="map-screen">
@@ -318,13 +440,19 @@ pub fn map_view(props: &MapViewProps) -> Html {
             <div class="map-top">
                 <div class="map-top-row">
                     <div class="searchbar">
-                        <span class="mi">{"search"}</span>
+                        <button class="search-submit" onclick={submit_search_click}>
+                            <span class="mi">{"search"}</span>
+                        </button>
                         <input
                             class="search-input"
                             placeholder="Search shops, malls, parks…"
                             value={(*query).clone()}
                             oninput={on_search_input}
+                            onkeydown={on_search_keydown}
                         />
+                        if let Some(count) = search_count {
+                            <span class="search-count">{format!("{count} found")}</span>
+                        }
                         if searching {
                             <button class="search-clear" onclick={clear_search}>
                                 <span class="mi">{"close"}</span>
@@ -338,9 +466,15 @@ pub fn map_view(props: &MapViewProps) -> Html {
                         }
                     </button>
                 </div>
-                if searching {
+                if searching && !props.show_unvisited {
+                    <div class="search-warn">
+                        <span class="mi">{"info"}</span>
+                        {"Discovery is off — only our places are searched"}
+                    </div>
+                }
+                if searching && !*submitted {
                     { search_results(&search_places, &poi_matches, &pick_result, &pick_poi) }
-                } else {
+                } else if !searching {
                     <FilterChips
                         active_amenities={props.active_amenities.clone()}
                         on_toggle_amenity={props.on_toggle_amenity.clone()}
@@ -350,6 +484,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
 
             { ui::discover_button(props.show_unvisited, featured.is_some(), &props.on_toggle_unvisited) }
 
+            if *show_tip {
+                { discover_tip(featured.is_some(), &dismiss_tip) }
+            }
+
             <button
                 class={if featured.is_some() { "recenter above-card" } else { "recenter" }}
                 onclick={recenter}
@@ -358,7 +496,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
             </button>
 
             if let Some(p) = featured {
-                { featured_card(p, props) }
+                { featured_card(p, props, &close_card) }
             }
         </div>
     }
@@ -500,7 +638,25 @@ fn poi_result_row(p: &OverpassPoi, pick: &Callback<OverpassPoi>) -> Html {
     }
 }
 
-fn featured_card(p: &PlaceSummary, props: &MapViewProps) -> Html {
+/// One-time coach mark pointing at the floating Discover button, shown
+/// until the user's first interaction with the app (see the window click
+/// listener in [`map_view`]). `above_card` mirrors the Discover button's own
+/// offset so the tip still points at it when the featured card is showing.
+fn discover_tip(above_card: bool, on_close: &Callback<MouseEvent>) -> Html {
+    let class = if above_card { "discover-tip above-card" } else { "discover-tip" };
+    html! {
+        <div {class} onclick={|e: MouseEvent| e.stop_propagation()}>
+            <button class="discover-tip-close" onclick={on_close.clone()}>
+                <span class="mi">{"close"}</span>
+            </button>
+            <span class="discover-tip-text">
+                {"Toggle discovery on to find new places, or off to show \"our places\"."}
+            </span>
+        </div>
+    }
+}
+
+fn featured_card(p: &PlaceSummary, props: &MapViewProps, on_close: &Callback<MouseEvent>) -> Html {
     let near_tag = if props.selected == Some(p.id) { "Selected" } else { "Nearest to you" };
     let open_card = {
         let cb = props.on_open.clone();
@@ -513,6 +669,9 @@ fn featured_card(p: &PlaceSummary, props: &MapViewProps) -> Html {
     };
     html! {
         <div class="sel-wrap" key={p.id.to_string()}>
+            <button class="sel-close" onclick={on_close.clone()}>
+                <span class="mi">{"close"}</span>
+            </button>
             <button class="sel-card" onclick={open_card}>
                 { ui::badge(p.place_type, PlaceSource::App) }
                 <div class="sel-main">
