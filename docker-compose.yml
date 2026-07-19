@@ -34,6 +34,11 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      # Disk LRU cache of proxied OSM map tiles (see backend/src/tile_cache.rs).
+      TILE_CACHE_DIR: /var/cache/service-break/tiles
+      TILE_CACHE_MAX_MB: ${TILE_CACHE_MAX_MB:-512}
+    volumes:
+      - tile-cache:/var/cache/service-break/tiles
     depends_on:
       db:
         condition: service_healthy
@@ -51,3 +56,4 @@ services:
 
 volumes:
   db-data:
+  tile-cache:

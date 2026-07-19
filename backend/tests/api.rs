@@ -19,8 +19,24 @@ use shared::{
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+/// A throwaway per-test tile cache directory. Not cleaned up afterwards
+/// (like the OS temp dir in general); tests leave at most a few KB behind.
+fn test_tile_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("service-break-test-tiles-{}", Uuid::new_v4().simple()))
+}
+
 async fn app(
     pool: PgPool,
+) -> impl Service<actix_http::Request, Response = ServiceResponse<impl MessageBody>, Error = actix_web::Error>
+{
+    app_with_tile_dir(pool, test_tile_dir()).await
+}
+
+/// Like [`app`], but with the disk tile cache rooted at `tile_dir`, so tile
+/// tests can seed files there beforehand.
+async fn app_with_tile_dir(
+    pool: PgPool,
+    tile_dir: std::path::PathBuf,
 ) -> impl Service<actix_http::Request, Response = ServiceResponse<impl MessageBody>, Error = actix_web::Error>
 {
     let state = Data::new(AppState {
@@ -32,6 +48,7 @@ async fn app(
         overpass_url: "http://127.0.0.1:1".to_owned(),
         // Unroutable address: tests must not depend on the live tile server.
         tile_url: "http://127.0.0.1:1".to_owned(),
+        tile_cache: backend::tile_cache::TileCache::open(tile_dir, 64 * 1024 * 1024).unwrap(),
         // Google sign-in isn't exercised by these tests.
         google: None,
     });
@@ -51,6 +68,8 @@ async fn app_with_google(
         nominatim_url: "http://127.0.0.1:1".to_owned(),
         overpass_url: "http://127.0.0.1:1".to_owned(),
         tile_url: "http://127.0.0.1:1".to_owned(),
+        tile_cache: backend::tile_cache::TileCache::open(test_tile_dir(), 64 * 1024 * 1024)
+            .unwrap(),
         google: Some(backend::google_auth::GoogleConfig {
             client_id: "test-client-id".to_owned(),
             client_secret: "test-client-secret".to_owned(),
@@ -2833,19 +2852,21 @@ async fn activity_endpoints_require_login_and_admin(pool: PgPool) {
 
 // ---- Map tile cache ----
 
+/// Writes tile z/x/y into `tile_dir` on disk, as if a past fetch cached it.
+fn seed_tile_file(tile_dir: &std::path::Path, z: u32, x: u32, y: u32, body: &[u8]) {
+    let dir = tile_dir.join(z.to_string()).join(x.to_string());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{y}.png")), body).unwrap();
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn tile_served_from_cache_without_upstream(pool: PgPool) {
     // Seed a fresh cached tile; the app's tile_url is unroutable, so a
     // 200 here proves the cache alone satisfied the request.
-    sqlx::query(
-        "INSERT INTO map_tiles (z, x, y, body, content_type) VALUES (3, 1, 2, $1, 'image/png')",
-    )
-    .bind(&b"fake png bytes"[..])
-    .execute(&pool)
-    .await
-    .unwrap();
+    let tile_dir = test_tile_dir();
+    seed_tile_file(&tile_dir, 3, 1, 2, b"fake png bytes");
 
-    let app = app(pool).await;
+    let app = app_with_tile_dir(pool, tile_dir).await;
     let req = TestRequest::get().uri("/api/tiles/3/1/2.png").to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::OK);
@@ -2856,16 +2877,19 @@ async fn tile_served_from_cache_without_upstream(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn stale_tile_served_when_upstream_unreachable(pool: PgPool) {
-    sqlx::query(
-        "INSERT INTO map_tiles (z, x, y, body, content_type, fetched_at) \
-         VALUES (3, 1, 2, $1, 'image/png', now() - interval '31 days')",
-    )
-    .bind(&b"stale png bytes"[..])
-    .execute(&pool)
-    .await
-    .unwrap();
+    let tile_dir = test_tile_dir();
+    seed_tile_file(&tile_dir, 3, 1, 2, b"stale png bytes");
+    // Age the file past the 30-day TTL (a tile's mtime is its fetch time).
+    let stale = std::time::SystemTime::now()
+        - (backend::tile_cache::TILE_TTL + std::time::Duration::from_secs(3600));
+    std::fs::File::options()
+        .write(true)
+        .open(tile_dir.join("3").join("1").join("2.png"))
+        .unwrap()
+        .set_modified(stale)
+        .unwrap();
 
-    let app = app(pool).await;
+    let app = app_with_tile_dir(pool, tile_dir).await;
     let req = TestRequest::get().uri("/api/tiles/3/1/2.png").to_request();
     let res = call_service(&app, req).await;
     assert_eq!(res.status(), StatusCode::OK);

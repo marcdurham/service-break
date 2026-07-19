@@ -9,6 +9,7 @@ pub mod google_auth;
 pub mod handlers;
 pub mod maps_link;
 pub mod overpass;
+pub mod tile_cache;
 pub mod tiles;
 pub mod util;
 
@@ -20,6 +21,7 @@ pub struct AppState {
     pub nominatim_url: String,
     pub overpass_url: String,
     pub tile_url: String,
+    pub tile_cache: tile_cache::TileCache,
     /// `None` disables "Sign in with Google" (`GOOGLE_CLIENT_ID` etc. not set).
     pub google: Option<google_auth::GoogleConfig>,
 }
