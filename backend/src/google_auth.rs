@@ -360,7 +360,16 @@ async fn google_callback(state: Data<AppState>, query: Query<CallbackQuery>) -> 
 
     match start_session(&state.pool, user_id, username.clone(), is_admin).await {
         Ok(session) => {
-            tracing::info!(user_id = %user_id, %username, %mode, "user logged in via google");
+            if mode == "register" {
+                tracing::info!(
+                    user_id = %user_id,
+                    %username,
+                    %invite_code,
+                    "user registered via google; invite redeemed"
+                );
+            } else {
+                tracing::info!(user_id = %user_id, %username, "user logged in via google");
+            }
             redirect_with_session(&cfg.app_base_url, &session)
         }
         Err(e) => redirect_with_error(&cfg.app_base_url, &e.to_string()),

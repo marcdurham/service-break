@@ -122,6 +122,31 @@ fn new_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
+/// Failed attempts against one account within this window that count as
+/// possible brute-forcing, for the ops-log warning below.
+const BRUTE_FORCE_WINDOW_MINUTES: i32 = 15;
+const BRUTE_FORCE_THRESHOLD: i64 = 5;
+
+/// Logs a warning if `user_id` has racked up enough recent failed logins
+/// (see [`db::count_recent_failed_logins`]) to look like brute-forcing.
+/// Best-effort: a query failure here just skips the warning rather than
+/// failing the login response.
+async fn warn_if_brute_force(pool: &sqlx::PgPool, user_id: Uuid, username: &str) {
+    match db::count_recent_failed_logins(pool, user_id, BRUTE_FORCE_WINDOW_MINUTES).await {
+        Ok(count) if count >= BRUTE_FORCE_THRESHOLD => {
+            tracing::warn!(
+                user_id = %user_id,
+                username,
+                count,
+                window_minutes = BRUTE_FORCE_WINDOW_MINUTES,
+                "possible brute-force: repeated failed logins against this account"
+            );
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, user_id = %user_id, "failed to check recent failed logins"),
+    }
+}
+
 /// Runs a CPU-heavy closure off the async workers.
 pub(crate) async fn run_blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
@@ -165,7 +190,7 @@ async fn register(
     let password = creds.password;
     let hash = run_blocking(move || hash_password(&password)).await?;
     let user_id = db::register_user(&state.pool, &username, &hash, &invite_code).await?;
-    tracing::info!(user_id = %user_id, %username, "user registered");
+    tracing::info!(user_id = %user_id, %username, %invite_code, "user registered; invite redeemed");
     let session = start_session(&state.pool, user_id, username, false).await?;
     Ok(HttpResponse::Created().json(session))
 }
@@ -194,6 +219,7 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
         db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
             .await?;
         tracing::warn!(user_id = %user_id, username = %user.username, reason = "google-only account", "login failed");
+        warn_if_brute_force(&state.pool, user_id, &user.username).await;
         return Err(bad());
     };
     let password = creds.password;
@@ -202,6 +228,7 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
         db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
             .await?;
         tracing::warn!(user_id = %user_id, username = %user.username, reason = "wrong password", "login failed");
+        warn_if_brute_force(&state.pool, user_id, &user.username).await;
         return Err(bad());
     }
     db::record_activity(&state.pool, user_id, "login", "", "", "", Some(user_id)).await?;
@@ -385,6 +412,12 @@ async fn create_invite(
     let name = body.into_inner().name.trim().to_owned();
     validate_invite_name(&name).map_err(|e| ApiError::BadRequest(e.to_owned()))?;
     let invite = db::create_invitation(&state.pool, user.id, &name, user.is_admin).await?;
+    tracing::info!(
+        inviter_id = %user.id,
+        inviter_username = %user.username,
+        invite_code = %invite.code,
+        "invite issued"
+    );
     Ok(HttpResponse::Created().json(invite))
 }
 

@@ -160,8 +160,16 @@ pub struct ExportSavedPlace {
 /// `GET /api/admin/export` — the whole database as one downloadable JSON
 /// file (no password hashes, no sessions).
 #[get("/api/admin/export")]
-async fn export_data(state: Data<AppState>, _admin: AdminUser) -> Result<HttpResponse, ApiError> {
+async fn export_data(state: Data<AppState>, admin: AdminUser) -> Result<HttpResponse, ApiError> {
     let data = collect_export(&state.pool).await?;
+    tracing::info!(
+        admin_id = %admin.0.id,
+        admin_username = %admin.0.username,
+        users = data.users.len(),
+        places = data.places.len(),
+        reviews = data.reviews.len(),
+        "admin exported a backup"
+    );
     Ok(HttpResponse::Ok()
         .insert_header((
             "Content-Disposition",
@@ -273,6 +281,17 @@ async fn import_data(
     body: Json<ExportData>,
 ) -> Result<HttpResponse, ApiError> {
     let summary = run_import(&state.pool, admin.0.id, body.into_inner()).await?;
+    tracing::warn!(
+        admin_id = %admin.0.id,
+        admin_username = %admin.0.username,
+        users = summary.users,
+        invitations = summary.invitations,
+        places = summary.places,
+        reviews = summary.reviews,
+        saved_places = summary.saved_places,
+        new_accounts = summary.new_passwords.len(),
+        "admin imported a backup, replacing database contents"
+    );
     Ok(HttpResponse::Ok().json(summary))
 }
 
@@ -634,6 +653,26 @@ async fn update_user(
         }
     }
 
+    let changed_fields: Vec<&str> = [
+        new.username.as_ref().filter(|n| **n != user.username).map(|_| "username"),
+        new.password.is_some().then_some("password"),
+        new.is_admin.filter(|a| *a != user.is_admin).map(|_| "is_admin"),
+        new.given_name.as_ref().filter(|n| **n != user.given_name).map(|_| "given_name"),
+        new.family_name.as_ref().filter(|n| **n != user.family_name).map(|_| "family_name"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !changed_fields.is_empty() {
+        tracing::info!(
+            admin_id = %admin.0.id,
+            target_user_id = %target_id,
+            target_username = %user.username,
+            fields = %changed_fields.join(","),
+            "admin edited a user account"
+        );
+    }
+
     // Return the refreshed summary so the frontend can update the list in
     // place without a full reload.
     let updated = db::find_user_by_id(&state.pool, target_id).await?;
@@ -666,7 +705,7 @@ async fn delete_user(
         ));
     }
 
-    let _user = db::find_user_by_id(&state.pool, target_id)
+    let target_user = db::find_user_by_id(&state.pool, target_id)
         .await?
         .ok_or(ApiError::NotFound)?;
 
@@ -675,6 +714,13 @@ async fn delete_user(
         .execute(&state.pool)
         .await?;
 
+    tracing::warn!(
+        admin_id = %admin.0.id,
+        admin_username = %admin.0.username,
+        target_user_id = %target_id,
+        target_username = %target_user.username,
+        "admin deleted a user account"
+    );
     Ok(HttpResponse::NoContent().finish())
 }
 

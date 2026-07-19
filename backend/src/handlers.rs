@@ -260,7 +260,16 @@ async fn create_review(
         text: body.text.trim(),
     };
     db::insert_review(&state.pool, &review).await?;
-    let detail = db::get_place(&state.pool, *id, None).await?;
+    let place_id = *id;
+    tracing::info!(
+        %place_id,
+        user_id = %user.id,
+        clean = body.clean,
+        coffee = body.coffee,
+        food = body.food,
+        "review created"
+    );
+    let detail = db::get_place(&state.pool, place_id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
 
