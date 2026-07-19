@@ -651,7 +651,39 @@ pub fn app() -> Html {
     };
 
     if !*started {
-        return html! { <div class="app-shell"><Onboarding on_start={on_start} /></div> };
+        // A visitor arriving on an invitation link (or bouncing back from
+        // the Google OAuth round trip registration can start) gets to
+        // create their account first — the onboarding screen, and its ask
+        // to turn on location, waits until they're done. Every other first
+        // visit still opens with onboarding.
+        let body = match route {
+            Route::Register => html! {
+                <RegisterView
+                    auth={(*auth).clone()}
+                    on_login={on_login.clone()}
+                    on_toast={show_toast.clone()}
+                    google_enabled={*google_enabled}
+                    notice={(*register_notice).clone()}
+                    on_notice_shown={on_register_notice_shown.clone()}
+                />
+            },
+            Route::OauthComplete => html! {
+                <OauthCompleteView
+                    on_login={on_login.clone()}
+                    on_toast={show_toast.clone()}
+                    on_register_notice={set_register_notice.clone()}
+                />
+            },
+            _ => html! { <Onboarding on_start={on_start} /> },
+        };
+        return html! {
+            <div class="app-shell">
+                { body }
+                if let Some(msg) = (*toast).clone() {
+                    <div class="toast"><span class="mi">{"check_circle"}</span>{msg}</div>
+                }
+            </div>
+        };
     }
 
     let list_count = places.len();

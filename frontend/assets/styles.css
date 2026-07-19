@@ -659,6 +659,15 @@ button { cursor: pointer; }
   margin-top: 14px; line-height: 1.5;
 }
 
+/* "— or —" separator between the Google and password sign-up paths. */
+.auth-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 18px; color: var(--muted); font-size: 13px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+
 /* Persistent explanation banner, e.g. why a Google sign-in bounced here. */
 .auth-banner {
   display: flex; align-items: flex-start; gap: 8px;
