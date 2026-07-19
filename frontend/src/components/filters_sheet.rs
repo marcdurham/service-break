@@ -24,6 +24,10 @@ pub struct FiltersSheetProps {
     pub on_reset: Callback<()>,
     pub on_close: Callback<()>,
     pub on_toggle_type: Callback<PlaceType>,
+    /// Index into [`shared::MARKER_DENSITY_LEVELS`]. A device-wide display
+    /// preference, not part of `Filters` — unaffected by "Reset".
+    pub marker_density: u8,
+    pub on_marker_density_change: Callback<u8>,
 }
 
 #[function_component(FiltersSheet)]
@@ -63,6 +67,17 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
                     let mut f = filters.clone();
                     f.radius_mi = shared::radius_from_slider(pos);
                     cb.emit(f);
+                }
+            }
+        })
+    };
+
+    let on_density = {
+        let cb = props.on_marker_density_change.clone();
+        Callback::from(move |e: InputEvent| {
+            if let Some(el) = e.target_dyn_into::<HtmlInputElement>() {
+                if let Ok(level) = el.value().parse::<u8>() {
+                    cb.emit(level);
                 }
             }
         })
@@ -122,6 +137,18 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
                     step="1"
                     value={shared::radius_to_slider(props.filters.radius_mi).to_string()}
                     oninput={on_radius}
+                />
+                <div class="field-label">
+                    {format!("Marker density: {}", shared::marker_density_label(props.marker_density))}
+                </div>
+                <input
+                    type="range"
+                    class="range"
+                    min="0"
+                    max={(shared::MARKER_DENSITY_LEVELS.len() - 1).to_string()}
+                    step="1"
+                    value={props.marker_density.to_string()}
+                    oninput={on_density}
                 />
                 <button class="sheet-apply" onclick={close_apply}>
                     {format!("Show {} places", props.count)}

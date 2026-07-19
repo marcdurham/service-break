@@ -1137,6 +1137,26 @@ pub fn radius_to_slider(mi: u8) -> u32 {
     (t * f64::from(RADIUS_SLIDER_STEPS)).round() as u32
 }
 
+/// Marker density levels for the map, sparsest first: each pairs a display
+/// label with the max number of Overpass POI pins shown at once (app-added
+/// places are never thinned, only the raw OSM layer). Index 0 is the
+/// default — deliberately sparse, since an unfiltered Overpass layer can
+/// return hundreds of POIs in one viewport.
+pub const MARKER_DENSITY_LEVELS: [(&str, u32); 4] =
+    [("Low", 40), ("Medium", 120), ("High", 300), ("All", u32::MAX)];
+
+pub fn marker_density_cap(level: u8) -> u32 {
+    MARKER_DENSITY_LEVELS
+        .get(level as usize)
+        .map_or(u32::MAX, |(_, cap)| *cap)
+}
+
+pub fn marker_density_label(level: u8) -> &'static str {
+    MARKER_DENSITY_LEVELS
+        .get(level as usize)
+        .map_or("All", |(label, _)| *label)
+}
+
 /// Display name derived from an anonymous device id, e.g. `"Scout 3f9a"`.
 pub fn scout_name(device_id: &str) -> String {
     let tag: String = device_id
