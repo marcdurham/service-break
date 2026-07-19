@@ -564,17 +564,17 @@ async fn overpass_places_returns_only_in_bbox_unpromoted_pois(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn overpass_places_caps_at_100_nearest_to_center(pool: PgPool) {
+async fn overpass_places_caps_at_250_nearest_to_center(pool: PgPool) {
     let app = app(pool.clone()).await;
     let bbox = test_bbox();
     let tile_ids = seed_fresh_tiles(&pool, &bbox).await;
     let tile_id = &tile_ids[0];
     let (center_lat, center_lng) = bbox.center();
 
-    // 120 POIs at strictly increasing distance from the bbox center; only
-    // the nearest 100 should come back, nearest first.
-    for i in 0..120 {
-        let lat = center_lat + f64::from(i) * 0.00005;
+    // 260 POIs at strictly increasing distance from the bbox center; only
+    // the nearest 250 should come back, nearest first.
+    for i in 0..260 {
+        let lat = center_lat + f64::from(i) * 0.00002;
         seed_overpass_poi(
             &pool,
             &format!("node/{i}"),
@@ -591,9 +591,9 @@ async fn overpass_places_caps_at_100_nearest_to_center(pool: PgPool) {
         .uri(&format!("/api/overpass/places?{}", bbox_query_string(&bbox)))
         .to_request();
     let pois: Vec<OverpassPoi> = read_body_json(call_service(&app, req).await).await;
-    assert_eq!(pois.len(), 100);
+    assert_eq!(pois.len(), 250);
     assert_eq!(pois[0].name, "POI 0");
-    assert_eq!(pois[99].name, "POI 99");
+    assert_eq!(pois[249].name, "POI 249");
     for w in pois.windows(2) {
         assert!(w[0].distance_mi.unwrap() <= w[1].distance_mi.unwrap());
     }
@@ -2456,7 +2456,6 @@ async fn delete_place_nonexistent_returns_404(pool: PgPool) {
 async fn admin_can_edit_user(pool: PgPool) {
     let app = app(pool.clone()).await;
     // Create a regular user and an admin.
-    let code = seed_invite(&pool).await;
     register(&app, &pool, "edit-target").await;
     sqlx::query("UPDATE users SET is_admin = true WHERE username = 'edit-target'")
         .bind("edit-target")
@@ -2522,7 +2521,6 @@ async fn admin_can_edit_user(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn admin_cannot_edit_self(pool: PgPool) {
     let app = app(pool.clone()).await;
-    let code = seed_invite(&pool).await;
     let token = register(&app, &pool, "self-edit").await;
     sqlx::query("UPDATE users SET is_admin = true WHERE username = 'self-edit'")
         .bind("self-edit")
@@ -2543,7 +2541,6 @@ async fn admin_cannot_edit_self(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn non_admin_cannot_edit_users(pool: PgPool) {
     let app = app(pool.clone()).await;
-    let code = seed_invite(&pool).await;
     register(&app, &pool, "regular-user").await;
     sqlx::query("UPDATE users SET is_admin = true WHERE username = 'regular-user'")
         .bind("regular-user")

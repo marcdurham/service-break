@@ -372,11 +372,11 @@ pub fn map_view(props: &MapViewProps) -> Html {
 /// with the lowest id hash rather than anything position- or order-based.
 /// The POI list itself still grows/shrinks at the viewport edge as fetches
 /// come in, but a kept POI stays kept wherever it's loaded.
-fn grid_thinned<'a>(
-    pois: &'a [OverpassPoi],
+fn grid_thinned(
+    pois: &[OverpassPoi],
     bounds: Option<BBox>,
     density_level: u8,
-) -> Vec<&'a OverpassPoi> {
+) -> Vec<&OverpassPoi> {
     let (Some(cells_across), Some(b)) =
         (shared::marker_density_cells(density_level), bounds)
     else {

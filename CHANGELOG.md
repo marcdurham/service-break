@@ -4,6 +4,12 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-19
+
+- 01:33 — Invitation links now land straight on the Create-an-account page: a first-time visitor opening `/register?code=…` (or returning from the Google OAuth round trip) registers before the onboarding screen — and its "Enable location & explore" ask — appears, instead of being asked to turn on location first. The register page also now gently recommends Google sign-up: invite code on top, "Continue with Google" as the primary button with a "Recommended — one tap, and no new password to remember" note, and the username/password form below an "or create an account with a password" divider (new `.auth-divider` style); the password path is unchanged when Google OAuth isn't configured.
+- 01:30 — Updated the stale Overpass viewport-cap test, doc comment, and `AGENTS.md` from 100 to the 250 the query has actually used since the grid-based marker-density change, fixing the failing `overpass_places_caps_at_100_nearest_to_center` test (now `…caps_at_250…`).
+- 01:28 — Fixed the outstanding clippy warnings: unused `user_id`/`code` bindings in `edit_user_view.rs` and `backend/tests/api.rs` (redundant `seed_invite` calls removed — `register()` seeds its own), and a needless explicit lifetime on `map_view.rs::grid_thinned`.
+
 ## 2026-07-18
 
 - 19:30 — Added an Overpass API (OpenStreetMap) POI layer to the map and list views: nearby fast food, cafés, stores, malls, and parks that no one has added to the app yet show up as blue/gray pins/cards alongside the existing brown app places, capped at 100 per viewport (nearest to center) and cached per geohash tile (`overpass_tiles`/`overpass_pois`, 7-day TTL) so repeated panning doesn't hammer the Overpass API. Tapping one opens a lightweight preview (`PoiDetailView`); saving, rating, or editing it promotes it into a normal `places` row (`source = 'overpass'`) and links the cache row via `app_place_id` so it's excluded from future Overpass results without ever being deleted. New `PlaceType::FastFood`, a new "Show unvisited places" toggle (on by default) and the place-Type filter (both moved from the map/list chip bars into the Filter modal), and search on both screens now matches Overpass POIs too. New backend endpoints `GET /api/overpass/places` and `POST /api/overpass/places/promote`; see the "App places vs Overpass POIs/Places" section in `AGENTS.md` for the full model.

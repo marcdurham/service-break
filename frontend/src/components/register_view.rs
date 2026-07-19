@@ -225,23 +225,30 @@ pub fn register_view(props: &RegisterViewProps) -> Html {
                       who's already a scout."}
                 </div>
 
-                { field("Username", "e.g. trail-scout", false, &username) }
-                { pw_field("Password", "At least 8 characters", password.clone(), *show_pw, toggle_pw) }
-                { pw_field("Confirm password", "Type it again", confirm.clone(), *show_confirm, toggle_confirm) }
                 { field("Invite code", "e.g. A1B2C3D4", false, &invite_code) }
 
-                <button class="submit-btn" onclick={create_account} disabled={*busy}>
-                    <span class="mi">{"person_add"}</span>
-                    {if *busy { "One moment…" } else { "Create an account" }}
-                </button>
                 if props.google_enabled {
-                    <button class="alt-auth-btn" onclick={continue_with_google}>
+                    <button class="submit-btn mt-md" onclick={continue_with_google}>
                         <span class="mi">{"login"}</span>{"Continue with Google"}
                     </button>
                     <div class="auth-note">
-                        {"Uses the invite code above — no username or password needed."}
+                        {"Recommended — one tap, and no new password to remember."}
                     </div>
+                    <div class="auth-divider">{"or create an account with a password"}</div>
                 }
+
+                { field("Username", "e.g. trail-scout", false, &username) }
+                { pw_field("Password", "At least 8 characters", password.clone(), *show_pw, toggle_pw) }
+                { pw_field("Confirm password", "Type it again", confirm.clone(), *show_confirm, toggle_confirm) }
+
+                <button
+                    class={if props.google_enabled { "alt-auth-btn" } else { "submit-btn" }}
+                    onclick={create_account}
+                    disabled={*busy}
+                >
+                    <span class="mi">{"person_add"}</span>
+                    {if *busy { "One moment…" } else { "Create an account" }}
+                </button>
                 <button class="alt-auth-btn" onclick={go_to_account}>
                     <span class="mi">{"login"}</span>{"Already have an account? Sign in"}
                 </button>
