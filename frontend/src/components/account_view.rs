@@ -81,6 +81,7 @@ pub fn account_view(props: &AccountViewProps) -> Html {
     let has_password = use_state(|| true);
     let has_google = use_state(|| false);
     let linking_google = use_state(|| false);
+    let unlinking_google = use_state(|| false);
     let navigator = use_navigator().expect("BrowserRouter provides a navigator");
 
     let show_login_pw = use_state(|| false);
@@ -237,6 +238,31 @@ pub fn account_view(props: &AccountViewProps) -> Html {
         })
     };
 
+    let unlink_google = {
+        let unlinking_google = unlinking_google.clone();
+        let has_google = has_google.clone();
+        let on_toast = props.on_toast.clone();
+        Callback::from(move |_| {
+            if *unlinking_google {
+                return;
+            }
+            unlinking_google.set(true);
+            let unlinking_google = unlinking_google.clone();
+            let has_google = has_google.clone();
+            let on_toast = on_toast.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::unlink_google().await {
+                    Ok(()) => {
+                        has_google.set(false);
+                        on_toast.emit("Google account unlinked".to_owned());
+                    }
+                    Err(msg) => on_toast.emit(msg),
+                }
+                unlinking_google.set(false);
+            });
+        })
+    };
+
     let go_to_invite = {
         let navigator = navigator.clone();
         Callback::from(move |_| navigator.push(&Route::Invite))
@@ -327,9 +353,10 @@ pub fn account_view(props: &AccountViewProps) -> Html {
 
                     if props.google_enabled {
                         if *has_google {
-                            <div class="account-sub">
-                                <span class="mi">{"check_circle"}</span>{"Google account linked"}
-                            </div>
+                            <button class="alt-auth-btn" onclick={unlink_google} disabled={*unlinking_google}>
+                                <span class="mi">{"link_off"}</span>
+                                {if *unlinking_google { "One moment…" } else { "Unlink Google account" }}
+                            </button>
                         } else {
                             <button class="alt-auth-btn" onclick={link_google} disabled={*linking_google}>
                                 <span class="mi">{"link"}</span>

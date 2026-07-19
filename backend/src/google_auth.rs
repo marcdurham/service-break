@@ -24,12 +24,14 @@ use shared::encode_query_component;
 
 use crate::auth::{start_session, AuthUser};
 use crate::db;
+use crate::error::ApiError;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(google_enabled)
         .service(google_start)
         .service(google_link_start)
+        .service(google_unlink)
         .service(google_callback);
 }
 
@@ -147,6 +149,17 @@ async fn google_link_start(state: Data<AppState>, user: AuthUser) -> HttpRespons
     }
 
     HttpResponse::Ok().json(json!({ "url": google_auth_url(cfg, &state_token) }))
+}
+
+/// Detaches the signed-in user's Google identity. Deliberately doesn't
+/// require a configured Google OAuth client — an existing link may
+/// predate a config change, and removing it needs nothing from Google.
+#[post("/api/auth/google/unlink")]
+async fn google_unlink(state: Data<AppState>, user: AuthUser) -> Result<HttpResponse, ApiError> {
+    db::unlink_google_account(&state.pool, user.id).await?;
+    db::record_activity(&state.pool, user.id, "profile_change", "google_unlink", "", "", Some(user.id))
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(Deserialize)]

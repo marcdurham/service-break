@@ -1047,6 +1047,28 @@ pub async fn link_google_account(
     }
 }
 
+/// Detaches the Google identity from a signed-in user's account — the
+/// reverse of [`link_google_account`]. Refused for accounts without a
+/// password, which would otherwise be left with no way to sign in.
+pub async fn unlink_google_account(pool: &PgPool, user_id: Uuid) -> Result<(), ApiError> {
+    let has_password =
+        sqlx::query_scalar::<_, bool>("SELECT password_hash IS NOT NULL FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?
+            .ok_or_else(|| ApiError::Unauthorized("unknown user".to_owned()))?;
+    if !has_password {
+        return Err(ApiError::Conflict(
+            "set a password first — without one you'd have no way to sign back in".to_owned(),
+        ));
+    }
+    sqlx::query("UPDATE users SET google_sub = NULL WHERE id = $1")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// A username candidate derived from the local part of an email address:
 /// lowercased, stripped of anything outside the allowed username charset,
 /// and capped well under [`shared::validate_username`]'s max so a numeric

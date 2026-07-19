@@ -344,6 +344,20 @@ pub async fn start_google_link() -> ApiResult<()> {
     Ok(())
 }
 
+/// Detaches the Google account from the signed-in user — the reverse of
+/// [`start_google_link`]. The server refuses if the account has no
+/// password, since that would leave no way to sign back in.
+pub async fn unlink_google() -> ApiResult<()> {
+    let res = with_auth(Request::post("/api/auth/google/unlink"))
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not unlink your Google account").await);
+    }
+    Ok(())
+}
+
 /// Updates the signed-in user's given and/or family name.
 pub async fn update_profile(profile: &UpdateProfile) -> ApiResult<()> {
     let res = with_auth(Request::patch("/api/auth/profile"))
