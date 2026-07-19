@@ -1138,17 +1138,18 @@ pub fn radius_to_slider(mi: u8) -> u32 {
 }
 
 /// Marker density levels for the map, sparsest first: each pairs a display
-/// label with the max number of Overpass POI pins shown at once (app-added
-/// places are never thinned, only the raw OSM layer). Index 0 is the
-/// default — deliberately sparse, since an unfiltered Overpass layer can
-/// return hundreds of POIs in one viewport.
-pub const MARKER_DENSITY_LEVELS: [(&str, u32); 4] =
-    [("Low", 40), ("Medium", 120), ("High", 300), ("All", u32::MAX)];
+/// label with roughly how many grid columns of Overpass POI pins fit across
+/// the viewport — the map thins that layer to one pin per world-anchored
+/// grid cell (app-added places are never thinned), and `None` disables
+/// thinning. Index 0 is the default — deliberately sparse, since an
+/// unfiltered Overpass layer can flood a downtown viewport.
+pub const MARKER_DENSITY_LEVELS: [(&str, Option<u32>); 4] =
+    [("Low", Some(5)), ("Medium", Some(9)), ("High", Some(15)), ("All", None)];
 
-pub fn marker_density_cap(level: u8) -> u32 {
+pub fn marker_density_cells(level: u8) -> Option<u32> {
     MARKER_DENSITY_LEVELS
         .get(level as usize)
-        .map_or(u32::MAX, |(_, cap)| *cap)
+        .and_then(|(_, cells)| *cells)
 }
 
 pub fn marker_density_label(level: u8) -> &'static str {

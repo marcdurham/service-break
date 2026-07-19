@@ -128,11 +128,11 @@ pub fn app() -> Html {
     let map_focus = use_state(|| None::<(f64, f64)>);
     let show_filters = use_state(|| false);
     let filters = use_state(Filters::default);
-    // Marker density: index into `shared::MARKER_DENSITY_LEVELS`, capping
-    // how many Overpass POI pins render at once. A device-wide display
-    // preference (remembered in localStorage, not reset with filters);
-    // defaults to the sparsest level since an unfiltered Overpass layer can
-    // dump hundreds of POIs into one viewport.
+    // Marker density: index into `shared::MARKER_DENSITY_LEVELS`, setting
+    // how closely packed Overpass POI pins may get on the map. A
+    // device-wide display preference (remembered in localStorage, not reset
+    // with filters); defaults to the sparsest level since an unfiltered
+    // Overpass layer can flood a downtown viewport.
     let marker_density = use_state(|| LocalStorage::get::<u8>("sb_marker_density").unwrap_or(0));
     // Overpass POIs (raw OSM places, not yet in the app) currently in view,
     // the live Leaflet viewport reported by the map, and whichever one the
@@ -741,6 +741,7 @@ pub fn app() -> Html {
                             overpass_places={(*overpass_places).clone()}
                             show_unvisited={filters.show_unvisited}
                             marker_density={*marker_density}
+                            bounds={*map_bounds}
                             on_select={on_select}
                             on_open={open_detail.clone()}
                             on_open_poi={on_open_poi.clone()}
