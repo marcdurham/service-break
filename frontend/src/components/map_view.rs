@@ -37,6 +37,9 @@ pub struct MapViewProps {
     /// `show_unvisited` is on.
     pub overpass_places: Vec<OverpassPoi>,
     pub show_unvisited: bool,
+    /// Index into [`shared::MARKER_DENSITY_LEVELS`] capping how many
+    /// Overpass POI pins render at once.
+    pub marker_density: u8,
     pub on_select: Callback<Uuid>,
     pub on_open: Callback<Uuid>,
     /// Fired when a tapped pin or search result is an unpromoted Overpass
@@ -230,8 +233,9 @@ pub fn map_view(props: &MapViewProps) -> Html {
             props.selected,
             props.overpass_places.clone(),
             props.show_unvisited,
+            props.marker_density,
         ),
-        |(places, selected, overpass_places, show_unvisited)| {
+        |(places, selected, overpass_places, show_unvisited, marker_density)| {
             let mut pins: Vec<Pin> = places
                 .iter()
                 .map(|p| Pin {
@@ -245,14 +249,18 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 })
                 .collect();
             if *show_unvisited {
-                pins.extend(overpass_places.iter().map(|p| Pin {
-                    id: p.id.clone(),
-                    lat: p.lat,
-                    lng: p.lng,
-                    color: p.place_type.color(PlaceSource::Overpass),
-                    icon: p.place_type.icon(),
-                    name: p.name.clone(),
-                    selected: false,
+                let cap = shared::marker_density_cap(*marker_density) as usize;
+                pins.extend(thinned_indices(overpass_places.len(), cap).into_iter().map(|i| {
+                    let p = &overpass_places[i];
+                    Pin {
+                        id: p.id.clone(),
+                        lat: p.lat,
+                        lng: p.lng,
+                        color: p.place_type.color(PlaceSource::Overpass),
+                        icon: p.place_type.icon(),
+                        name: p.name.clone(),
+                        selected: false,
+                    }
                 }));
             }
             if let Ok(json) = serde_json::to_string(&pins) {
@@ -344,6 +352,29 @@ pub fn map_view(props: &MapViewProps) -> Html {
             }
         </div>
     }
+}
+
+/// Picks up to `cap` evenly-spaced indices out of `0..len`, so a thinned
+/// marker layer stays spread across the whole list instead of bunching at
+/// the start (which — for viewport-ordered Overpass results — would bias
+/// toward one corner of the map).
+fn thinned_indices(len: usize, cap: usize) -> Vec<usize> {
+    if cap == 0 || len <= cap {
+        return (0..len).collect();
+    }
+    let step = len as f64 / cap as f64;
+    let mut out = Vec::with_capacity(cap);
+    let mut next = 0.0f64;
+    for i in 0..len {
+        if out.len() >= cap {
+            break;
+        }
+        if i as f64 >= next {
+            out.push(i);
+            next += step;
+        }
+    }
+    out
 }
 
 fn search_results(
