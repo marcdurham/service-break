@@ -271,8 +271,11 @@ button { cursor: pointer; }
 .chip .mi { font-size: 15px; }
 .chip.on { border-color: var(--accent); background: var(--accent); color: #fff; }
 
-.recenter {
-  position: absolute; right: 16px; z-index: 500;
+/* Discover sits lowest of the two floating buttons; recenter floats above
+   it. Both use position:fixed (not absolute) so Discover stays put on the
+   List screen too, where its container scrolls. */
+.discover {
+  position: fixed; right: 16px; z-index: 500;
   bottom: calc(88px + env(safe-area-inset-bottom));
   width: 46px; height: 46px; border: none; border-radius: 14px; background: #fff;
   box-shadow: 0 6px 18px -8px rgba(74, 53, 39, .5);
@@ -280,7 +283,26 @@ button { cursor: pointer; }
 }
 /* the featured-place card spans the full width above the tab bar on
    mobile, so the button floats above it instead of overlapping */
-.recenter.above-card { bottom: 250px; }
+.discover.above-card { bottom: 250px; }
+.discover .mi { font-size: 23px; color: var(--muted2); }
+.discover.on { background: #3f7fd6; }
+.discover.on .mi { color: #fff; }
+/* off state: a diagonal slash over the marker icon, like a muted/disabled
+   control, so "off" reads at a glance without a second icon asset */
+.discover:not(.on)::after {
+  content: ""; position: absolute;
+  width: 28px; height: 2px; background: var(--muted2);
+  transform: rotate(-45deg); border-radius: 1px; pointer-events: none;
+}
+
+.recenter {
+  position: fixed; right: 16px; z-index: 500;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  width: 46px; height: 46px; border: none; border-radius: 14px; background: #fff;
+  box-shadow: 0 6px 18px -8px rgba(74, 53, 39, .5);
+  display: flex; align-items: center; justify-content: center;
+}
+.recenter.above-card { bottom: 312px; }
 .recenter .mi { font-size: 23px; color: #3f7fd6; }
 
 .sel-wrap {
@@ -965,7 +987,8 @@ button { cursor: pointer; }
   .sel-wrap { left: 16px; right: auto; bottom: 20px; width: 400px; margin: 0; }
   /* the card is anchored to the left on desktop, so the corner is always
      clear regardless of whether a place is featured */
-  .recenter, .recenter.above-card { right: 16px; bottom: 16px; }
+  .discover, .discover.above-card { right: 16px; bottom: 16px; }
+  .recenter, .recenter.above-card { right: 16px; bottom: 78px; }
 
   .hero { height: 240px; }
 

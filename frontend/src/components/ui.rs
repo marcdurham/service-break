@@ -97,6 +97,27 @@ pub fn access_class(purchase_required: Requirement, code_required: Requirement) 
     }
 }
 
+/// Floating toggle for the Overpass "unvisited places" layer — gray with a
+/// slash through the marker-plus icon when off, solid blue when on. Shared
+/// between the Map and List screens so both stay visually identical.
+pub fn discover_button(on: bool, above_card: bool, on_toggle: &Callback<()>) -> Html {
+    let onclick = {
+        let cb = on_toggle.clone();
+        Callback::from(move |_| cb.emit(()))
+    };
+    let class = match (on, above_card) {
+        (true, true) => "discover on above-card",
+        (true, false) => "discover on",
+        (false, true) => "discover above-card",
+        (false, false) => "discover",
+    };
+    html! {
+        <button {class} {onclick}>
+            <span class="mi">{"add_location"}</span>
+        </button>
+    }
+}
+
 /// Opens turn-by-turn directions in Google Maps to `(lat, lng)` — takes
 /// coordinates rather than a `PlaceSummary` so it works for Overpass POIs
 /// (which aren't app places) too.

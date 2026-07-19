@@ -53,6 +53,8 @@ pub struct MapViewProps {
     pub on_open_filters: Callback<()>,
     pub on_toggle_amenity: Callback<Amenity>,
     pub on_recenter: Callback<()>,
+    /// Fired when the "Discover" button is tapped, flipping `show_unvisited`.
+    pub on_toggle_unvisited: Callback<()>,
     /// Fired when a pasted Google Maps link resolved, so the app can open
     /// the "Add a place" page prefilled.
     pub on_maps_link: Callback<MapsLinkResult>,
@@ -345,6 +347,8 @@ pub fn map_view(props: &MapViewProps) -> Html {
                     />
                 }
             </div>
+
+            { ui::discover_button(props.show_unvisited, featured.is_some(), &props.on_toggle_unvisited) }
 
             <button
                 class={if featured.is_some() { "recenter above-card" } else { "recenter" }}
