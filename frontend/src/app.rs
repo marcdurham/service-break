@@ -129,6 +129,10 @@ pub fn app() -> Html {
     let places = use_state(Vec::<PlaceSummary>::new);
     let selected = use_state(|| None::<Uuid>);
     let detail = use_state(|| None::<PlaceDetail>);
+    // One-shot flag: open the detail view's edit form as soon as it next
+    // mounts — set when the `/poi/.../edit` flow finishes promoting, so the
+    // user who asked to edit before signing in lands in the editor.
+    let edit_on_open = use_state(|| false);
     // A place the map should center on, set by "Show on map" in the viewer.
     let map_focus = use_state(|| None::<(f64, f64)>);
     let show_filters = use_state(|| false);
@@ -227,6 +231,46 @@ pub fn app() -> Html {
             } else {
                 detail.set(None);
             }
+        });
+    }
+
+    // The `/poi/:kind/:num/edit` route: once a signed-in user is on it —
+    // directly, or after the sign-in gate the route shows — promote the POI
+    // into a real place and open that place with its editor already open.
+    // `replace` (not `push`) so Back skips the transient gate URL.
+    {
+        let signed_in = auth.is_some();
+        let device = device.clone();
+        let selected = selected.clone();
+        let detail = detail.clone();
+        let edit_on_open = edit_on_open.clone();
+        let refresh = refresh.clone();
+        let navigator = navigator.clone();
+        let show_toast = show_toast.clone();
+        use_effect_with((route, signed_in, *started), move |(route, signed_in, started)| {
+            let Route::PoiEdit { kind, num } = *route else {
+                return;
+            };
+            if !(*signed_in && *started) {
+                return;
+            }
+            let poi_id = format!("{}/{num}", kind.as_str());
+            wasm_bindgen_futures::spawn_local(async move {
+                match api::promote_overpass_poi(&poi_id, &device).await {
+                    Ok(d) => {
+                        let id = d.summary.id;
+                        selected.set(Some(id));
+                        detail.set(Some(d));
+                        edit_on_open.set(true);
+                        refresh.set(refresh.wrapping_add(1));
+                        navigator.replace(&Route::Place { id });
+                    }
+                    Err(msg) => {
+                        show_toast.emit(msg);
+                        navigator.replace(&Route::Map);
+                    }
+                }
+            });
         });
     }
 
@@ -429,11 +473,15 @@ pub fn app() -> Html {
     };
 
     // Sends the user to the Account page when a gated action needs a login.
+    // Also closes the POI preview overlay, which isn't route-driven and
+    // would otherwise stay covering the Account page it navigated to.
     let require_login = {
         let navigator = navigator.clone();
         let show_toast = show_toast.clone();
+        let open_poi = open_poi.clone();
         Callback::from(move |msg: String| {
             show_toast.emit(msg);
+            open_poi.set(None);
             navigator.push(&Route::Account);
         })
     };
@@ -742,8 +790,8 @@ pub fn app() -> Html {
                     Route::Account => html! {
                         <AccountView
                             auth={(*auth).clone()}
-                            on_login={on_login}
-                            on_logout={on_logout}
+                            on_login={on_login.clone()}
+                            on_logout={on_logout.clone()}
                             on_toast={show_toast.clone()}
                             google_enabled={*google_enabled}
                         />
@@ -757,7 +805,7 @@ pub fn app() -> Html {
                     Route::Register => html! {
                         <RegisterView
                             auth={(*auth).clone()}
-                            on_login={on_login}
+                            on_login={on_login.clone()}
                             on_toast={show_toast.clone()}
                             google_enabled={*google_enabled}
                             notice={(*register_notice).clone()}
@@ -766,7 +814,7 @@ pub fn app() -> Html {
                     },
                     Route::OauthComplete => html! {
                         <OauthCompleteView
-                            on_login={on_login}
+                            on_login={on_login.clone()}
                             on_toast={show_toast.clone()}
                             on_register_notice={set_register_notice.clone()}
                         />
@@ -815,6 +863,28 @@ pub fn app() -> Html {
 
             <TabBar route={*background} on_change={on_nav} />
 
+            // The sign-in gate for `/poi/.../edit`: editing needs an
+            // account, so the route shows the sign-in page until `auth`
+            // exists, then a brief placeholder while the promote effect
+            // above moves the user on to the place editor.
+            if matches!(route, Route::PoiEdit { .. }) {
+                <div class="detail-overlay">
+                    if auth.is_none() {
+                        <AccountView
+                            auth={(*auth).clone()}
+                            on_login={on_login.clone()}
+                            on_logout={on_logout.clone()}
+                            on_toast={show_toast.clone()}
+                            google_enabled={*google_enabled}
+                        />
+                    } else {
+                        <div class="screen sb-scroll">
+                            <div class="screen-title">{"Opening editor…"}</div>
+                        </div>
+                    }
+                </div>
+            }
+
             if let Some(d) = (*detail).clone() {
                 <DetailView
                     detail={d}
@@ -833,18 +903,40 @@ pub fn app() -> Html {
                     on_updated={on_detail_updated}
                     on_deleted={on_detail_deleted}
                     on_toast={show_toast.clone()}
+                    start_editing={*edit_on_open}
+                    on_editing_started={{
+                        let edit_on_open = edit_on_open.clone();
+                        Callback::from(move |()| edit_on_open.set(false))
+                    }}
                 />
             }
 
             if let Some(poi) = (*open_poi).clone() {
                 <PoiDetailView
-                    poi={poi}
+                    poi={poi.clone()}
                     device_id={(*device).clone()}
                     logged_in={auth.is_some()}
                     on_require_login={{
                         let require_login = require_login.clone();
                         Callback::from(move |()| {
                             require_login.emit("Sign in to save places".to_owned())
+                        })
+                    }}
+                    on_edit_signed_out={{
+                        let navigator = navigator.clone();
+                        let show_toast = show_toast.clone();
+                        let open_poi = open_poi.clone();
+                        let require_login = require_login.clone();
+                        let poi_id = poi.id.clone();
+                        Callback::from(move |()| match Route::poi_edit(&poi_id) {
+                            Some(gate) => {
+                                show_toast.emit("Sign in to edit this place".to_owned());
+                                open_poi.set(None);
+                                navigator.push(&gate);
+                            }
+                            // An OSM ref shape we don't route: fall back to
+                            // the plain sign-in redirect.
+                            None => require_login.emit("Sign in to edit places".to_owned()),
                         })
                     }}
                     on_close={close_poi}

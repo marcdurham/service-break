@@ -8,7 +8,9 @@
 use shared::{query_param, AuthSession};
 use yew::prelude::*;
 use yew_router::hooks::use_navigator;
+use yew_router::Routable;
 
+use crate::api;
 use crate::route::Route;
 
 #[derive(Properties, PartialEq)]
@@ -39,6 +41,10 @@ pub fn oauth_complete_view(props: &OauthCompleteViewProps) -> Html {
             let frag = fragment();
             let frag = frag.trim_start_matches('#');
             let mut destination = Route::Account;
+            // Read (and clear) unconditionally so a stale stored path can't
+            // leak into some later, unrelated sign-in.
+            let return_route =
+                api::take_oauth_return_path().and_then(|path| Route::recognize(&path));
             if let Some(message) = query_param(frag, "register_required") {
                 on_register_notice.emit(message);
                 destination = Route::Register;
@@ -56,6 +62,12 @@ pub fn oauth_complete_view(props: &OauthCompleteViewProps) -> Html {
                     given_name: String::new(),
                     family_name: String::new(),
                 });
+                // A sign-in that started from the gated POI edit page goes
+                // back there to resume the edit; everything else keeps
+                // landing on Account.
+                if let Some(gate @ Route::PoiEdit { .. }) = return_route {
+                    destination = gate;
+                }
             } else {
                 on_toast.emit("Google sign-in didn't complete".to_owned());
             }

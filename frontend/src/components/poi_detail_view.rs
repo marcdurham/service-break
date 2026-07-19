@@ -19,6 +19,10 @@ pub struct PoiDetailViewProps {
     /// actions emit `on_require_login` instead of promoting.
     pub logged_in: bool,
     pub on_require_login: Callback<()>,
+    /// Like `on_require_login`, but for the Edit action specifically: the
+    /// app routes it to this POI's `/poi/.../edit` URL, so the user comes
+    /// back to editing this exact place once they've signed in.
+    pub on_edit_signed_out: Callback<()>,
     pub on_close: Callback<()>,
     pub on_promoted: Callback<PlaceDetail>,
     pub on_toast: Callback<String>,
@@ -69,17 +73,16 @@ pub fn poi_detail_view(props: &PoiDetailViewProps) -> Html {
     // resulting place in the same tap. Rate/Edit just land the user on the
     // normal `DetailView`, which already has the review composer and Edit
     // button, rather than auto-opening either sub-form here.
-    let promote_action = |then_save: bool| {
+    let promote_action = |then_save: bool, signed_out: Callback<()>| {
         let poi_id = poi.id.clone();
         let device_id = props.device_id.clone();
         let logged_in = props.logged_in;
-        let require_login = props.on_require_login.clone();
         let on_promoted = props.on_promoted.clone();
         let on_toast = props.on_toast.clone();
         let busy = busy.clone();
         Callback::from(move |_: MouseEvent| {
             if !logged_in {
-                require_login.emit(());
+                signed_out.emit(());
                 return;
             }
             if *busy {
@@ -96,9 +99,9 @@ pub fn poi_detail_view(props: &PoiDetailViewProps) -> Html {
             ));
         })
     };
-    let save = promote_action(true);
-    let rate = promote_action(false);
-    let edit = promote_action(false);
+    let save = promote_action(true, props.on_require_login.clone());
+    let rate = promote_action(false, props.on_require_login.clone());
+    let edit = promote_action(false, props.on_edit_signed_out.clone());
 
     html! {
         <div class="detail-overlay">
