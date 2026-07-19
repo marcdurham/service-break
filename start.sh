@@ -33,21 +33,22 @@ SERVICES=(
 find_or_create_tab() {
   local label="$1" cwd="$2"
   # Search all tabs for an exact label match
-  local tab_id
+  local tab_id root_pane
   tab_id=$(herdr tab list | jq -r --arg l "$label" \
     '.result.tabs[] | select(.label == $l) | .tab_id' | head -1)
   if [[ -z "$tab_id" ]]; then
-    tab_id=$(herdr tab create --cwd "$cwd" --label "$label" --no-focus \
-      | jq -r '.result.tab.tab_id')
-    echo "Created new tab '$label': $tab_id"
+    local created
+    created=$(herdr tab create --cwd "$cwd" --label "$label" --no-focus)
+    tab_id=$(jq -r '.result.tab.tab_id' <<<"$created")
+    root_pane=$(jq -r '.result.root_pane.pane_id' <<<"$created")
+    echo "Created new tab '$label': $tab_id" >&2
   else
-    echo "Reusing existing tab '$label': $tab_id"
+    echo "Reusing existing tab '$label': $tab_id" >&2
+    herdr tab focus "$tab_id" >/dev/null
+    # tab list/get don't expose root_pane; look it up via pane list instead.
+    root_pane=$(herdr pane list | jq -r --arg t "$tab_id" \
+      '.result.panes[] | select(.tab_id == $t) | .pane_id' | head -1)
   fi
-  # Ensure the tab's root pane is in the right cwd (in case it was moved)
-  herdr tab focus "$tab_id" >/dev/null
-  local root_pane
-  root_pane=$(herdr tab list | jq -r --arg t "$tab_id" \
-    '.result.tabs[] | select(.tab_id == $t) | .root_pane.pane_id' | head -1)
   echo "$root_pane"
 }
 
@@ -67,7 +68,7 @@ is_db_running() {
 restart_service() {
   local label="$1" pane_id="$2" cmd="$3"
   echo "Stopping existing $label service..."
-  herdr pane send-keys "$pane_id" CtrlC
+  herdr pane send-keys "$pane_id" ctrl+c
   sleep 1
   herdr pane run "$pane_id" "$cmd"
   echo "Started $label on new port (pane $pane_id): $cmd"
