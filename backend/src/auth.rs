@@ -165,6 +165,7 @@ async fn register(
     let password = creds.password;
     let hash = run_blocking(move || hash_password(&password)).await?;
     let user_id = db::register_user(&state.pool, &username, &hash, &invite_code).await?;
+    tracing::info!(user_id = %user_id, %username, "user registered");
     let session = start_session(&state.pool, user_id, username, false).await?;
     Ok(HttpResponse::Created().json(session))
 }
@@ -173,12 +174,17 @@ async fn register(
 async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpResponse, ApiError> {
     let creds = body.into_inner();
     let bad = || ApiError::Unauthorized("wrong username or password".to_owned());
+    let username_attempted = creds.username.trim().to_owned();
     // An unknown username has no account to log the attempt against — only
     // failures against a real account (wrong password) reach the activity
     // log, which is always viewed scoped to one account.
-    let user = db::find_user(&state.pool, creds.username.trim())
-        .await?
-        .ok_or_else(bad)?;
+    let user = match db::find_user(&state.pool, &username_attempted).await? {
+        Some(u) => u,
+        None => {
+            tracing::warn!(username = %username_attempted, reason = "unknown username", "login failed");
+            return Err(bad());
+        }
+    };
     let user_id = user.id;
 
     let Some(hash) = user.password_hash else {
@@ -187,6 +193,7 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
         // probe which accounts exist or how they sign in.
         db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
             .await?;
+        tracing::warn!(user_id = %user_id, username = %user.username, reason = "google-only account", "login failed");
         return Err(bad());
     };
     let password = creds.password;
@@ -194,9 +201,11 @@ async fn login(state: Data<AppState>, body: Json<Credentials>) -> Result<HttpRes
     if !ok {
         db::record_activity(&state.pool, user_id, "failed_login", "", "", "", Some(user_id))
             .await?;
+        tracing::warn!(user_id = %user_id, username = %user.username, reason = "wrong password", "login failed");
         return Err(bad());
     }
     db::record_activity(&state.pool, user_id, "login", "", "", "", Some(user_id)).await?;
+    tracing::info!(user_id = %user_id, username = %user.username, "user logged in");
     let session = start_session(&state.pool, user.id, user.username, user.is_admin).await?;
     Ok(HttpResponse::Ok().json(session))
 }

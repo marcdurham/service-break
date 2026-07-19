@@ -2,17 +2,37 @@ use actix_cors::Cors;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use backend::{
-    admin, db, handlers, http_client, AppState, DEFAULT_NOMINATIM_URL, DEFAULT_OVERPASS_URL,
-    DEFAULT_TILE_URL,
+    admin, db, handlers, http_client, telemetry, AppState, DEFAULT_NOMINATIM_URL,
+    DEFAULT_OVERPASS_URL, DEFAULT_TILE_URL,
 };
 use sqlx::postgres::PgPoolOptions;
+use tracing_actix_web::TracingLogger;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+    // Every log line goes to stdout as before. When `OPENOBSERVE_URL` is
+    // set, the same lines (plus one per finished HTTP request, via
+    // `TracingLogger`'s root span below) are also serialized as JSON and
+    // shipped to OpenObserve in the background — see `telemetry.rs`.
+    let openobserve_config = telemetry::OpenObserveConfig::from_env();
+    let shipping_to_openobserve = openobserve_config.is_some();
+    let openobserve_layer = openobserve_config.map(|cfg| {
+        let writer = telemetry::spawn_shipper(cfg, http_client());
+        tracing_subscriber::fmt::layer()
+            .json()
+            .flatten_event(true)
+            .with_span_events(FmtSpan::CLOSE)
+            .with_writer(writer)
+    });
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .with(openobserve_layer)
         .init();
+    tracing::info!(shipping_to_openobserve, "logging initialized");
 
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set (see .cargo/config.toml)");
@@ -60,6 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         App::new()
             .app_data(state.clone())
             .wrap(Cors::permissive())
+            .wrap(TracingLogger::default())
             .configure(handlers::configure)
     })
     .bind(&bind_addr)?

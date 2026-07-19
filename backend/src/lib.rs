@@ -9,6 +9,7 @@ pub mod google_auth;
 pub mod handlers;
 pub mod maps_link;
 pub mod overpass;
+pub mod telemetry;
 pub mod tile_cache;
 pub mod tiles;
 pub mod util;

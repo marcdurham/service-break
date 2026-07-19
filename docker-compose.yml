@@ -16,6 +16,21 @@ services:
       timeout: 3s
       retries: 10
 
+  # Log aggregation (see https://openobserve.ai/). Not profile-gated, like
+  # `db`, so it's available whether the backend runs in a container or
+  # natively via `cargo run` — set OPENOBSERVE_URL to http://127.0.0.1:5080
+  # for the latter. Ships are a no-op if the backend has no OPENOBSERVE_URL.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    container_name: service-break-openobserve
+    environment:
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER:-admin@example.com}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:-Ch4nge-Me-Please!}
+    ports:
+      - "127.0.0.1:5080:5080"
+    volumes:
+      - openobserve-data:/data
+
   # backend + frontend are profile-gated so the dev workflow
   # (`docker compose up -d` for Postgres only, cargo/trunk run natively)
   # keeps working. Full containerized stack:
@@ -37,11 +52,20 @@ services:
       # Disk LRU cache of proxied OSM map tiles (see backend/src/tile_cache.rs).
       TILE_CACHE_DIR: /var/cache/service-break/tiles
       TILE_CACHE_MAX_MB: ${TILE_CACHE_MAX_MB:-512}
+      # Ships structured logs to the `openobserve` container above. See
+      # DEPLOY.md for the ingestion details.
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-http://openobserve:5080}
+      OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-default}
+      OPENOBSERVE_STREAM: ${OPENOBSERVE_STREAM:-backend}
+      OPENOBSERVE_USER: ${OPENOBSERVE_USER:-admin@example.com}
+      OPENOBSERVE_PASSWORD: ${OPENOBSERVE_PASSWORD:-Ch4nge-Me-Please!}
     volumes:
       - tile-cache:/var/cache/service-break/tiles
     depends_on:
       db:
         condition: service_healthy
+      openobserve:
+        condition: service_started
 
   frontend:
     build:
@@ -57,3 +81,4 @@ services:
 volumes:
   db-data:
   tile-cache:
+  openobserve-data:

@@ -67,9 +67,11 @@ async fn get_tile(
     let cached = state.tile_cache.get(z, x, y).await;
     if let Some(tile) = &cached {
         if tile.fresh {
+            tracing::debug!(z, x, y, "tile cache hit");
             return Ok(tile_response(tile.body.clone()));
         }
     }
+    tracing::debug!(z, x, y, stale = cached.is_some(), "tile cache miss; fetching upstream");
 
     match fetch_tile(&state.http, &state.tile_url, z, x, y).await {
         Ok(body) => {

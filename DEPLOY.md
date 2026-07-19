@@ -183,6 +183,43 @@ passwords, listed once on the page after the import — hand them out, or
 reset them with `scripts/change-password.sh`. Accounts that already exist,
 like the `admin` you're signed in as, keep their current password.
 
+### Structured logging (OpenObserve)
+
+The compose stack includes an [OpenObserve](https://openobserve.ai/)
+container (`openobserve`, image `public.ecr.aws/zinclabs/openobserve`) that
+collects the backend's logs — every REST request (method, route, status,
+latency), logins/failed logins, registrations, Google sign-ins/links, place
+create/update/delete, and tile-cache activity/errors. It's not
+profile-gated, so it starts with a plain `docker compose up -d` alongside
+`db`.
+
+The backend ships logs to it automatically once deployed — no extra step —
+by POSTing batched JSON to OpenObserve's `_json` ingestion endpoint (see
+`backend/src/telemetry.rs`). Logs still also go to stdout as before
+(`docker compose logs`), so nothing is lost if OpenObserve is unreachable.
+
+- **Credentials**: set `OPENOBSERVE_USER` / `OPENOBSERVE_PASSWORD` in your
+  `.env` (defaults to `admin@example.com` / `Ch4nge-Me-Please!` — change
+  this before deploying, same as `POSTGRES_PASSWORD`; OpenObserve rejects
+  weak passwords outright, so the default is only there to make first boot
+  work, not to be secure). These double as the login for OpenObserve's web
+  UI and the backend's ingestion credentials.
+- **Viewing logs**: OpenObserve's UI listens on `127.0.0.1:5080` on the
+  server (not exposed publicly). Reach it over an SSH tunnel:
+  ```
+  ssh -L 5080:127.0.0.1:5080 youruser@yourserver.example.com
+  ```
+  then open `http://127.0.0.1:5080` locally and sign in with
+  `OPENOBSERVE_USER` / `OPENOBSERVE_PASSWORD`. Logs land in the `default`
+  org's `backend` stream (override with `OPENOBSERVE_ORG` /
+  `OPENOBSERVE_STREAM`).
+- **Disabling it**: unset `OPENOBSERVE_URL` (or don't run the `openobserve`
+  container) and the backend just logs to stdout — same as before this
+  feature existed.
+- **Local dev without Docker**: `cargo run -p backend` never ships to
+  OpenObserve unless you export `OPENOBSERVE_URL` yourself (e.g.
+  `http://127.0.0.1:5080` if you've started the container standalone).
+
 ## Rollback
 
 ```

@@ -148,6 +148,7 @@ async fn create_place(
         text: new.comment.trim(),
     };
     db::insert_review(&state.pool, &review).await?;
+    tracing::info!(place_id = %id, user_id = %user.id, name = %place.name, "place created");
     let detail = db::get_place(&state.pool, id, None).await?;
     Ok(HttpResponse::Created().json(detail))
 }
@@ -208,8 +209,10 @@ async fn update_place(
         amenities: up.amenities.clone(),
         hours: up.hours.map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()),
     };
-    db::update_place(&state.pool, *id, user.id, &fields).await?;
-    let detail = db::get_place(&state.pool, *id, None).await?;
+    let place_id = *id;
+    db::update_place(&state.pool, place_id, user.id, &fields).await?;
+    tracing::info!(%place_id, user_id = %user.id, "place updated");
+    let detail = db::get_place(&state.pool, place_id, None).await?;
     Ok(HttpResponse::Ok().json(detail))
 }
 
@@ -222,7 +225,9 @@ async fn delete_place(
     user: AuthUser,
     id: Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    db::delete_place(&state.pool, *id, user.id).await?;
+    let place_id = *id;
+    db::delete_place(&state.pool, place_id, user.id).await?;
+    tracing::info!(%place_id, user_id = %user.id, "place deleted");
     Ok(HttpResponse::NoContent().finish())
 }
 
