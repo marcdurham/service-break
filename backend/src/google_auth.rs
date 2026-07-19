@@ -159,6 +159,7 @@ async fn google_unlink(state: Data<AppState>, user: AuthUser) -> Result<HttpResp
     db::unlink_google_account(&state.pool, user.id).await?;
     db::record_activity(&state.pool, user.id, "profile_change", "google_unlink", "", "", Some(user.id))
         .await?;
+    tracing::info!(user_id = %user.id, username = %user.username, "google account unlinked");
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -314,8 +315,14 @@ async fn google_callback(state: Data<AppState>, query: Query<CallbackQuery>) -> 
         )
         .await
         {
-            Ok(()) => redirect_linked(&cfg.app_base_url),
-            Err(e) => redirect_with_error(&cfg.app_base_url, &e.to_string()),
+            Ok(()) => {
+                tracing::info!(user_id = %user_id, email = %profile.email, "google account linked");
+                redirect_linked(&cfg.app_base_url)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, user_id = %user_id, "google account link failed");
+                redirect_with_error(&cfg.app_base_url, &e.to_string())
+            }
         };
     }
 
@@ -345,11 +352,17 @@ async fn google_callback(state: Data<AppState>, query: Query<CallbackQuery>) -> 
 
     let (user_id, username, is_admin) = match result {
         Ok(v) => v,
-        Err(e) => return redirect_with_error(&cfg.app_base_url, &e.to_string()),
+        Err(e) => {
+            tracing::warn!(error = %e, %mode, "google sign-in failed");
+            return redirect_with_error(&cfg.app_base_url, &e.to_string());
+        }
     };
 
-    match start_session(&state.pool, user_id, username, is_admin).await {
-        Ok(session) => redirect_with_session(&cfg.app_base_url, &session),
+    match start_session(&state.pool, user_id, username.clone(), is_admin).await {
+        Ok(session) => {
+            tracing::info!(user_id = %user_id, %username, %mode, "user logged in via google");
+            redirect_with_session(&cfg.app_base_url, &session)
+        }
         Err(e) => redirect_with_error(&cfg.app_base_url, &e.to_string()),
     }
 }

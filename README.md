@@ -49,6 +49,8 @@ Config via env (defaults in parentheses): `DATABASE_URL` (set in
 (`https://nominatim.openstreetmap.org`). "Sign in with Google" is optional
 and off unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
 `GOOGLE_REDIRECT_URI` are all set — see DEPLOY.md for how to get them.
+Shipping logs to [OpenObserve](https://openobserve.ai/) is likewise optional
+and off unless `OPENOBSERVE_URL` is set — see DEPLOY.md.
 
 ## Tests
 
