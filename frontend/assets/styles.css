@@ -298,7 +298,7 @@ button { cursor: pointer; }
 }
 /* the featured-place card spans the full width above the tab bar on
    mobile, so the button floats above it instead of overlapping */
-.discover.above-card { bottom: 250px; }
+.discover.above-card { bottom: 236px; }
 .discover .mi { font-size: 23px; color: var(--muted2); }
 .discover.on { background: #3f7fd6; }
 .discover.on .mi { color: #fff; }
@@ -319,7 +319,7 @@ button { cursor: pointer; }
   padding: 12px 26px 12px 14px; box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .5);
   animation: sbfade .2s ease-out;
 }
-.discover-tip.above-card { bottom: calc(306px + env(safe-area-inset-bottom)); }
+.discover-tip.above-card { bottom: calc(292px + env(safe-area-inset-bottom)); }
 .discover-tip::after {
   content: ""; position: absolute; right: 21px; bottom: -6px;
   width: 12px; height: 12px; background: var(--dark);
@@ -339,12 +339,12 @@ button { cursor: pointer; }
   box-shadow: 0 6px 18px -8px rgba(74, 53, 39, .5);
   display: flex; align-items: center; justify-content: center;
 }
-.recenter.above-card { bottom: 312px; }
+.recenter.above-card { bottom: 298px; }
 .recenter .mi { font-size: 23px; color: #3f7fd6; }
 
 .sel-wrap {
   position: absolute; left: 12px; right: 12px;
-  bottom: calc(100px + env(safe-area-inset-bottom));
+  bottom: calc(86px + env(safe-area-inset-bottom));
   max-width: 460px; margin-inline: auto;
   z-index: 500; animation: sbup .28s ease-out;
 }
