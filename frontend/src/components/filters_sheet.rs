@@ -16,8 +16,17 @@ const TYPE_OPTIONS: [PlaceType; 7] = [
     PlaceType::FastFood,
 ];
 
+/// Which view the sheet was opened from; each shows only the controls
+/// that apply to it (distance on List, marker density on Map).
+#[derive(Clone, Copy, PartialEq)]
+pub enum FiltersFor {
+    Map,
+    List,
+}
+
 #[derive(Properties, PartialEq)]
 pub struct FiltersSheetProps {
+    pub view: FiltersFor,
     pub filters: Filters,
     pub count: usize,
     pub on_change: Callback<Filters>,
@@ -128,30 +137,39 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
                         }
                     }) }
                 </div>
-                <div class="field-label">{format!("Within {} mi", props.filters.radius_mi)}</div>
-                <input
-                    type="range"
-                    class="range"
-                    min="0"
-                    max={shared::RADIUS_SLIDER_STEPS.to_string()}
-                    step="1"
-                    value={shared::radius_to_slider(props.filters.radius_mi).to_string()}
-                    oninput={on_radius}
-                />
-                <div class="field-label">
-                    {format!("Marker density: {}", shared::marker_density_label(props.marker_density))}
-                </div>
-                <input
-                    type="range"
-                    class="range"
-                    min="0"
-                    max={(shared::MARKER_DENSITY_LEVELS.len() - 1).to_string()}
-                    step="1"
-                    value={props.marker_density.to_string()}
-                    oninput={on_density}
-                />
+                if props.view == FiltersFor::List {
+                    <div class="field-label">{format!("Within {} mi", props.filters.radius_mi)}</div>
+                    <input
+                        type="range"
+                        class="range"
+                        min="0"
+                        max={shared::RADIUS_SLIDER_STEPS.to_string()}
+                        step="1"
+                        value={shared::radius_to_slider(props.filters.radius_mi).to_string()}
+                        oninput={on_radius}
+                    />
+                }
+                if props.view == FiltersFor::Map {
+                    <div class="field-label">
+                        {format!("Marker density: {}", shared::marker_density_label(props.marker_density))}
+                    </div>
+                    <input
+                        type="range"
+                        class="range"
+                        min="0"
+                        max={(shared::MARKER_DENSITY_LEVELS.len() - 1).to_string()}
+                        step="1"
+                        value={props.marker_density.to_string()}
+                        oninput={on_density}
+                    />
+                }
                 <button class="sheet-apply" onclick={close_apply}>
-                    {format!("Show {} places", props.count)}
+                    {
+                        match props.view {
+                            FiltersFor::Map => "Show Map".to_owned(),
+                            FiltersFor::List => format!("Show {} places", props.count),
+                        }
+                    }
                 </button>
             </div>
         </div>
