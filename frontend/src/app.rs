@@ -19,7 +19,7 @@ use crate::components::admin_view::AdminView;
 use crate::components::edit_user_view::EditUserView;
 use crate::components::users_view::UsersView;
 use crate::components::detail_view::DetailView;
-use crate::components::filters_sheet::FiltersSheet;
+use crate::components::filters_sheet::{FiltersFor, FiltersSheet};
 use crate::components::invite_view::InviteView;
 use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
@@ -67,11 +67,16 @@ impl Default for Filters {
 }
 
 impl Filters {
-    pub fn is_active(&self) -> bool {
-        self != &Filters::default()
+    /// Whether any filter differs from its default, ignoring the radius —
+    /// the badge this drives sits on the Map view, which has no distance
+    /// control.
+    pub fn is_active_ignoring_radius(&self) -> bool {
+        Filters { radius_mi: Filters::default().radius_mi, ..self.clone() } != Filters::default()
     }
 
-    pub fn to_query(&self, origin: Option<(f64, f64)>) -> PlacesQuery {
+    /// `apply_radius` is false on the Map view, where the viewport — not the
+    /// distance filter — bounds what's shown.
+    pub fn to_query(&self, origin: Option<(f64, f64)>, apply_radius: bool) -> PlacesQuery {
         let mut types: Vec<&str> = self.types.iter().map(|t| t.as_str()).collect();
         types.sort_unstable();
         // Every featured chip on (the default) means "show everything",
@@ -83,7 +88,7 @@ impl Filters {
             q: None,
             lat: origin.map(|(lat, _)| lat),
             lng: origin.map(|(_, lng)| lng),
-            radius_mi: Some(f64::from(self.radius_mi)),
+            radius_mi: apply_radius.then(|| f64::from(self.radius_mi)),
             types: (!types.is_empty()).then(|| types.join(",")),
             amenities: (!amenities.is_empty() && !all_featured).then(|| amenities.join(",")),
             clean_min: self.clean_only.then_some(4.0),
@@ -264,14 +269,17 @@ pub fn app() -> Html {
         });
     }
 
-    // Load places whenever position, filters or data change.
+    // Load places whenever position, filters, view or data change. The
+    // distance filter only constrains the List view; on Map the viewport
+    // bounds what's shown, so the query goes out unrestricted by radius.
     {
         let places = places.clone();
+        let on_list = matches!(*background, Route::List);
         use_effect_with(
-            (*started, *origin, (*filters).clone(), *refresh),
-            move |(started, origin, filters, _)| {
+            (*started, *origin, (*filters).clone(), on_list, *refresh),
+            move |(started, origin, filters, on_list, _)| {
                 if *started {
-                    let q = filters.to_query(*origin);
+                    let q = filters.to_query(*origin, *on_list);
                     let places = places.clone();
                     wasm_bindgen_futures::spawn_local(async move {
                         if let Ok(list) = api::fetch_places(&q).await {
@@ -736,7 +744,7 @@ pub fn app() -> Html {
                             selected={*selected}
                             origin={*origin}
                             focus={*map_focus}
-                            filters_active={filters.is_active()}
+                            filters_active={filters.is_active_ignoring_radius()}
                             active_amenities={active_amenities(&filters)}
                             overpass_places={(*overpass_places).clone()}
                             show_unvisited={filters.show_unvisited}
@@ -798,6 +806,13 @@ pub fn app() -> Html {
 
             if *show_filters {
                 <FiltersSheet
+                    view={
+                        if matches!(*background, Route::List) {
+                            FiltersFor::List
+                        } else {
+                            FiltersFor::Map
+                        }
+                    }
                     filters={(*filters).clone()}
                     count={list_count}
                     on_change={on_filters_change}
