@@ -51,7 +51,9 @@
         if (map) { map.remove(); map = null; }
         map = L.map(document.getElementById(elId), { zoomControl: false });
         map.setView([lat, lng], zoom);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Tiles proxied through the backend, which caches them for 30 days
+        // (backend/src/tiles.rs) instead of hitting OSM per device.
+        L.tileLayer('/api/tiles/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
@@ -125,7 +127,9 @@
         if (pickMap) { pickMap.remove(); pickMap = null; pickMarker = null; pickUserMarker = null; }
         pickMap = L.map(document.getElementById(elId), { zoomControl: false });
         pickMap.setView([lat, lng], zoom);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Tiles proxied through the backend, which caches them for 30 days
+        // (backend/src/tiles.rs) instead of hitting OSM per device.
+        L.tileLayer('/api/tiles/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(pickMap);

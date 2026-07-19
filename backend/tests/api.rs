@@ -30,6 +30,8 @@ async fn app(
         nominatim_url: "http://127.0.0.1:1".to_owned(),
         // Unroutable address: tests must not depend on the live Overpass API.
         overpass_url: "http://127.0.0.1:1".to_owned(),
+        // Unroutable address: tests must not depend on the live tile server.
+        tile_url: "http://127.0.0.1:1".to_owned(),
         // Google sign-in isn't exercised by these tests.
         google: None,
     });
@@ -48,6 +50,7 @@ async fn app_with_google(
         http: http_client(),
         nominatim_url: "http://127.0.0.1:1".to_owned(),
         overpass_url: "http://127.0.0.1:1".to_owned(),
+        tile_url: "http://127.0.0.1:1".to_owned(),
         google: Some(backend::google_auth::GoogleConfig {
             client_id: "test-client-id".to_owned(),
             client_secret: "test-client-secret".to_owned(),
@@ -2829,4 +2832,60 @@ async fn activity_endpoints_require_login_and_admin(pool: PgPool) {
     let req =
         TestRequest::get().uri("/api/auth/activity").insert_header(auth(&token)).to_request();
     assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+}
+
+// ---- Map tile cache ----
+
+#[sqlx::test(migrations = "./migrations")]
+async fn tile_served_from_cache_without_upstream(pool: PgPool) {
+    // Seed a fresh cached tile; the app's tile_url is unroutable, so a
+    // 200 here proves the cache alone satisfied the request.
+    sqlx::query(
+        "INSERT INTO map_tiles (z, x, y, body, content_type) VALUES (3, 1, 2, $1, 'image/png')",
+    )
+    .bind(&b"fake png bytes"[..])
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = app(pool).await;
+    let req = TestRequest::get().uri("/api/tiles/3/1/2.png").to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers().get("content-type").unwrap(), "image/png");
+    assert!(res.headers().get("cache-control").unwrap().to_str().unwrap().contains("max-age"));
+    assert_eq!(read_body(res).await.as_ref(), b"fake png bytes");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn stale_tile_served_when_upstream_unreachable(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO map_tiles (z, x, y, body, content_type, fetched_at) \
+         VALUES (3, 1, 2, $1, 'image/png', now() - interval '31 days')",
+    )
+    .bind(&b"stale png bytes"[..])
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = app(pool).await;
+    let req = TestRequest::get().uri("/api/tiles/3/1/2.png").to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(read_body(res).await.as_ref(), b"stale png bytes");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn tile_requests_validate_coordinates(pool: PgPool) {
+    let app = app(pool).await;
+    // z0 is a single tile, so x=1 is off the grid; z20 exceeds the UI max.
+    for uri in ["/api/tiles/0/1/0.png", "/api/tiles/20/0/0.png"] {
+        let req = TestRequest::get().uri(uri).to_request();
+        let res = call_service(&app, req).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{uri}");
+    }
+    // An uncached in-range tile with an unreachable upstream is a 502,
+    // not a validation error.
+    let req = TestRequest::get().uri("/api/tiles/0/0/0.png").to_request();
+    assert_eq!(call_service(&app, req).await.status(), StatusCode::BAD_GATEWAY);
 }

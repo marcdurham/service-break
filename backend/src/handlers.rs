@@ -19,6 +19,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     crate::auth::configure(cfg);
     crate::google_auth::configure(cfg);
     crate::admin::configure(cfg);
+    crate::tiles::configure(cfg);
     cfg.service(health)
         .service(list_places)
         .service(create_place)
