@@ -9,6 +9,8 @@ extern "C" {
     /// `on_bounds_changed(min_lat, min_lng, max_lat, max_lng)` fires once
     /// immediately with the initial viewport, then again on every
     /// (debounced) pan/zoom -- drives the Overpass POI layer.
+    /// `on_empty_click` fires (no args) when the map itself -- not a pin --
+    /// is tapped, so the app can clear the current selection.
     #[wasm_bindgen(js_name = sbInitMap)]
     pub fn sb_init_map(
         el_id: &str,
@@ -17,6 +19,7 @@ extern "C" {
         zoom: f64,
         on_select: &JsValue,
         on_bounds_changed: &JsValue,
+        on_empty_click: &JsValue,
     );
 
     #[wasm_bindgen(js_name = sbDestroyMap)]

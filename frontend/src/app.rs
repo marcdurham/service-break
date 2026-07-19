@@ -372,6 +372,11 @@ pub fn app() -> Html {
         Callback::from(move |id: Uuid| selected.set(Some(id)))
     };
 
+    let on_deselect = {
+        let selected = selected.clone();
+        Callback::from(move |()| selected.set(None))
+    };
+
     let on_bounds_changed = {
         let map_bounds = map_bounds.clone();
         Callback::from(move |b: BBox| map_bounds.set(Some(b)))
@@ -802,6 +807,7 @@ pub fn app() -> Html {
                             on_bounds_changed={on_bounds_changed}
                             on_toast={show_toast.clone()}
                             on_toggle_unvisited={on_toggle_unvisited.clone()}
+                            on_deselect={on_deselect}
                         />
                     },
                 }

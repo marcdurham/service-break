@@ -28,6 +28,7 @@
     // ---- Leaflet + geolocation glue used by the wasm app (see src/glue.rs) ----
     (function () {
       let map = null, pinLayer = null, userMarker = null, onSelect = null, onBoundsChanged = null;
+      let onEmptyClick = null;
       let boundsTimer = null;
 
       const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({
@@ -45,9 +46,10 @@
         onBoundsChanged(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
       }
 
-      window.sbInitMap = function (elId, lat, lng, zoom, cb, boundsCb) {
+      window.sbInitMap = function (elId, lat, lng, zoom, cb, boundsCb, emptyClickCb) {
         onSelect = cb;
         onBoundsChanged = boundsCb;
+        onEmptyClick = emptyClickCb;
         if (map) { map.remove(); map = null; }
         map = L.map(document.getElementById(elId), { zoomControl: false });
         map.setView([lat, lng], zoom);
@@ -65,12 +67,16 @@
           clearTimeout(boundsTimer);
           boundsTimer = setTimeout(reportBounds, 400);
         });
+        // Pin markers stop propagation of their own click, so this only
+        // fires for taps on empty map area.
+        map.on('click', () => onEmptyClick && onEmptyClick());
         reportBounds();
       };
 
       window.sbDestroyMap = function () {
         clearTimeout(boundsTimer);
         onBoundsChanged = null;
+        onEmptyClick = null;
         if (map) { map.remove(); map = null; pinLayer = null; userMarker = null; }
       };
 

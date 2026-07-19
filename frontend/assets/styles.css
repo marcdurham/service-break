@@ -203,6 +203,7 @@ button { cursor: pointer; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .searchbar .mi { font-size: 21px; color: #b09a82; }
+.search-submit { border: none; background: none; padding: 0; display: flex; flex-shrink: 0; }
 .icon-btn {
   width: 46px; height: 46px; border: none; border-radius: 15px; background: #fff;
   box-shadow: 0 6px 18px -8px rgba(74, 53, 39, .4);
@@ -226,6 +227,20 @@ button { cursor: pointer; }
   display: flex; align-items: center;
 }
 .search-clear .mi { font-size: 19px; color: var(--muted2); }
+.search-count {
+  flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--accent);
+  white-space: nowrap;
+}
+
+/* Compact notice shown under the search bar when searching with Discovery
+   off, since results are then limited to app places only. */
+.search-warn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 8px 12px; border-radius: 11px;
+  background: #fbeee6; color: var(--accent-dark);
+  font-size: 12px; line-height: 1.35;
+}
+.search-warn .mi { font-size: 15px; flex-shrink: 0; }
 
 .search-results {
   margin-top: 8px; background: #fff; border-radius: 16px;
@@ -295,6 +310,28 @@ button { cursor: pointer; }
   transform: rotate(-45deg); border-radius: 1px; pointer-events: none;
 }
 
+/* One-time coach mark pointing at .discover; sits just above it (mirrors
+   its own .above-card offset) with a small tail pointing down at it. */
+.discover-tip {
+  position: fixed; right: 16px; z-index: 600;
+  bottom: calc(144px + env(safe-area-inset-bottom));
+  width: 208px; background: var(--dark); border-radius: 14px;
+  padding: 12px 26px 12px 14px; box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .5);
+  animation: sbfade .2s ease-out;
+}
+.discover-tip.above-card { bottom: calc(306px + env(safe-area-inset-bottom)); }
+.discover-tip::after {
+  content: ""; position: absolute; right: 21px; bottom: -6px;
+  width: 12px; height: 12px; background: var(--dark);
+  transform: rotate(45deg); border-radius: 2px;
+}
+.discover-tip-text { font-size: 12.5px; line-height: 1.45; color: #fff; }
+.discover-tip-close {
+  position: absolute; top: 6px; right: 6px; border: none; background: none; padding: 4px;
+  display: flex;
+}
+.discover-tip-close .mi { font-size: 15px; color: rgba(255, 255, 255, .65); }
+
 .recenter {
   position: fixed; right: 16px; z-index: 500;
   bottom: calc(150px + env(safe-area-inset-bottom));
@@ -317,6 +354,15 @@ button { cursor: pointer; }
   cursor: pointer; display: flex; gap: 13px; align-items: center;
   border: none; width: 100%; text-align: left; font-size: inherit;
 }
+/* Compact dismiss control for the featured card, popped over its top-right
+   corner so it reads as "close this" rather than part of the card content. */
+.sel-close {
+  position: absolute; top: -9px; right: -6px; z-index: 1;
+  width: 27px; height: 27px; border-radius: 50%; border: 1.5px solid var(--border2);
+  background: #fff; box-shadow: 0 6px 14px -6px rgba(74, 53, 39, .5);
+  display: flex; align-items: center; justify-content: center;
+}
+.sel-close .mi { font-size: 16px; color: var(--muted2); }
 .badge {
   width: 54px; height: 54px; border-radius: 15px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
