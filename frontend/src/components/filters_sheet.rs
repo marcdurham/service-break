@@ -1,7 +1,20 @@
+use shared::PlaceType;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
 use crate::app::Filters;
+
+/// Selectable place types, in display order. `Other` stays excluded here,
+/// matching the chip row this replaced.
+const TYPE_OPTIONS: [PlaceType; 7] = [
+    PlaceType::Shop,
+    PlaceType::Store,
+    PlaceType::Mall,
+    PlaceType::Park,
+    PlaceType::Public,
+    PlaceType::Hall,
+    PlaceType::FastFood,
+];
 
 #[derive(Properties, PartialEq)]
 pub struct FiltersSheetProps {
@@ -10,6 +23,7 @@ pub struct FiltersSheetProps {
     pub on_change: Callback<Filters>,
     pub on_reset: Callback<()>,
     pub on_close: Callback<()>,
+    pub on_toggle_type: Callback<PlaceType>,
 }
 
 #[function_component(FiltersSheet)]
@@ -29,13 +43,15 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
     let stop = Callback::from(|e: MouseEvent| e.stop_propagation());
 
     type Toggle = (&'static str, &'static str, bool, fn(&mut Filters));
-    let toggles: [Toggle; 3] = [
+    let toggles: [Toggle; 4] = [
         ("Clean spots only (4.0+)", "mop", props.filters.clean_only,
             |f| f.clean_only = !f.clean_only),
         ("Has parking", "local_parking", props.filters.has_parking,
             |f| f.has_parking = !f.has_parking),
         ("No purchase required", "money_off", props.filters.no_purchase,
             |f| f.no_purchase = !f.no_purchase),
+        ("Show unvisited places", "travel_explore", props.filters.show_unvisited,
+            |f| f.show_unvisited = !f.show_unvisited),
     ];
 
     let on_radius = {
@@ -59,6 +75,21 @@ pub fn filters_sheet(props: &FiltersSheetProps) -> Html {
                 <div class="sheet-head">
                     <div class="sheet-title">{"Filters"}</div>
                     <button class="sheet-reset" onclick={reset}>{"Reset"}</button>
+                </div>
+                <div class="field-label">{"Type"}</div>
+                <div class="chips sb-scroll">
+                    { for TYPE_OPTIONS.into_iter().map(|t| {
+                        let on = props.filters.types.contains(&t);
+                        let onclick = {
+                            let cb = props.on_toggle_type.clone();
+                            Callback::from(move |_| cb.emit(t))
+                        };
+                        html! {
+                            <button class={if on { "chip on" } else { "chip" }} {onclick}>
+                                <span class="mi">{t.icon()}</span>{t.label()}
+                            </button>
+                        }
+                    }) }
                 </div>
                 <div class="ftoggles">
                     { for toggles.into_iter().map(|(label, icon, on, flip)| {

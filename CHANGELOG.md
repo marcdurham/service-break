@@ -4,6 +4,10 @@ All notable changes to this project are logged here as they happen.
 Newest entries at the top. Format: `YYYY-MM-DD HH:MM` (local time) —
 short description.
 
+## 2026-07-18
+
+- 19:30 — Added an Overpass API (OpenStreetMap) POI layer to the map and list views: nearby fast food, cafés, stores, malls, and parks that no one has added to the app yet show up as blue/gray pins/cards alongside the existing brown app places, capped at 100 per viewport (nearest to center) and cached per geohash tile (`overpass_tiles`/`overpass_pois`, 7-day TTL) so repeated panning doesn't hammer the Overpass API. Tapping one opens a lightweight preview (`PoiDetailView`); saving, rating, or editing it promotes it into a normal `places` row (`source = 'overpass'`) and links the cache row via `app_place_id` so it's excluded from future Overpass results without ever being deleted. New `PlaceType::FastFood`, a new "Show unvisited places" toggle (on by default) and the place-Type filter (both moved from the map/list chip bars into the Filter modal), and search on both screens now matches Overpass POIs too. New backend endpoints `GET /api/overpass/places` and `POST /api/overpass/places/promote`; see the "App places vs Overpass POIs/Places" section in `AGENTS.md` for the full model.
+
 ## 2026-07-16
 
 - 23:05 — Added explicit `padding: 15px 14px` to `.delete-btn` so the delete button has consistent internal spacing with other action-row buttons regardless of CSS specificity.

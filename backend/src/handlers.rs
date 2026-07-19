@@ -2,7 +2,7 @@ use actix_web::web::{Data, Json, Path, Query, ServiceConfig};
 use actix_web::{delete, get, post, put, HttpResponse};
 use serde::Deserialize;
 use serde_json::json;
-use shared::{parse_latlng, NewPlace, NewReview, PlacesQuery, UpdatePlace};
+use shared::{parse_latlng, BBox, NewPlace, NewReview, PlaceSource, PlacesQuery, PromotePoi, UpdatePlace};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -10,6 +10,7 @@ use crate::db;
 use crate::error::ApiError;
 use crate::geocode;
 use crate::maps_link;
+use crate::overpass;
 use crate::AppState;
 
 pub fn configure(cfg: &mut ServiceConfig) {
@@ -30,7 +31,9 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(save_place)
         .service(unsave_place)
         .service(geocode_query)
-        .service(maps_link_query);
+        .service(maps_link_query)
+        .service(list_overpass_places)
+        .service(promote_overpass_poi);
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,6 +134,7 @@ async fn create_place(
         amenities: new.amenities.clone(),
         device_id: new.device_id.clone(),
         user_id: user.id,
+        source: PlaceSource::App,
     };
     let id = db::insert_place(&state.pool, &place).await?;
     let review = db::InsertReview {
@@ -324,4 +328,58 @@ async fn maps_link_query(
     }
     let (name, lat, lng) = maps_link::resolve(&state.http, url).await?;
     Ok(HttpResponse::Ok().json(shared::MapsLinkResult { name, lat, lng }))
+}
+
+/// Overpass POIs (raw OpenStreetMap data, not yet in the app) within a map
+/// viewport, cached per geohash tile (see `overpass::ensure_bbox_cached`)
+/// and capped at the 100 nearest to the bbox center. Public, like every
+/// other read.
+#[get("/api/overpass/places")]
+async fn list_overpass_places(
+    state: Data<AppState>,
+    q: Query<shared::OverpassQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let bbox = BBox {
+        min_lat: q.min_lat,
+        min_lng: q.min_lng,
+        max_lat: q.max_lat,
+        max_lng: q.max_lng,
+    };
+    if !bbox.is_valid() {
+        return Err(ApiError::BadRequest("invalid bounding box".to_owned()));
+    }
+    overpass::ensure_bbox_cached(&state.pool, &state.http, &state.overpass_url, &bbox).await?;
+    let pois = db::list_overpass_pois(&state.pool, &bbox, q.q.as_deref()).await?;
+    Ok(HttpResponse::Ok().json(pois))
+}
+
+/// Promotes an Overpass POI into a normal app place — the first time a user
+/// saves, rates, or edits one. Idempotent: promoting an already-promoted
+/// POI just returns the existing place (`200`, not `201`).
+#[post("/api/overpass/places/promote")]
+async fn promote_overpass_poi(
+    state: Data<AppState>,
+    user: AuthUser,
+    body: Json<PromotePoi>,
+) -> Result<HttpResponse, ApiError> {
+    let cached = db::get_overpass_poi_row(&state.pool, &body.poi_id).await?;
+    let insert = db::InsertPlace {
+        name: cached.name,
+        place_type: cached.place_type,
+        lat: cached.lat,
+        lng: cached.lng,
+        address: cached.address,
+        door_ft: 0,
+        door_note: String::new(),
+        parking: shared::Parking::Street,
+        purchase_required: shared::Requirement::Unknown,
+        code_required: shared::Requirement::Unknown,
+        amenities: vec![],
+        device_id: body.device_id.clone(),
+        user_id: user.id,
+        source: PlaceSource::Overpass,
+    };
+    let (id, created) = db::promote_overpass_poi(&state.pool, &body.poi_id, &insert).await?;
+    let detail = db::get_place(&state.pool, id, None).await?;
+    Ok(if created { HttpResponse::Created() } else { HttpResponse::Ok() }.json(detail))
 }

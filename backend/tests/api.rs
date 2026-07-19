@@ -9,11 +9,12 @@ use actix_web::http::StatusCode;
 use actix_web::test::{call_service, init_service, read_body, read_body_json, TestRequest};
 use actix_web::web::Data;
 use actix_web::App;
-use backend::{handlers, http_client, AppState};
+use backend::{db, handlers, http_client, AppState};
 use serde_json::json;
 use shared::{
-    ActivityEntry, AuthSession, ImportSummary, Invitation, InviteStatus, InvitesOverview, Parking,
-    PlaceDetail, PlaceEdit, PlaceSummary, PlaceType, Requirement,
+    tiles, ActivityEntry, AuthSession, BBox, ImportSummary, Invitation, InviteStatus,
+    InvitesOverview, OverpassPoi, Parking, PlaceDetail, PlaceEdit, PlaceSource, PlaceSummary,
+    PlaceType, Requirement,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -27,6 +28,8 @@ async fn app(
         http: http_client(),
         // Unroutable address: tests must not depend on the live geocoder.
         nominatim_url: "http://127.0.0.1:1".to_owned(),
+        // Unroutable address: tests must not depend on the live Overpass API.
+        overpass_url: "http://127.0.0.1:1".to_owned(),
         // Google sign-in isn't exercised by these tests.
         google: None,
     });
@@ -44,6 +47,7 @@ async fn app_with_google(
         pool,
         http: http_client(),
         nominatim_url: "http://127.0.0.1:1".to_owned(),
+        overpass_url: "http://127.0.0.1:1".to_owned(),
         google: Some(backend::google_auth::GoogleConfig {
             client_id: "test-client-id".to_owned(),
             client_secret: "test-client-secret".to_owned(),
@@ -422,6 +426,230 @@ async fn saved_places_round_trip(pool: PgPool) {
     let req = TestRequest::get().uri("/api/devices/dev-a/saved").to_request();
     let saved: Vec<PlaceSummary> = read_body_json(call_service(&app, req).await).await;
     assert!(saved.is_empty());
+}
+
+/// A small bbox used by the Overpass POI cache tests below.
+fn test_bbox() -> BBox {
+    BBox { min_lat: 47.60, min_lng: -122.35, max_lat: 47.62, max_lng: -122.32 }
+}
+
+fn bbox_query_string(bbox: &BBox) -> String {
+    format!(
+        "min_lat={}&min_lng={}&max_lat={}&max_lng={}",
+        bbox.min_lat, bbox.min_lng, bbox.max_lat, bbox.max_lng
+    )
+}
+
+/// Marks every geohash tile covering `bbox` as freshly fetched, so
+/// `GET /api/overpass/places` serves cached rows without attempting a live
+/// Overpass call -- these tests must never hit the network. Returns the
+/// covering tile ids for use as the FK target when seeding POI rows.
+async fn seed_fresh_tiles(pool: &PgPool, bbox: &BBox) -> Vec<String> {
+    let covering = tiles::tiles_covering_bbox(bbox, tiles::OVERPASS_TILE_PRECISION);
+    for tile_id in &covering {
+        sqlx::query(
+            "INSERT INTO overpass_tiles (tile_id, fetched_at) VALUES ($1, now()) \
+             ON CONFLICT (tile_id) DO UPDATE SET fetched_at = now()",
+        )
+        .bind(tile_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    covering
+}
+
+async fn seed_overpass_poi(
+    pool: &PgPool,
+    id: &str,
+    tile_id: &str,
+    name: &str,
+    place_type: PlaceType,
+    lat: f64,
+    lng: f64,
+) {
+    sqlx::query(
+        "INSERT INTO overpass_pois (id, tile_id, name, place_type, lat, lng) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(id)
+    .bind(tile_id)
+    .bind(name)
+    .bind(place_type.as_str())
+    .bind(lat)
+    .bind(lng)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn created_place_has_app_source(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(new_place_json("Camber Coffee"))
+        .to_request();
+    let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(created.summary.source, PlaceSource::App);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn stale_overpass_tiles_detects_missing_and_expired(pool: PgPool) {
+    sqlx::query("INSERT INTO overpass_tiles (tile_id, fetched_at) VALUES ('fresh_tile', now())")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO overpass_tiles (tile_id, fetched_at) \
+         VALUES ('stale_tile', now() - interval '8 days')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut stale = db::stale_overpass_tiles(
+        &pool,
+        &["fresh_tile".to_owned(), "stale_tile".to_owned(), "missing_tile".to_owned()],
+    )
+    .await
+    .unwrap();
+    stale.sort();
+    assert_eq!(stale, vec!["missing_tile".to_owned(), "stale_tile".to_owned()]);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn overpass_places_returns_only_in_bbox_unpromoted_pois(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+    let req = TestRequest::post()
+        .uri("/api/places")
+        .insert_header(auth(&token))
+        .set_json(new_place_json("Existing App Place"))
+        .to_request();
+    let created: PlaceDetail = read_body_json(call_service(&app, req).await).await;
+
+    let bbox = test_bbox();
+    let tile_ids = seed_fresh_tiles(&pool, &bbox).await;
+    let tile_id = &tile_ids[0];
+
+    seed_overpass_poi(&pool, "node/1", tile_id, "Camber Coffee", PlaceType::Shop, 47.61, -122.34)
+        .await;
+    // Outside the bbox.
+    seed_overpass_poi(&pool, "node/2", tile_id, "Far Away Park", PlaceType::Park, 48.0, -122.0)
+        .await;
+    // Already promoted -- excluded even though it's in-bbox.
+    seed_overpass_poi(&pool, "node/3", tile_id, "Promoted Mall", PlaceType::Mall, 47.615, -122.33)
+        .await;
+    sqlx::query("UPDATE overpass_pois SET app_place_id = $1 WHERE id = 'node/3'")
+        .bind(created.summary.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let req = TestRequest::get()
+        .uri(&format!("/api/overpass/places?{}", bbox_query_string(&bbox)))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let pois: Vec<OverpassPoi> = read_body_json(res).await;
+    assert_eq!(pois.len(), 1);
+    assert_eq!(pois[0].id, "node/1");
+    assert_eq!(pois[0].name, "Camber Coffee");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn overpass_places_caps_at_100_nearest_to_center(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let bbox = test_bbox();
+    let tile_ids = seed_fresh_tiles(&pool, &bbox).await;
+    let tile_id = &tile_ids[0];
+    let (center_lat, center_lng) = bbox.center();
+
+    // 120 POIs at strictly increasing distance from the bbox center; only
+    // the nearest 100 should come back, nearest first.
+    for i in 0..120 {
+        let lat = center_lat + f64::from(i) * 0.00005;
+        seed_overpass_poi(
+            &pool,
+            &format!("node/{i}"),
+            tile_id,
+            &format!("POI {i}"),
+            PlaceType::Store,
+            lat,
+            center_lng,
+        )
+        .await;
+    }
+
+    let req = TestRequest::get()
+        .uri(&format!("/api/overpass/places?{}", bbox_query_string(&bbox)))
+        .to_request();
+    let pois: Vec<OverpassPoi> = read_body_json(call_service(&app, req).await).await;
+    assert_eq!(pois.len(), 100);
+    assert_eq!(pois[0].name, "POI 0");
+    assert_eq!(pois[99].name, "POI 99");
+    for w in pois.windows(2) {
+        assert!(w[0].distance_mi.unwrap() <= w[1].distance_mi.unwrap());
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn promote_overpass_poi_creates_place_links_cache_and_is_idempotent(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let token = register(&app, &pool, "scout-one").await;
+    let bbox = test_bbox();
+    let tile_ids = seed_fresh_tiles(&pool, &bbox).await;
+    let tile_id = &tile_ids[0];
+    seed_overpass_poi(&pool, "node/1", tile_id, "Camber Coffee", PlaceType::Shop, 47.61, -122.34)
+        .await;
+
+    let req = TestRequest::post()
+        .uri("/api/overpass/places/promote")
+        .insert_header(auth(&token))
+        .set_json(json!({ "poi_id": "node/1", "device_id": "test-device-1" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let detail: PlaceDetail = read_body_json(res).await;
+    assert_eq!(detail.summary.name, "Camber Coffee");
+    assert_eq!(detail.summary.source, PlaceSource::Overpass);
+    let place_id = detail.summary.id;
+
+    let linked: Option<Uuid> =
+        sqlx::query_scalar("SELECT app_place_id FROM overpass_pois WHERE id = 'node/1'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(linked, Some(place_id));
+
+    // Excluded from future Overpass results over the same bbox -- never
+    // shown twice once promoted.
+    let req = TestRequest::get()
+        .uri(&format!("/api/overpass/places?{}", bbox_query_string(&bbox)))
+        .to_request();
+    let pois: Vec<OverpassPoi> = read_body_json(call_service(&app, req).await).await;
+    assert!(pois.is_empty());
+
+    // Promoting again is idempotent: same place, 200 (not 201), no
+    // duplicate row.
+    let req = TestRequest::post()
+        .uri("/api/overpass/places/promote")
+        .insert_header(auth(&token))
+        .set_json(json!({ "poi_id": "node/1", "device_id": "test-device-1" }))
+        .to_request();
+    let res = call_service(&app, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let detail2: PlaceDetail = read_body_json(res).await;
+    assert_eq!(detail2.summary.id, place_id);
+
+    let place_count: i64 = sqlx::query_scalar("SELECT count(*) FROM places WHERE name = 'Camber Coffee'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(place_count, 1);
 }
 
 #[sqlx::test(migrations = "./migrations")]

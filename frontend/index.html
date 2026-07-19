@@ -27,7 +27,8 @@
   <script>
     // ---- Leaflet + geolocation glue used by the wasm app (see src/glue.rs) ----
     (function () {
-      let map = null, pinLayer = null, userMarker = null, onSelect = null;
+      let map = null, pinLayer = null, userMarker = null, onSelect = null, onBoundsChanged = null;
+      let boundsTimer = null;
 
       const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -38,8 +39,15 @@
         if (pickMap) pickMap.invalidateSize();
       });
 
-      window.sbInitMap = function (elId, lat, lng, zoom, cb) {
+      function reportBounds() {
+        if (!map || !onBoundsChanged) return;
+        const b = map.getBounds();
+        onBoundsChanged(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+      }
+
+      window.sbInitMap = function (elId, lat, lng, zoom, cb, boundsCb) {
         onSelect = cb;
+        onBoundsChanged = boundsCb;
         if (map) { map.remove(); map = null; }
         map = L.map(document.getElementById(elId), { zoomControl: false });
         map.setView([lat, lng], zoom);
@@ -49,9 +57,18 @@
         }).addTo(map);
         pinLayer = L.layerGroup().addTo(map);
         userMarker = null;
+        // Fires once with the initial viewport, then again (debounced) on
+        // every pan/zoom -- drives the Overpass POI layer.
+        map.on('moveend', () => {
+          clearTimeout(boundsTimer);
+          boundsTimer = setTimeout(reportBounds, 400);
+        });
+        reportBounds();
       };
 
       window.sbDestroyMap = function () {
+        clearTimeout(boundsTimer);
+        onBoundsChanged = null;
         if (map) { map.remove(); map = null; pinLayer = null; userMarker = null; }
       };
 

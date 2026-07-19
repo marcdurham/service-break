@@ -6,8 +6,18 @@ use wasm_bindgen::prelude::*;
 extern "C" {
     /// Creates the Leaflet map with OpenStreetMap tiles inside `#el_id`.
     /// `on_select` is called with a place id when a pin is tapped.
+    /// `on_bounds_changed(min_lat, min_lng, max_lat, max_lng)` fires once
+    /// immediately with the initial viewport, then again on every
+    /// (debounced) pan/zoom -- drives the Overpass POI layer.
     #[wasm_bindgen(js_name = sbInitMap)]
-    pub fn sb_init_map(el_id: &str, lat: f64, lng: f64, zoom: f64, on_select: &JsValue);
+    pub fn sb_init_map(
+        el_id: &str,
+        lat: f64,
+        lng: f64,
+        zoom: f64,
+        on_select: &JsValue,
+        on_bounds_changed: &JsValue,
+    );
 
     #[wasm_bindgen(js_name = sbDestroyMap)]
     pub fn sb_destroy_map();

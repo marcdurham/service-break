@@ -129,6 +129,14 @@ pub struct ExportPlace {
     pub device_id: String,
     pub user_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+    /// `#[serde(default)]` so backups made before the Overpass POI layer
+    /// still import cleanly, defaulting every place to `"app"`.
+    #[serde(default = "default_place_source")]
+    pub source: String,
+}
+
+fn default_place_source() -> String {
+    "app".to_owned()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -177,7 +185,8 @@ async fn collect_export(pool: &PgPool) -> Result<ExportData, ApiError> {
     .await?;
     let places = sqlx::query_as::<_, ExportPlace>(
         "SELECT id, name, place_type, lat, lng, address, door_ft, door_note, parking, \
-         purchase_required, code_required, hours, amenities, device_id, user_id, created_at \
+         purchase_required, code_required, hours, amenities, device_id, user_id, created_at, \
+         source \
          FROM places ORDER BY created_at, id",
     )
     .fetch_all(pool)
@@ -367,8 +376,8 @@ async fn run_import(
         sqlx::query(
             "INSERT INTO places (id, name, place_type, lat, lng, address, door_ft, door_note, \
              parking, purchase_required, code_required, hours, amenities, device_id, user_id, \
-             created_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
+             created_at, source) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
         )
         .bind(p.id)
         .bind(&p.name)
@@ -386,6 +395,7 @@ async fn run_import(
         .bind(&p.device_id)
         .bind(map_user(p.user_id))
         .bind(p.created_at)
+        .bind(&p.source)
         .execute(&mut *tx)
         .await?;
     }

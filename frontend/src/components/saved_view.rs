@@ -1,4 +1,4 @@
-use shared::PlaceSummary;
+use shared::{PlaceSource, PlaceSummary};
 use uuid::Uuid;
 use yew::prelude::*;
 
@@ -40,10 +40,10 @@ fn saved_card(p: &PlaceSummary, props: &SavedViewProps) -> Html {
         Callback::from(move |_| cb.emit(id))
     };
     let directions = {
-        let place = p.clone();
+        let (lat, lng) = (p.lat, p.lng);
         Callback::from(move |e: MouseEvent| {
             e.stop_propagation();
-            ui::open_directions(&place);
+            ui::open_directions(lat, lng);
         })
     };
     let sub = match p.distance_mi {
@@ -52,7 +52,7 @@ fn saved_card(p: &PlaceSummary, props: &SavedViewProps) -> Html {
     };
     html! {
         <button class="card" key={p.id.to_string()} onclick={open} style="align-items:center">
-            { ui::badge(p.place_type) }
+            { ui::badge(p.place_type, PlaceSource::App) }
             <div class="card-main">
                 <div class="card-name">{&p.name}</div>
                 <div class="card-type">{sub}</div>

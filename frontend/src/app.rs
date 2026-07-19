@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use gloo_storage::{LocalStorage, Storage};
-use shared::{Amenity, AuthSession, MapsLinkResult, PlaceDetail, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{
+    Amenity, AuthSession, BBox, MapsLinkResult, OverpassPoi, OverpassQuery, PlaceDetail,
+    PlaceSummary, PlaceType, PlacesQuery,
+};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -22,6 +25,7 @@ use crate::components::list_view::ListView;
 use crate::components::map_view::MapView;
 use crate::components::oauth_complete_view::OauthCompleteView;
 use crate::components::onboarding::Onboarding;
+use crate::components::poi_detail_view::PoiDetailView;
 use crate::components::register_view::RegisterView;
 use crate::components::saved_view::SavedView;
 use crate::components::share_target_view::ShareTargetView;
@@ -42,6 +46,10 @@ pub struct Filters {
     pub no_purchase: bool,
     pub has_parking: bool,
     pub radius_mi: u8,
+    /// Whether the Overpass POI layer (raw OSM places nobody has interacted
+    /// with in the app yet) shows on the map/list and in search. On by
+    /// default.
+    pub show_unvisited: bool,
 }
 
 impl Default for Filters {
@@ -53,6 +61,7 @@ impl Default for Filters {
             no_purchase: false,
             has_parking: false,
             radius_mi: 5,
+            show_unvisited: true,
         }
     }
 }
@@ -119,6 +128,12 @@ pub fn app() -> Html {
     let map_focus = use_state(|| None::<(f64, f64)>);
     let show_filters = use_state(|| false);
     let filters = use_state(Filters::default);
+    // Overpass POIs (raw OSM places, not yet in the app) currently in view,
+    // the live Leaflet viewport reported by the map, and whichever one the
+    // user has tapped open for the lightweight preview.
+    let overpass_places = use_state(Vec::<OverpassPoi>::new);
+    let map_bounds = use_state(|| None::<BBox>);
+    let open_poi = use_state(|| None::<OverpassPoi>);
     let saved_ids = use_state(HashSet::<Uuid>::new);
     let saved_places = use_state(Vec::<PlaceSummary>::new);
     // Name/location resolved from a pasted Google Maps link, handed to the
@@ -262,6 +277,45 @@ pub fn app() -> Html {
         );
     }
 
+    // The bbox to query the Overpass POI layer for: the live map viewport
+    // on the Map screen (reported by Leaflet via `on_bounds_changed`), or a
+    // synthetic bbox from the radius filter on List (which has no real map
+    // to derive bounds from). `None` elsewhere, where the layer isn't shown.
+    let effective_overpass_bbox = match *background {
+        Route::Map => *map_bounds,
+        Route::List => origin.map(|o| shared::radius_bbox(o, f64::from(filters.radius_mi))),
+        _ => None,
+    };
+
+    // Load Overpass POIs whenever the effective viewport or the "Show
+    // unvisited places" toggle changes; cleared immediately (no fetch) when
+    // the toggle is off or there's no viewport to query yet.
+    {
+        let overpass_places = overpass_places.clone();
+        use_effect_with(
+            (effective_overpass_bbox, filters.show_unvisited),
+            move |(bbox, show_unvisited)| {
+                let Some(bbox) = (*show_unvisited).then_some(*bbox).flatten() else {
+                    overpass_places.set(Vec::new());
+                    return;
+                };
+                let q = OverpassQuery {
+                    min_lat: bbox.min_lat,
+                    min_lng: bbox.min_lng,
+                    max_lat: bbox.max_lat,
+                    max_lng: bbox.max_lng,
+                    q: None,
+                };
+                let overpass_places = overpass_places.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Ok(list) = api::fetch_overpass_pois(&q).await {
+                        overpass_places.set(list);
+                    }
+                });
+            },
+        );
+    }
+
     // Load saved ids once, and the saved list when relevant state changes.
     {
         let saved_ids = saved_ids.clone();
@@ -302,6 +356,21 @@ pub fn app() -> Html {
     let on_select = {
         let selected = selected.clone();
         Callback::from(move |id: Uuid| selected.set(Some(id)))
+    };
+
+    let on_bounds_changed = {
+        let map_bounds = map_bounds.clone();
+        Callback::from(move |b: BBox| map_bounds.set(Some(b)))
+    };
+
+    let on_open_poi = {
+        let open_poi = open_poi.clone();
+        Callback::from(move |poi: OverpassPoi| open_poi.set(Some(poi)))
+    };
+
+    let close_poi = {
+        let open_poi = open_poi.clone();
+        Callback::from(move |()| open_poi.set(None))
     };
 
     let open_detail = {
@@ -498,6 +567,26 @@ pub fn app() -> Html {
         })
     };
 
+    // An Overpass POI just promoted into a normal app place — the pin/card
+    // flips from blue/gray to brown on the next refresh, and the user lands
+    // on the normal `DetailView` (with Save/Rate/Edit) instead of the
+    // lightweight preview.
+    let on_poi_promoted = {
+        let navigator = navigator.clone();
+        let selected = selected.clone();
+        let detail = detail.clone();
+        let open_poi = open_poi.clone();
+        let refresh = refresh.clone();
+        Callback::from(move |d: PlaceDetail| {
+            let id = d.summary.id;
+            selected.set(Some(id));
+            detail.set(Some(d));
+            open_poi.set(None);
+            refresh.set(refresh.wrapping_add(1));
+            navigator.push(&Route::Place { id });
+        })
+    };
+
     let on_detail_updated = {
         let detail = detail.clone();
         let refresh = refresh.clone();
@@ -543,11 +632,13 @@ pub fn app() -> Html {
                     Route::List => html! {
                         <ListView
                             places={(*places).clone()}
-                            active_types={active_types(&filters)}
+                            origin={*origin}
                             active_amenities={active_amenities(&filters)}
+                            overpass_places={(*overpass_places).clone()}
+                            show_unvisited={filters.show_unvisited}
                             on_open={open_detail.clone()}
+                            on_open_poi={on_open_poi.clone()}
                             on_open_filters={open_filters.clone()}
-                            on_toggle_type={on_toggle_type.clone()}
                             on_toggle_amenity={on_toggle_amenity.clone()}
                             on_reset_filters={on_reset_filters.clone()}
                         />
@@ -632,15 +723,17 @@ pub fn app() -> Html {
                             origin={*origin}
                             focus={*map_focus}
                             filters_active={filters.is_active()}
-                            active_types={active_types(&filters)}
                             active_amenities={active_amenities(&filters)}
+                            overpass_places={(*overpass_places).clone()}
+                            show_unvisited={filters.show_unvisited}
                             on_select={on_select}
                             on_open={open_detail.clone()}
+                            on_open_poi={on_open_poi.clone()}
                             on_open_filters={open_filters.clone()}
-                            on_toggle_type={on_toggle_type.clone()}
                             on_toggle_amenity={on_toggle_amenity.clone()}
                             on_recenter={on_recenter}
                             on_maps_link={on_maps_link}
+                            on_bounds_changed={on_bounds_changed}
                             on_toast={show_toast.clone()}
                         />
                     },
@@ -670,6 +763,23 @@ pub fn app() -> Html {
                 />
             }
 
+            if let Some(poi) = (*open_poi).clone() {
+                <PoiDetailView
+                    poi={poi}
+                    device_id={(*device).clone()}
+                    logged_in={auth.is_some()}
+                    on_require_login={{
+                        let require_login = require_login.clone();
+                        Callback::from(move |()| {
+                            require_login.emit("Sign in to save places".to_owned())
+                        })
+                    }}
+                    on_close={close_poi}
+                    on_promoted={on_poi_promoted}
+                    on_toast={show_toast.clone()}
+                />
+            }
+
             if *show_filters {
                 <FiltersSheet
                     filters={(*filters).clone()}
@@ -677,6 +787,7 @@ pub fn app() -> Html {
                     on_change={on_filters_change}
                     on_reset={on_reset_filters}
                     on_close={close_filters}
+                    on_toggle_type={on_toggle_type.clone()}
                 />
             }
 
@@ -685,12 +796,6 @@ pub fn app() -> Html {
             }
         </div>
     }
-}
-
-fn active_types(filters: &Filters) -> Vec<PlaceType> {
-    let mut v: Vec<PlaceType> = filters.types.iter().copied().collect();
-    v.sort_unstable_by_key(|t| t.as_str());
-    v
 }
 
 fn active_amenities(filters: &Filters) -> Vec<Amenity> {

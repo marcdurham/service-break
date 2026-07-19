@@ -1,7 +1,9 @@
 use actix_cors::Cors;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
-use backend::{admin, db, handlers, http_client, AppState, DEFAULT_NOMINATIM_URL};
+use backend::{
+    admin, db, handlers, http_client, AppState, DEFAULT_NOMINATIM_URL, DEFAULT_OVERPASS_URL,
+};
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
@@ -16,6 +18,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8020".to_owned());
     let nominatim_url =
         std::env::var("NOMINATIM_URL").unwrap_or_else(|_| DEFAULT_NOMINATIM_URL.to_owned());
+    let overpass_url =
+        std::env::var("OVERPASS_URL").unwrap_or_else(|_| DEFAULT_OVERPASS_URL.to_owned());
     let google = backend::google_auth::GoogleConfig::from_env();
     tracing::info!(google_sign_in = google.is_some(), "startup config");
 
@@ -31,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool,
         http: http_client(),
         nominatim_url,
+        overpass_url,
         google,
     });
 

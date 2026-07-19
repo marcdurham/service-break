@@ -6,6 +6,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub mod tiles;
+
 pub const EARTH_RADIUS_MI: f64 = 3958.8;
 
 /// Great-circle distance between two coordinates, in miles.
@@ -38,17 +40,19 @@ pub enum PlaceType {
     Park,
     Public,
     Hall,
+    FastFood,
     Other,
 }
 
 impl PlaceType {
-    pub const ALL: [PlaceType; 7] = [
+    pub const ALL: [PlaceType; 8] = [
         PlaceType::Shop,
         PlaceType::Store,
         PlaceType::Mall,
         PlaceType::Park,
         PlaceType::Public,
         PlaceType::Hall,
+        PlaceType::FastFood,
         PlaceType::Other,
     ];
 
@@ -60,6 +64,7 @@ impl PlaceType {
             PlaceType::Park => "park",
             PlaceType::Public => "public",
             PlaceType::Hall => "hall",
+            PlaceType::FastFood => "fast_food",
             PlaceType::Other => "other",
         }
     }
@@ -72,6 +77,7 @@ impl PlaceType {
             PlaceType::Park => "Park",
             PlaceType::Public => "Public",
             PlaceType::Hall => "Hall",
+            PlaceType::FastFood => "Fast Food",
             PlaceType::Other => "Other",
         }
     }
@@ -85,20 +91,37 @@ impl PlaceType {
             PlaceType::Park => "park",
             PlaceType::Public => "account_balance",
             PlaceType::Hall => "meeting_room",
+            PlaceType::FastFood => "lunch_dining",
             PlaceType::Other => "place",
         }
     }
 
-    /// Brand color for pins and badges, from the design mockup.
-    pub fn color(self) -> &'static str {
-        match self {
-            PlaceType::Shop => "#6f4e37",
-            PlaceType::Store => "#6f8256",
-            PlaceType::Mall => "#9b6a7d",
-            PlaceType::Park => "#5c7a4a",
-            PlaceType::Public => "#4f7a86",
-            PlaceType::Hall => "#b5533f",
-            PlaceType::Other => "#8a7565",
+    /// Brand color for pins and badges. App places (added or promoted in
+    /// the app) render in brown tones; Overpass POIs (raw, unpromoted OSM
+    /// data) render in blue/gray tones, so the two sources stay visually
+    /// distinct on the map and in list badges at a glance.
+    pub fn color(self, source: PlaceSource) -> &'static str {
+        match source {
+            PlaceSource::App => match self {
+                PlaceType::Shop => "#6f4e37",
+                PlaceType::Store => "#8a5a34",
+                PlaceType::Mall => "#7a4632",
+                PlaceType::Park => "#746c40",
+                PlaceType::Public => "#5c4a3d",
+                PlaceType::Hall => "#96593a",
+                PlaceType::FastFood => "#b5652f",
+                PlaceType::Other => "#8a7565",
+            },
+            PlaceSource::Overpass => match self {
+                PlaceType::Shop => "#4a6fa5",
+                PlaceType::Store => "#5b7c99",
+                PlaceType::Mall => "#3d5a80",
+                PlaceType::Park => "#5c7a89",
+                PlaceType::Public => "#6b7f99",
+                PlaceType::Hall => "#46577a",
+                PlaceType::FastFood => "#5c8aa6",
+                PlaceType::Other => "#718096",
+            },
         }
     }
 }
@@ -117,6 +140,54 @@ impl FromStr for PlaceType {
             .into_iter()
             .find(|t| t.as_str() == s)
             .ok_or(())
+    }
+}
+
+/// Where a place came from: added directly in the app, or an Overpass POI
+/// that has been promoted into `places` because a user saved, rated, or
+/// edited it. Once promoted a place is a fully normal app place — this is
+/// a provenance record only, not surfaced in the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaceSource {
+    #[default]
+    App,
+    Overpass,
+}
+
+impl PlaceSource {
+    pub const ALL: [PlaceSource; 2] = [PlaceSource::App, PlaceSource::Overpass];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PlaceSource::App => "app",
+            PlaceSource::Overpass => "overpass",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PlaceSource::App => "App place",
+            PlaceSource::Overpass => "Overpass POI",
+        }
+    }
+}
+
+impl fmt::Display for PlaceSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PlaceSource {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "app" => Ok(PlaceSource::App),
+            "overpass" => Ok(PlaceSource::Overpass),
+            _ => Err(()),
+        }
     }
 }
 
@@ -389,6 +460,8 @@ pub struct PlaceSummary {
     pub food_avg: Option<f64>,
     pub review_count: i64,
     pub distance_mi: Option<f64>,
+    #[serde(default)]
+    pub source: PlaceSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -925,6 +998,99 @@ impl PlacesQuery {
     }
 }
 
+/// A lat/lng bounding box, e.g. the current Leaflet map viewport.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BBox {
+    pub min_lat: f64,
+    pub min_lng: f64,
+    pub max_lat: f64,
+    pub max_lng: f64,
+}
+
+impl BBox {
+    pub fn center(&self) -> (f64, f64) {
+        (
+            (self.min_lat + self.max_lat) / 2.0,
+            (self.min_lng + self.max_lng) / 2.0,
+        )
+    }
+
+    pub fn is_valid(&self) -> bool {
+        (-90.0..=90.0).contains(&self.min_lat)
+            && (-90.0..=90.0).contains(&self.max_lat)
+            && (-180.0..=180.0).contains(&self.min_lng)
+            && (-180.0..=180.0).contains(&self.max_lng)
+            && self.min_lat <= self.max_lat
+            && self.min_lng <= self.max_lng
+    }
+}
+
+/// A bounding box centered on `origin` and sized to cover `radius_mi` in
+/// every direction — used by the List view (which has no real map
+/// viewport) to turn its existing radius-from-origin model into a bbox for
+/// the Overpass POI query.
+pub fn radius_bbox(origin: (f64, f64), radius_mi: f64) -> BBox {
+    let (lat, lng) = origin;
+    let dlat = radius_mi / 69.0;
+    let dlng = radius_mi / (69.0 * lat.to_radians().cos()).abs().max(1e-6);
+    BBox {
+        min_lat: lat - dlat,
+        min_lng: lng - dlng,
+        max_lat: lat + dlat,
+        max_lng: lng + dlng,
+    }
+}
+
+/// Query parameters for `GET /api/overpass/places`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OverpassQuery {
+    pub min_lat: f64,
+    pub min_lng: f64,
+    pub max_lat: f64,
+    pub max_lng: f64,
+    #[serde(default)]
+    pub q: Option<String>,
+}
+
+impl OverpassQuery {
+    /// Serializes to a URL query string (no leading `?`).
+    pub fn to_query_string(&self) -> String {
+        let mut parts = vec![
+            format!("min_lat={}", self.min_lat),
+            format!("min_lng={}", self.min_lng),
+            format!("max_lat={}", self.max_lat),
+            format!("max_lng={}", self.max_lng),
+        ];
+        if let Some(q) = self.q.as_deref().filter(|q| !q.trim().is_empty()) {
+            parts.push(format!("q={}", encode_query_component(q.trim())));
+        }
+        parts.join("&")
+    }
+}
+
+/// A cached OSM point of interest as sent to the frontend. Already-promoted
+/// POIs (with `app_place_id` set on the cache row) are excluded server-side,
+/// so this wire type doesn't need to carry that field.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OverpassPoi {
+    /// OSM ref, e.g. `"node/123456"` — distinct from a `places.id` UUID, so
+    /// the frontend can tell the two id spaces apart.
+    pub id: String,
+    pub name: String,
+    pub place_type: PlaceType,
+    pub lat: f64,
+    pub lng: f64,
+    pub address: String,
+    pub distance_mi: Option<f64>,
+}
+
+/// Body for `POST /api/overpass/places/promote`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PromotePoi {
+    pub poi_id: String,
+    pub device_id: String,
+}
+
 /// Formats a coordinate pair as `"lat, lng"` text that [`parse_latlng`]
 /// accepts back, e.g. for prefilling an address field.
 pub fn fmt_latlng(lat: f64, lng: f64) -> String {
@@ -1033,6 +1199,67 @@ mod tests {
             assert_eq!(back, t);
             assert_eq!(t.as_str().parse::<PlaceType>(), Ok(t));
         }
+    }
+
+    #[test]
+    fn place_source_serde_round_trip() {
+        for s in PlaceSource::ALL {
+            let json = serde_json::to_string(&s).expect("serialize");
+            assert_eq!(json, format!("\"{}\"", s.as_str()));
+            let back: PlaceSource = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, s);
+            assert_eq!(s.as_str().parse::<PlaceSource>(), Ok(s));
+        }
+        assert_eq!(PlaceSource::default(), PlaceSource::App);
+        assert!("osm".parse::<PlaceSource>().is_err());
+    }
+
+    #[test]
+    fn app_and_overpass_colors_are_all_distinct() {
+        let app_colors: Vec<&str> = PlaceType::ALL.map(|t| t.color(PlaceSource::App)).to_vec();
+        let overpass_colors: Vec<&str> =
+            PlaceType::ALL.map(|t| t.color(PlaceSource::Overpass)).to_vec();
+        for (i, a) in app_colors.iter().enumerate() {
+            for (j, b) in app_colors.iter().enumerate() {
+                assert!(i == j || a != b, "app colors collide: {a} == {b}");
+            }
+        }
+        for (i, a) in overpass_colors.iter().enumerate() {
+            for (j, b) in overpass_colors.iter().enumerate() {
+                assert!(i == j || a != b, "overpass colors collide: {a} == {b}");
+            }
+        }
+        for t in PlaceType::ALL {
+            assert_ne!(t.color(PlaceSource::App), t.color(PlaceSource::Overpass));
+        }
+    }
+
+    #[test]
+    fn radius_bbox_covers_expected_degree_span() {
+        let bbox = radius_bbox((47.6, -122.3), 10.0);
+        // 10 miles is roughly 0.145 degrees of latitude either direction.
+        assert!((bbox.max_lat - bbox.min_lat - 0.29).abs() < 0.02);
+        assert!(bbox.min_lat < 47.6 && bbox.max_lat > 47.6);
+        assert!(bbox.min_lng < -122.3 && bbox.max_lng > -122.3);
+        assert!(bbox.is_valid());
+        let (lat, lng) = bbox.center();
+        assert!((lat - 47.6).abs() < 1e-9);
+        assert!((lng - (-122.3)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overpass_query_string_includes_bbox_and_optional_search() {
+        let q = OverpassQuery {
+            min_lat: 47.5,
+            min_lng: -122.4,
+            max_lat: 47.7,
+            max_lng: -122.2,
+            q: Some("camber".to_owned()),
+        };
+        let qs = q.to_query_string();
+        assert!(qs.contains("min_lat=47.5"));
+        assert!(qs.contains("max_lng=-122.2"));
+        assert!(qs.contains("q=camber"));
     }
 
     #[test]
@@ -1299,6 +1526,7 @@ mod tests {
                 food_avg: None,
                 review_count: 2,
                 distance_mi: Some(0.2),
+                source: PlaceSource::App,
             },
             door_note: "Right past the counter".to_owned(),
             hours: None,
