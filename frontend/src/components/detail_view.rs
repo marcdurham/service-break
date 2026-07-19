@@ -1,4 +1,4 @@
-use shared::{Aspect, NewReview, PlaceDetail, PlaceEdit, PlaceSummary};
+use shared::{Aspect, NewReview, PlaceDetail, PlaceEdit, PlaceSource, PlaceSummary};
 use uuid::Uuid;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
@@ -66,8 +66,8 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
         Callback::from(move |_| cb.emit(id))
     };
     let directions = {
-        let place = p.clone();
-        Callback::from(move |_| ui::open_directions(&place))
+        let (lat, lng) = (p.lat, p.lng);
+        Callback::from(move |_| ui::open_directions(lat, lng))
     };
     let show_on_map = {
         let cb = props.on_show_on_map.clone();
@@ -242,7 +242,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     html! {
         <div class="detail-overlay">
             <div class="detail-scroll sb-scroll">
-                <div class="hero" style={format!("background:{}", p.place_type.color())}>
+                <div class="hero" style={format!("background:{}", p.place_type.color(PlaceSource::App))}>
                     <span class="mi">{p.place_type.icon()}</span>
                     <div class="hero-btns">
                         <button class="hero-btn" onclick={close}>

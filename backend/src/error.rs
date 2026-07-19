@@ -18,7 +18,7 @@ pub enum ApiError {
     Internal(String),
     #[error("database error")]
     Db(#[from] sqlx::Error),
-    #[error("geocoding service error")]
+    #[error("upstream service error")]
     Upstream(#[from] reqwest::Error),
 }
 

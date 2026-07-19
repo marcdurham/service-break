@@ -1,13 +1,13 @@
 //! Small shared render helpers.
 
-use shared::{Amenity, Parking, PlaceSummary, PlaceType, Requirement};
+use shared::{Amenity, Parking, PlaceSource, PlaceSummary, PlaceType, Requirement};
 use yew::prelude::*;
 
 use crate::glue;
 
-pub fn badge(place_type: PlaceType) -> Html {
+pub fn badge(place_type: PlaceType, source: PlaceSource) -> Html {
     html! {
-        <div class="badge" style={format!("background:{}", place_type.color())}>
+        <div class="badge" style={format!("background:{}", place_type.color(source))}>
             <span class="mi">{place_type.icon()}</span>
         </div>
     }
@@ -97,39 +97,25 @@ pub fn access_class(purchase_required: Requirement, code_required: Requirement) 
     }
 }
 
-/// Opens turn-by-turn directions in Google Maps.
-pub fn open_directions(place: &PlaceSummary) {
-    let url = format!(
-        "https://www.google.com/maps/dir/?api=1&destination={},{}",
-        place.lat, place.lng
-    );
+/// Opens turn-by-turn directions in Google Maps to `(lat, lng)` — takes
+/// coordinates rather than a `PlaceSummary` so it works for Overpass POIs
+/// (which aren't app places) too.
+pub fn open_directions(lat: f64, lng: f64) {
+    let url = format!("https://www.google.com/maps/dir/?api=1&destination={lat},{lng}");
     glue::open_url(&url);
 }
 
 #[derive(Properties, PartialEq)]
 pub struct FilterChipsProps {
-    pub active_types: Vec<PlaceType>,
     pub active_amenities: Vec<Amenity>,
-    pub on_toggle_type: Callback<PlaceType>,
     pub on_toggle_amenity: Callback<Amenity>,
 }
 
 /// Top-level filter chips: the things a place offers (Restroom, Coffee,
-/// Food, Seating — all on by default) plus a single "Type" chip that
-/// expands into the place-type options (Shop, Store, Mall, …).
+/// Food, Seating — all on by default). Place-type filtering lives in the
+/// Filter modal (`FiltersSheet`) instead.
 #[function_component(FilterChips)]
 pub fn filter_chips(props: &FilterChipsProps) -> Html {
-    let show_types = use_state(|| false);
-    let toggle_types_row = {
-        let show_types = show_types.clone();
-        Callback::from(move |_| show_types.set(!*show_types))
-    };
-    let type_count = props.active_types.len();
-    let type_label = if type_count > 0 {
-        format!("Type · {type_count}")
-    } else {
-        "Type".to_owned()
-    };
     // The task copy asks for singular "Restroom" on the chip, so the
     // labels here differ slightly from `Amenity::label`.
     let amenity_chips = [
@@ -141,14 +127,6 @@ pub fn filter_chips(props: &FilterChipsProps) -> Html {
     html! {
         <div class="chipbar">
             <div class="chips sb-scroll">
-                <button
-                    class={if type_count > 0 { "chip on" } else { "chip" }}
-                    onclick={toggle_types_row}
-                >
-                    <span class="mi">{"category"}</span>
-                    {type_label}
-                    <span class="mi">{if *show_types { "expand_less" } else { "expand_more" }}</span>
-                </button>
                 { for amenity_chips.into_iter().map(|(a, label)| {
                     let on = props.active_amenities.contains(&a);
                     let onclick = {
@@ -162,29 +140,6 @@ pub fn filter_chips(props: &FilterChipsProps) -> Html {
                     }
                 }) }
             </div>
-            if *show_types {
-                <div class="chips sb-scroll">
-                    { for [
-                        PlaceType::Shop,
-                        PlaceType::Store,
-                        PlaceType::Mall,
-                        PlaceType::Park,
-                        PlaceType::Public,
-                        PlaceType::Hall,
-                    ].into_iter().map(|t| {
-                        let on = props.active_types.contains(&t);
-                        let onclick = {
-                            let cb = props.on_toggle_type.clone();
-                            Callback::from(move |_| cb.emit(t))
-                        };
-                        html! {
-                            <button class={if on { "chip on" } else { "chip" }} {onclick}>
-                                <span class="mi">{t.icon()}</span>{t.label()}
-                            </button>
-                        }
-                    }) }
-                </div>
-            }
         </div>
     }
 }
@@ -253,7 +208,7 @@ pub fn place_card(props: &PlaceCardProps) -> Html {
     };
     html! {
         <button class="card" {onclick}>
-            { badge(p.place_type) }
+            { badge(p.place_type, PlaceSource::App) }
             <div class="card-main">
                 <div class="card-top">
                     <div style="min-width:0">

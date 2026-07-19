@@ -5,8 +5,8 @@ use gloo_storage::{LocalStorage, Storage};
 use shared::{
     encode_query_component, ActivityEntry, AuthSession, ChangePassword, Credentials,
     ImportSummary, Invitation, InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite,
-    NewPlace, NewReview, PlaceDetail, PlaceEdit, PlaceSummary, PlacesQuery, SetPassword,
-    UpdatePlace, UpdateProfile, UserSummary,
+    NewPlace, NewReview, OverpassPoi, OverpassQuery, PlaceDetail, PlaceEdit, PlaceSummary,
+    PlacesQuery, PromotePoi, SetPassword, UpdatePlace, UpdateProfile, UserSummary,
 };
 use uuid::Uuid;
 
@@ -60,6 +60,30 @@ pub async fn fetch_places(q: &PlacesQuery) -> ApiResult<Vec<PlaceSummary>> {
         format!("/api/places?{qs}")
     };
     Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)
+}
+
+/// Overpass POIs (raw OpenStreetMap data, not yet in the app) within a map
+/// viewport, respecting the "Show unvisited places" toggle upstream of this
+/// call (the caller decides whether to fetch at all).
+pub async fn fetch_overpass_pois(q: &OverpassQuery) -> ApiResult<Vec<OverpassPoi>> {
+    let url = format!("/api/overpass/places?{}", q.to_query_string());
+    Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)
+}
+
+/// Promotes an Overpass POI into a normal app place — the first time a user
+/// saves, rates, or edits one. Idempotent on the backend.
+pub async fn promote_overpass_poi(poi_id: &str, device_id: &str) -> ApiResult<PlaceDetail> {
+    let body = PromotePoi { poi_id: poi_id.to_owned(), device_id: device_id.to_owned() };
+    let res = with_auth(Request::post("/api/overpass/places/promote"))
+        .json(&body)
+        .map_err(err)?
+        .send()
+        .await
+        .map_err(err)?;
+    if res.status() >= 400 {
+        return Err(error_message(res, "could not save this place").await);
+    }
+    res.json().await.map_err(err)
 }
 
 /// Resolves a pasted Google Maps link to a place name and coordinates, for

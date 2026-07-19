@@ -1,5 +1,7 @@
 use serde::Serialize;
-use shared::{Amenity, MapsLinkResult, PlaceSummary, PlaceType, PlacesQuery};
+use shared::{
+    Amenity, BBox, MapsLinkResult, OverpassPoi, PlaceSource, PlaceSummary, PlacesQuery,
+};
 use uuid::Uuid;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -30,17 +32,25 @@ pub struct MapViewProps {
     /// A place to center on instead of the user ("Show on map").
     pub focus: Option<(f64, f64)>,
     pub filters_active: bool,
-    pub active_types: Vec<PlaceType>,
     pub active_amenities: Vec<Amenity>,
+    /// Overpass POIs currently in view; only rendered/searched when
+    /// `show_unvisited` is on.
+    pub overpass_places: Vec<OverpassPoi>,
+    pub show_unvisited: bool,
     pub on_select: Callback<Uuid>,
     pub on_open: Callback<Uuid>,
+    /// Fired when a tapped pin or search result is an unpromoted Overpass
+    /// POI, so the app can open the lightweight preview.
+    pub on_open_poi: Callback<OverpassPoi>,
     pub on_open_filters: Callback<()>,
-    pub on_toggle_type: Callback<PlaceType>,
     pub on_toggle_amenity: Callback<Amenity>,
     pub on_recenter: Callback<()>,
-    /// Fired when the search box resolves a pasted Google Maps link to a
-    /// place, so the app can open the "Add a place" page prefilled.
+    /// Fired when a pasted Google Maps link resolved, so the app can open
+    /// the "Add a place" page prefilled.
     pub on_maps_link: Callback<MapsLinkResult>,
+    /// Reports the live Leaflet viewport (once on init, then debounced on
+    /// every pan/zoom) so the app can fetch the Overpass POI layer.
+    pub on_bounds_changed: Callback<BBox>,
     pub on_toast: Callback<String>,
 }
 
@@ -137,47 +147,114 @@ pub fn map_view(props: &MapViewProps) -> Html {
             on_open.emit(p.id);
         })
     };
+    let pick_poi = {
+        let query = query.clone();
+        let results = results.clone();
+        let on_open_poi = props.on_open_poi.clone();
+        Callback::from(move |p: OverpassPoi| {
+            glue::sb_fly_to(p.lat, p.lng, 16.0);
+            query.set(String::new());
+            results.set(None);
+            on_open_poi.emit(p);
+        })
+    };
     let searching = !query.trim().is_empty();
-    // The pin-tap callback must survive re-renders; the JS side holds one
-    // function for the map's lifetime, reading the latest Yew callback
-    // through this ref.
+    let poi_matches: Vec<OverpassPoi> = if searching && props.show_unvisited {
+        let needle = query.trim().to_lowercase();
+        props
+            .overpass_places
+            .iter()
+            .filter(|p| p.name.to_lowercase().contains(&needle))
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // The pin-tap and bounds-changed callbacks must survive re-renders; the
+    // JS side holds one function each for the map's lifetime, reading the
+    // latest Yew callback (and, for pin taps, the latest Overpass POI list)
+    // through these refs.
     let select_ref = use_mut_ref(|| props.on_select.clone());
     *select_ref.borrow_mut() = props.on_select.clone();
+    let open_poi_ref = use_mut_ref(|| props.on_open_poi.clone());
+    *open_poi_ref.borrow_mut() = props.on_open_poi.clone();
+    let overpass_lookup_ref = use_mut_ref(|| props.overpass_places.clone());
+    *overpass_lookup_ref.borrow_mut() = props.overpass_places.clone();
+    let bounds_ref = use_mut_ref(|| props.on_bounds_changed.clone());
+    *bounds_ref.borrow_mut() = props.on_bounds_changed.clone();
     let closure_slot = use_mut_ref(|| None::<Closure<dyn Fn(String)>>);
+    let bounds_closure_slot = use_mut_ref(|| None::<Closure<dyn Fn(f64, f64, f64, f64)>>);
 
     {
         let closure_slot = closure_slot.clone();
+        let bounds_closure_slot = bounds_closure_slot.clone();
         let (center, zoom) = match props.focus {
             Some(f) => (f, 16.0),
             None => (props.origin.unwrap_or(FALLBACK_CENTER), 14.0),
         };
         use_effect_with((), move |()| {
             let closure = Closure::<dyn Fn(String)>::new(move |id: String| {
-                if let Ok(id) = Uuid::parse_str(&id) {
-                    select_ref.borrow().emit(id);
+                match Uuid::parse_str(&id) {
+                    Ok(id) => select_ref.borrow().emit(id),
+                    Err(_) => {
+                        if let Some(poi) =
+                            overpass_lookup_ref.borrow().iter().find(|p| p.id == id)
+                        {
+                            open_poi_ref.borrow().emit(poi.clone());
+                        }
+                    }
                 }
             });
-            glue::sb_init_map("sb-map", center.0, center.1, zoom, closure.as_ref().unchecked_ref());
+            let bounds_closure =
+                Closure::<dyn Fn(f64, f64, f64, f64)>::new(move |min_lat, min_lng, max_lat, max_lng| {
+                    bounds_ref.borrow().emit(BBox { min_lat, min_lng, max_lat, max_lng });
+                });
+            glue::sb_init_map(
+                "sb-map",
+                center.0,
+                center.1,
+                zoom,
+                closure.as_ref().unchecked_ref(),
+                bounds_closure.as_ref().unchecked_ref(),
+            );
             *closure_slot.borrow_mut() = Some(closure);
+            *bounds_closure_slot.borrow_mut() = Some(bounds_closure);
             || glue::sb_destroy_map()
         });
     }
 
     use_effect_with(
-        (props.places.clone(), props.selected),
-        |(places, selected)| {
-            let pins: Vec<Pin> = places
+        (
+            props.places.clone(),
+            props.selected,
+            props.overpass_places.clone(),
+            props.show_unvisited,
+        ),
+        |(places, selected, overpass_places, show_unvisited)| {
+            let mut pins: Vec<Pin> = places
                 .iter()
                 .map(|p| Pin {
                     id: p.id.to_string(),
                     lat: p.lat,
                     lng: p.lng,
-                    color: p.place_type.color(),
+                    color: p.place_type.color(PlaceSource::App),
                     icon: p.place_type.icon(),
                     name: p.name.clone(),
                     selected: *selected == Some(p.id),
                 })
                 .collect();
+            if *show_unvisited {
+                pins.extend(overpass_places.iter().map(|p| Pin {
+                    id: p.id.clone(),
+                    lat: p.lat,
+                    lng: p.lng,
+                    color: p.place_type.color(PlaceSource::Overpass),
+                    icon: p.place_type.icon(),
+                    name: p.name.clone(),
+                    selected: false,
+                }));
+            }
             if let Ok(json) = serde_json::to_string(&pins) {
                 glue::sb_set_pins(&json);
             }
@@ -216,6 +293,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
         let cb = props.on_recenter.clone();
         Callback::from(move |_| cb.emit(()))
     };
+    let search_places = (*results).clone().unwrap_or_default();
 
     html! {
         <div class="map-screen">
@@ -245,14 +323,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
                     </button>
                 </div>
                 if searching {
-                    if let Some(list) = (*results).clone() {
-                        { search_results(&list, &pick_result) }
-                    }
+                    { search_results(&search_places, &poi_matches, &pick_result, &pick_poi) }
                 } else {
                     <FilterChips
-                        active_types={props.active_types.clone()}
                         active_amenities={props.active_amenities.clone()}
-                        on_toggle_type={props.on_toggle_type.clone()}
                         on_toggle_amenity={props.on_toggle_amenity.clone()}
                     />
                 }
@@ -272,8 +346,13 @@ pub fn map_view(props: &MapViewProps) -> Html {
     }
 }
 
-fn search_results(list: &[PlaceSummary], pick: &Callback<PlaceSummary>) -> Html {
-    if list.is_empty() {
+fn search_results(
+    places: &[PlaceSummary],
+    pois: &[OverpassPoi],
+    pick_place: &Callback<PlaceSummary>,
+    pick_poi: &Callback<OverpassPoi>,
+) -> Html {
+    if places.is_empty() && pois.is_empty() {
         return html! {
             <div class="search-results">
                 <div class="sresult-empty">{"No places found"}</div>
@@ -282,36 +361,71 @@ fn search_results(list: &[PlaceSummary], pick: &Callback<PlaceSummary>) -> Html 
     }
     html! {
         <div class="search-results sb-scroll">
-            { for list.iter().map(|p| {
-                let onclick = {
-                    let pick = pick.clone();
-                    let place = p.clone();
-                    Callback::from(move |_| pick.emit(place.clone()))
-                };
-                html! {
-                    <button class="sresult" key={p.id.to_string()} {onclick}>
-                        <span
-                            class="sresult-icon mi"
-                            style={format!("background:{}", p.place_type.color())}
-                        >
-                            {p.place_type.icon()}
-                        </span>
-                        <span class="sresult-main">
-                            <span class="sresult-name">{&p.name}</span>
-                            <span class="sresult-sub">
-                                {p.place_type.label()}
-                                if !p.address.is_empty() {
-                                    {format!(" · {}", p.address)}
-                                }
-                            </span>
-                        </span>
-                        if let Some(d) = p.distance_mi {
-                            <span class="sresult-dist">{format!("{} mi", shared::fmt_distance_mi(d))}</span>
-                        }
-                    </button>
-                }
-            }) }
+            { for places.iter().map(|p| place_result_row(p, pick_place)) }
+            { for pois.iter().map(|p| poi_result_row(p, pick_poi)) }
         </div>
+    }
+}
+
+fn place_result_row(p: &PlaceSummary, pick: &Callback<PlaceSummary>) -> Html {
+    let onclick = {
+        let pick = pick.clone();
+        let place = p.clone();
+        Callback::from(move |_| pick.emit(place.clone()))
+    };
+    html! {
+        <button class="sresult" key={p.id.to_string()} {onclick}>
+            <span
+                class="sresult-icon mi"
+                style={format!("background:{}", p.place_type.color(PlaceSource::App))}
+            >
+                {p.place_type.icon()}
+            </span>
+            <span class="sresult-main">
+                <span class="sresult-name">{&p.name}</span>
+                <span class="sresult-sub">
+                    {p.place_type.label()}
+                    if !p.address.is_empty() {
+                        {format!(" · {}", p.address)}
+                    }
+                </span>
+            </span>
+            if let Some(d) = p.distance_mi {
+                <span class="sresult-dist">{format!("{} mi", shared::fmt_distance_mi(d))}</span>
+            }
+        </button>
+    }
+}
+
+/// Like [`place_result_row`] but for an unpromoted Overpass POI — same
+/// layout, blue/gray badge.
+fn poi_result_row(p: &OverpassPoi, pick: &Callback<OverpassPoi>) -> Html {
+    let onclick = {
+        let pick = pick.clone();
+        let poi = p.clone();
+        Callback::from(move |_| pick.emit(poi.clone()))
+    };
+    html! {
+        <button class="sresult" key={p.id.clone()} {onclick}>
+            <span
+                class="sresult-icon mi"
+                style={format!("background:{}", p.place_type.color(PlaceSource::Overpass))}
+            >
+                {p.place_type.icon()}
+            </span>
+            <span class="sresult-main">
+                <span class="sresult-name">{&p.name}</span>
+                <span class="sresult-sub">
+                    {p.place_type.label()}
+                    if !p.address.is_empty() {
+                        {format!(" · {}", p.address)}
+                    }
+                </span>
+            </span>
+            if let Some(d) = p.distance_mi {
+                <span class="sresult-dist">{format!("{} mi", shared::fmt_distance_mi(d))}</span>
+            }
+        </button>
     }
 }
 
@@ -323,13 +437,13 @@ fn featured_card(p: &PlaceSummary, props: &MapViewProps) -> Html {
         Callback::from(move |_| cb.emit(id))
     };
     let directions = {
-        let place = p.clone();
-        Callback::from(move |_| ui::open_directions(&place))
+        let (lat, lng) = (p.lat, p.lng);
+        Callback::from(move |_| ui::open_directions(lat, lng))
     };
     html! {
         <div class="sel-wrap" key={p.id.to_string()}>
             <button class="sel-card" onclick={open_card}>
-                { ui::badge(p.place_type) }
+                { ui::badge(p.place_type, PlaceSource::App) }
                 <div class="sel-main">
                     <div class="sel-tags">
                         <span class="near-tag">{near_tag}</span>

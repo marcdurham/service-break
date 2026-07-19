@@ -39,6 +39,38 @@ per-device id in localStorage remains for scoping saved lists and naming
 pre-account reviews. Place cleanliness is the average of its reviews'
 `clean` scores (1–5).
 
+## App places vs Overpass POIs/Places
+
+The map and list views blend two kinds of location data — keep this
+distinction in mind whenever touching places, filters, or the map:
+
+- **App places** — rows in `places`: anything added directly through the
+  app, *plus* any Overpass POI that has since been **promoted** because a
+  user saved it, rated/reviewed it, or edited its details
+  (`backend/src/handlers.rs::promote_overpass_poi`). App places can have
+  reviews and a full edit history, and render in the **brown** pin/badge
+  family (`PlaceType::color(PlaceSource::App)`). `places.source` records
+  `"app"` vs `"overpass"` for provenance only — a promoted place is
+  otherwise a fully normal app place, with no visible "from OSM" marker.
+- **Overpass POIs** (aka "Overpass Places") — raw OpenStreetMap data pulled
+  live from the Overpass API (fast food, cafés, stores, malls, parks) and
+  cached per geohash tile in `overpass_tiles`/`overpass_pois`
+  (`backend/src/overpass.rs`, `shared/src/tiles.rs`). They're read-only
+  until promoted, capped at 100 per viewport (nearest to the query center),
+  and render in the **blue/gray** pin/badge family
+  (`PlaceType::color(PlaceSource::Overpass)`).
+
+The first time a user saves, rates, or edits an Overpass POI, the backend
+*promotes* it: a normal row is inserted into `places` and the original
+`overpass_pois` cache row is linked to it via `app_place_id` rather than
+deleted, so it's excluded from future Overpass layer results (never shown
+twice) while the cache itself stays intact and its 7-day TTL keeps working.
+
+The "Show unvisited places" toggle in the Filter modal (`FiltersSheet`,
+`Filters.show_unvisited` in `frontend/src/app.rs`) controls whether the
+Overpass POI layer shows at all — on the map, in the list, and in both
+screens' search boxes. It's **on by default**.
+
 ## Commands
 
 ```sh

@@ -1,12 +1,14 @@
 use chrono::{DateTime, Utc};
 use shared::{
-    ActivityEntry, Amenity, Invitation, InviteStatus, InvitesOverview, Parking, PlaceDetail,
-    PlaceEdit, PlaceSummary, PlaceType, PlacesQuery, Requirement, Review, SortBy, UserSummary,
-    INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
+    ActivityEntry, Amenity, BBox, Invitation, InviteStatus, InvitesOverview, OverpassPoi, Parking,
+    PlaceDetail, PlaceEdit, PlaceSource, PlaceSummary, PlaceType, PlacesQuery, Requirement,
+    Review, SortBy, UserSummary, INVITES_PER_DAY_NEW, INVITES_PER_DAY_OLD_AGE, INVITE_EXPIRY_DAYS,
 };
 use sqlx::postgres::PgRow;
-use sqlx::{Acquire, PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{Acquire, PgExecutor, PgPool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
+
+use crate::overpass::RawPoi;
 
 use crate::error::ApiError;
 use crate::util::time_ago;
@@ -35,7 +37,7 @@ fn push_distance_expr(qb: &mut QueryBuilder<'_, Postgres>, lat: f64, lng: f64) {
 }
 
 const SUMMARY_COLS: &str = "p.id, p.name, p.place_type, p.lat, p.lng, p.address, p.door_ft, \
-     p.parking, p.purchase_required, p.code_required, p.amenities, \
+     p.parking, p.purchase_required, p.code_required, p.amenities, p.source, \
      avg(r.clean)::float8 AS clean_avg, avg(r.coffee)::float8 AS coffee_avg, \
      avg(r.food)::float8 AS food_avg, count(r.id) AS review_count, ";
 
@@ -45,6 +47,7 @@ fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
     let purchase_required: String = row.try_get("purchase_required")?;
     let code_required: String = row.try_get("code_required")?;
     let amenities: Vec<String> = row.try_get("amenities")?;
+    let source: String = row.try_get("source")?;
     Ok(PlaceSummary {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
@@ -70,6 +73,9 @@ fn summary_from_row(row: &PgRow) -> Result<PlaceSummary, ApiError> {
         food_avg: row.try_get("food_avg")?,
         review_count: row.try_get("review_count")?,
         distance_mi: row.try_get("distance_mi")?,
+        source: source
+            .parse::<PlaceSource>()
+            .map_err(|()| ApiError::BadRequest(format!("unknown place source {source:?}")))?,
     })
 }
 
@@ -234,14 +240,21 @@ pub struct InsertPlace {
     pub amenities: Vec<Amenity>,
     pub device_id: String,
     pub user_id: Uuid,
+    pub source: PlaceSource,
 }
 
-pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiError> {
+/// Generic over the executor (a pool or a transaction) so it can run either
+/// standalone (`create_place`) or as part of a larger transaction (Overpass
+/// POI promotion, which also links the cache row in the same commit).
+pub async fn insert_place(
+    executor: impl PgExecutor<'_>,
+    p: &InsertPlace,
+) -> Result<Uuid, ApiError> {
     let amenities: Vec<&str> = p.amenities.iter().map(|a| a.as_str()).collect();
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO places (name, place_type, lat, lng, address, door_ft, door_note, \
-         parking, purchase_required, code_required, amenities, device_id, user_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
+         parking, purchase_required, code_required, amenities, device_id, user_id, source) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id",
     )
     .bind(&p.name)
     .bind(p.place_type.as_str())
@@ -256,7 +269,8 @@ pub async fn insert_place(pool: &PgPool, p: &InsertPlace) -> Result<Uuid, ApiErr
     .bind(&amenities)
     .bind(&p.device_id)
     .bind(p.user_id)
-    .fetch_one(pool)
+    .bind(p.source.as_str())
+    .fetch_one(executor)
     .await?;
     Ok(id)
 }
@@ -450,6 +464,177 @@ pub async fn list_place_edits(pool: &PgPool, place_id: Uuid) -> Result<Vec<Place
             })
         })
         .collect()
+}
+
+/// Pushes the haversine distance (miles) from (`lat`, `lng`) to an Overpass
+/// POI row, mirroring [`push_distance_expr`] for the `places` table.
+fn push_poi_distance_expr(qb: &mut QueryBuilder<'_, Postgres>, lat: f64, lng: f64) {
+    qb.push("2.0 * 3958.8 * asin(least(1.0, sqrt(power(sin(radians(lat - ")
+        .push_bind(lat)
+        .push(") / 2), 2) + cos(radians(")
+        .push_bind(lat)
+        .push(")) * cos(radians(lat)) * power(sin(radians(lng - ")
+        .push_bind(lng)
+        .push(") / 2), 2))))");
+}
+
+/// The subset of `tile_ids` that are missing from `overpass_tiles` or whose
+/// `fetched_at` is older than the 7-day cache TTL.
+pub async fn stale_overpass_tiles(
+    pool: &PgPool,
+    tile_ids: &[String],
+) -> Result<Vec<String>, ApiError> {
+    let rows = sqlx::query(
+        "SELECT t AS tile_id FROM unnest($1::text[]) AS t \
+         LEFT JOIN overpass_tiles o ON o.tile_id = t \
+         WHERE o.tile_id IS NULL OR o.fetched_at < now() - interval '7 days'",
+    )
+    .bind(tile_ids)
+    .fetch_all(pool)
+    .await?;
+    rows.iter().map(|row| Ok(row.try_get("tile_id")?)).collect()
+}
+
+/// Marks a tile as freshly fetched (inserting it if new).
+pub async fn upsert_overpass_tile(
+    executor: impl PgExecutor<'_>,
+    tile_id: &str,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        "INSERT INTO overpass_tiles (tile_id, fetched_at) VALUES ($1, now()) \
+         ON CONFLICT (tile_id) DO UPDATE SET fetched_at = now()",
+    )
+    .bind(tile_id)
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// Upserts one cached POI. Never touches `app_place_id` on conflict, so a
+/// previously-promoted POI can't be un-linked by a routine tile refresh.
+pub async fn upsert_overpass_poi(
+    executor: impl PgExecutor<'_>,
+    tile_id: &str,
+    poi: &RawPoi,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        "INSERT INTO overpass_pois (id, tile_id, name, place_type, lat, lng, address, tags, fetched_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) \
+         ON CONFLICT (id) DO UPDATE SET tile_id = excluded.tile_id, name = excluded.name, \
+         place_type = excluded.place_type, lat = excluded.lat, lng = excluded.lng, \
+         address = excluded.address, tags = excluded.tags, fetched_at = now()",
+    )
+    .bind(&poi.id)
+    .bind(tile_id)
+    .bind(&poi.name)
+    .bind(poi.place_type.as_str())
+    .bind(poi.lat)
+    .bind(poi.lng)
+    .bind(&poi.address)
+    .bind(&poi.tags)
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// Unpromoted, in-bbox Overpass POIs (optionally name-filtered), the 100
+/// nearest to the bbox center — this is where the "cap at 100, nearest to
+/// center" rule lives.
+pub async fn list_overpass_pois(
+    pool: &PgPool,
+    bbox: &BBox,
+    q: Option<&str>,
+) -> Result<Vec<OverpassPoi>, ApiError> {
+    let (center_lat, center_lng) = bbox.center();
+    let mut qb = QueryBuilder::new("SELECT id, name, place_type, lat, lng, address, ");
+    push_poi_distance_expr(&mut qb, center_lat, center_lng);
+    qb.push(" AS distance_mi FROM overpass_pois WHERE app_place_id IS NULL");
+    qb.push(" AND lat BETWEEN ").push_bind(bbox.min_lat).push(" AND ").push_bind(bbox.max_lat);
+    qb.push(" AND lng BETWEEN ").push_bind(bbox.min_lng).push(" AND ").push_bind(bbox.max_lng);
+    if let Some(search) = q.map(str::trim).filter(|s| !s.is_empty()) {
+        qb.push(" AND name ILIKE ").push_bind(like_pattern(search));
+    }
+    qb.push(" ORDER BY distance_mi ASC LIMIT 100");
+
+    let rows = qb.build().fetch_all(pool).await?;
+    rows.iter()
+        .map(|row| {
+            let place_type: String = row.try_get("place_type")?;
+            Ok(OverpassPoi {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                place_type: place_type.parse::<PlaceType>().map_err(|()| {
+                    ApiError::BadRequest(format!("unknown place type {place_type:?}"))
+                })?,
+                lat: row.try_get("lat")?,
+                lng: row.try_get("lng")?,
+                address: row.try_get("address")?,
+                distance_mi: row.try_get("distance_mi")?,
+            })
+        })
+        .collect()
+}
+
+/// A cached Overpass POI row, for building the [`InsertPlace`] used when
+/// promoting it.
+pub struct CachedPoiRow {
+    pub name: String,
+    pub place_type: PlaceType,
+    pub lat: f64,
+    pub lng: f64,
+    pub address: String,
+}
+
+pub async fn get_overpass_poi_row(pool: &PgPool, poi_id: &str) -> Result<CachedPoiRow, ApiError> {
+    let row = sqlx::query("SELECT name, place_type, lat, lng, address FROM overpass_pois WHERE id = $1")
+        .bind(poi_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let place_type: String = row.try_get("place_type")?;
+    Ok(CachedPoiRow {
+        name: row.try_get("name")?,
+        place_type: place_type
+            .parse::<PlaceType>()
+            .map_err(|()| ApiError::BadRequest(format!("unknown place type {place_type:?}")))?,
+        lat: row.try_get("lat")?,
+        lng: row.try_get("lng")?,
+        address: row.try_get("address")?,
+    })
+}
+
+/// Promotes an Overpass POI into a normal app place: inserts a `places` row
+/// (idempotent -- a POI already linked to an app place returns that same
+/// id rather than creating a duplicate) and links the cache row via
+/// `app_place_id`, so it's excluded from future Overpass layer results
+/// without ever being deleted. Returns `(place_id, newly_created)`.
+pub async fn promote_overpass_poi(
+    pool: &PgPool,
+    poi_id: &str,
+    insert: &InsertPlace,
+) -> Result<(Uuid, bool), ApiError> {
+    let mut tx = pool.begin().await?;
+    let existing: Option<Uuid> = sqlx::query_scalar(
+        "SELECT app_place_id FROM overpass_pois WHERE id = $1 FOR UPDATE",
+    )
+    .bind(poi_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+
+    if let Some(place_id) = existing {
+        tx.commit().await?;
+        return Ok((place_id, false));
+    }
+
+    let place_id = insert_place(&mut *tx, insert).await?;
+    sqlx::query("UPDATE overpass_pois SET app_place_id = $1 WHERE id = $2")
+        .bind(place_id)
+        .bind(poi_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok((place_id, true))
 }
 
 /// Records one row in the account-activity audit log: a login, a failed

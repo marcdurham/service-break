@@ -12,4 +12,3 @@
 - 110 Make a 'going there' button for places, with a modal menu that includes being able to share a link to where you're going and selecting a time (When) you think you'll arrive, only allow 24 hours in advance so the user who is sharing doesn't need to pick a date, just a time.
 - 115 ?Add a feature that shows your friend's friends
 - 111 Add a "Share location" option to share with your friends, but only allow it to share for 8 hours.  Include when the last time your location was updated.
-- 114 Is there a way to get a list of business with addresses and name near a geolocation?
