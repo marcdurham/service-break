@@ -1,7 +1,7 @@
 //! Thin async client for the backend API (proxied by Trunk at /api).
 
 use gloo_net::http::{Request, RequestBuilder, Response};
-use gloo_storage::{LocalStorage, Storage};
+use gloo_storage::{LocalStorage, SessionStorage, Storage};
 use shared::{
     encode_query_component, ActivityEntry, AuthSession, ChangePassword, Credentials,
     ImportSummary, Invitation, InviteNameUpdate, InvitesOverview, MapsLinkResult, NewInvite,
@@ -204,6 +204,11 @@ pub async fn google_sign_in_enabled() -> bool {
     body["enabled"].as_bool().unwrap_or(false)
 }
 
+/// Where the browser was when a Google sign-in began. The OAuth round trip
+/// reloads the whole app, so `/oauth-complete` reads this to send sign-ins
+/// that started from a gated page (e.g. `/poi/.../edit`) back there.
+const OAUTH_RETURN_KEY: &str = "sb_oauth_return";
+
 /// Navigates the whole page (not a SPA route — this leaves the app to
 /// Google's consent screen and back) to start the Google OAuth flow.
 /// `invite_code` is ignored for `mode == "login"`.
@@ -214,8 +219,18 @@ pub fn start_google_auth(mode: &str, invite_code: &str) {
         encode_query_component(invite_code),
     );
     if let Some(window) = web_sys::window() {
+        if let Ok(path) = window.location().pathname() {
+            let _ = SessionStorage::set(OAUTH_RETURN_KEY, path);
+        }
         let _ = window.location().set_href(&url);
     }
+}
+
+/// Takes (and clears) the path stored by [`start_google_auth`], if any.
+pub fn take_oauth_return_path() -> Option<String> {
+    let path = SessionStorage::get::<String>(OAUTH_RETURN_KEY).ok();
+    SessionStorage::delete(OAUTH_RETURN_KEY);
+    path
 }
 
 pub async fn login(creds: &Credentials) -> ApiResult<AuthSession> {

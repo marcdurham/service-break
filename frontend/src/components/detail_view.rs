@@ -24,6 +24,15 @@ pub struct DetailViewProps {
     pub on_updated: Callback<PlaceDetail>,
     pub on_deleted: Callback<()>,
     pub on_toast: Callback<String>,
+    /// Open the edit form as soon as the view mounts — set when the user
+    /// asked to edit before signing in (the `/poi/.../edit` flow), so they
+    /// land straight in the editor after authenticating.
+    #[prop_or_default]
+    pub start_editing: bool,
+    /// Fired once on mount when `start_editing` was honored, so the caller
+    /// can reset its one-shot flag.
+    #[prop_or_default]
+    pub on_editing_started: Callback<()>,
 }
 
 #[function_component(DetailView)]
@@ -33,7 +42,7 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
     let coffee_pick = use_state(|| None::<i16>);
     let food_pick = use_state(|| None::<i16>);
     let text = use_state(String::new);
-    let editing = use_state(|| false);
+    let editing = use_state(|| props.start_editing && props.logged_in);
     let show_confirm = use_state(|| false);
     let deleting = use_state(|| false);
     let edits = use_state(Vec::<PlaceEdit>::new);
@@ -42,6 +51,18 @@ pub fn detail_view(props: &DetailViewProps) -> Html {
 
     let p = &props.detail.summary;
     let d = &props.detail;
+
+    // `start_editing` is a one-shot: report it consumed at mount so a later
+    // remount (some other place opened) doesn't auto-open the editor again.
+    {
+        let consumed = props.start_editing;
+        let on_editing_started = props.on_editing_started.clone();
+        use_effect_with((), move |()| {
+            if consumed {
+                on_editing_started.emit(());
+            }
+        });
+    }
 
     // The audited edit history for this place — what changed, when, by whom.
     {
