@@ -56,7 +56,7 @@ distinction in mind whenever touching places, filters, or the map:
   live from the Overpass API (fast food, cafés, stores, malls, parks) and
   cached per geohash tile in `overpass_tiles`/`overpass_pois`
   (`backend/src/overpass.rs`, `shared/src/tiles.rs`). They're read-only
-  until promoted, capped at 100 per viewport (nearest to the query center),
+  until promoted, capped at 250 per viewport (nearest to the query center),
   and render in the **blue/gray** pin/badge family
   (`PlaceType::color(PlaceSource::Overpass)`).
 

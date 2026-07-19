@@ -294,10 +294,9 @@ pub fn edit_user_view(props: &EditUserViewProps) -> Html {
 
     // Early return if not on the UserEdit route — all hooks are already
     // initialized above so Yew's hook counter stays in sync.
-    let user_id = match user_id_opt {
-        Some(id) => id,
-        None => return html! {},
-    };
+    if user_id_opt.is_none() {
+        return html! {};
+    }
 
     let has_changes = || {
         *username != *initial_username

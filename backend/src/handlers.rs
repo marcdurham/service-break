@@ -332,7 +332,7 @@ async fn maps_link_query(
 
 /// Overpass POIs (raw OpenStreetMap data, not yet in the app) within a map
 /// viewport, cached per geohash tile (see `overpass::ensure_bbox_cached`)
-/// and capped at the 100 nearest to the bbox center. Public, like every
+/// and capped at the 250 nearest to the bbox center. Public, like every
 /// other read.
 #[get("/api/overpass/places")]
 async fn list_overpass_places(
