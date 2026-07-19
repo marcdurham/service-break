@@ -668,6 +668,26 @@ pub async fn record_activity(
     Ok(())
 }
 
+/// Failed login attempts recorded against `user_id` in the last
+/// `minutes` minutes — used to flag possible brute-forcing in the ops
+/// logs (see the `login` handler in `auth.rs`).
+pub async fn count_recent_failed_logins(
+    pool: &PgPool,
+    user_id: Uuid,
+    minutes: i32,
+) -> Result<i64, ApiError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM user_activity \
+         WHERE user_id = $1 AND activity_type = 'failed_login' \
+         AND created_at > now() - make_interval(mins => $2)",
+    )
+    .bind(user_id)
+    .bind(minutes)
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
+}
+
 /// The last `limit` activity events for one account, newest first: logins,
 /// failed logins, profile changes (by the account or an admin), invitations
 /// removed, places created, place edits, and ratings (reviews) posted. Each
