@@ -79,6 +79,10 @@ pub fn map_view(props: &MapViewProps) -> Html {
     // featured card even though `selected`/`places.first()` would otherwise
     // still resolve to one. Cleared as soon as a new place is picked.
     let dismissed = use_state(|| false);
+    // A tapped unvisited (Overpass) pin -- shown as the same compact bottom
+    // tile app places get, instead of jumping straight to the full-page
+    // preview; tapping the tile opens the full page via `on_open_poi`.
+    let featured_poi = use_state(|| None::<OverpassPoi>);
     // One-time tip bubble pointing at the Discover button, shown until the
     // user interacts with anything (dismissed via a window-level click
     // listener below, so any tap dismisses it, not just its own controls).
@@ -252,6 +256,9 @@ pub fn map_view(props: &MapViewProps) -> Html {
         let empty_click_closure_slot = empty_click_closure_slot.clone();
         let dismissed_for_select = dismissed.clone();
         let dismissed_for_empty_click = dismissed.clone();
+        let featured_poi_for_select = featured_poi.clone();
+        let featured_poi_for_empty_click = featured_poi.clone();
+        let deselect_ref_for_select = deselect_ref.clone();
         let (center, zoom) = match props.focus {
             Some(f) => (f, 16.0),
             None => (props.origin.unwrap_or(FALLBACK_CENTER), 14.0),
@@ -260,12 +267,19 @@ pub fn map_view(props: &MapViewProps) -> Html {
             let closure = Closure::<dyn Fn(String)>::new(move |id: String| {
                 dismissed_for_select.set(false);
                 match Uuid::parse_str(&id) {
-                    Ok(id) => select_ref.borrow().emit(id),
+                    Ok(id) => {
+                        featured_poi_for_select.set(None);
+                        select_ref.borrow().emit(id);
+                    }
                     Err(_) => {
                         if let Some(poi) =
                             overpass_lookup_ref.borrow().iter().find(|p| p.id == id)
                         {
-                            open_poi_ref.borrow().emit(poi.clone());
+                            // Show the compact tile (not the full-page
+                            // preview) and drop any app-place selection so
+                            // its pin highlight clears.
+                            featured_poi_for_select.set(Some(poi.clone()));
+                            deselect_ref_for_select.borrow().emit(());
                         }
                     }
                 }
@@ -276,6 +290,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 });
             let empty_click_closure = Closure::<dyn Fn()>::new(move || {
                 dismissed_for_empty_click.set(true);
+                featured_poi_for_empty_click.set(None);
                 deselect_ref.borrow().emit(());
             });
             glue::sb_init_map(
@@ -294,6 +309,27 @@ pub fn map_view(props: &MapViewProps) -> Html {
         });
     }
 
+    // The compact POI tile only makes sense while its pin layer is showing
+    // and no app place has taken the selection (e.g. after a promotion or a
+    // "Show on map" from another screen).
+    {
+        let featured_poi = featured_poi.clone();
+        use_effect_with(props.show_unvisited, move |on| {
+            if !on {
+                featured_poi.set(None);
+            }
+        });
+    }
+    {
+        let featured_poi = featured_poi.clone();
+        use_effect_with(props.selected, move |selected| {
+            if selected.is_some() {
+                featured_poi.set(None);
+            }
+        });
+    }
+
+    let featured_poi_id = featured_poi.as_ref().map(|p| p.id.clone());
     use_effect_with(
         (
             props.places.clone(),
@@ -305,6 +341,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
             *submitted,
             search_places.clone(),
             poi_matches.clone(),
+            featured_poi_id.clone(),
         ),
         |(
             places,
@@ -316,6 +353,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
             submitted,
             search_places,
             poi_matches,
+            featured_poi_id,
         )| {
             // A submitted search narrows the map to just its matches instead
             // of the full place/Overpass layers.
@@ -344,7 +382,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
                             color: p.place_type.color(PlaceSource::Overpass),
                             icon: p.place_type.icon(),
                             name: p.name.clone(),
-                            selected: false,
+                            selected: featured_poi_id.as_ref() == Some(&p.id),
                         }),
                 );
             }
@@ -398,7 +436,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
         });
     }
 
-    let featured = if *dismissed {
+    let featured = if *dismissed || featured_poi.is_some() {
         None
     } else {
         props
@@ -406,6 +444,7 @@ pub fn map_view(props: &MapViewProps) -> Html {
             .and_then(|id| props.places.iter().find(|p| p.id == id))
             .or_else(|| props.places.first())
     };
+    let has_card = featured.is_some() || featured_poi.is_some();
 
     let close_card = {
         let dismissed = dismissed.clone();
@@ -413,6 +452,14 @@ pub fn map_view(props: &MapViewProps) -> Html {
         Callback::from(move |_| {
             dismissed.set(true);
             cb.emit(());
+        })
+    };
+    let close_poi_card = {
+        let dismissed = dismissed.clone();
+        let featured_poi = featured_poi.clone();
+        Callback::from(move |_| {
+            dismissed.set(true);
+            featured_poi.set(None);
         })
     };
 
@@ -482,20 +529,22 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 }
             </div>
 
-            { ui::discover_button(props.show_unvisited, featured.is_some(), &props.on_toggle_unvisited) }
+            { ui::discover_button(props.show_unvisited, has_card, &props.on_toggle_unvisited) }
 
             if *show_tip {
-                { discover_tip(featured.is_some(), &dismiss_tip) }
+                { discover_tip(has_card, &dismiss_tip) }
             }
 
             <button
-                class={if featured.is_some() { "recenter above-card" } else { "recenter" }}
+                class={if has_card { "recenter above-card" } else { "recenter" }}
                 onclick={recenter}
             >
                 <span class="mi">{"my_location"}</span>
             </button>
 
-            if let Some(p) = featured {
+            if let Some(p) = &*featured_poi {
+                { featured_poi_card(p, props, &close_poi_card) }
+            } else if let Some(p) = featured {
                 { featured_card(p, props, &close_card) }
             }
         </div>
@@ -687,6 +736,53 @@ fn featured_card(p: &PlaceSummary, props: &MapViewProps, on_close: &Callback<Mou
                         </span>
                         <span class="stat">
                             <span class="mi walk">{"directions_walk"}</span>{shared::door_short(p.door_ft)}
+                        </span>
+                    </div>
+                </div>
+                if let Some(d) = p.distance_mi {
+                    <div class="dist-col">
+                        <div class="dist-num">{shared::fmt_distance_mi(d)}</div>
+                        <div class="dist-unit">{"MI"}</div>
+                    </div>
+                }
+            </button>
+            <button class="directions-btn" onclick={directions}>
+                <span class="mi">{"directions"}</span>{format!("Directions to {}", p.name)}
+            </button>
+        </div>
+    }
+}
+
+/// Same compact bottom tile as [`featured_card`], but for a tapped unvisited
+/// (Overpass) pin. Tapping it opens the full-page POI preview, which is
+/// where Save/Rate/Edit live.
+fn featured_poi_card(p: &OverpassPoi, props: &MapViewProps, on_close: &Callback<MouseEvent>) -> Html {
+    let open_card = {
+        let cb = props.on_open_poi.clone();
+        let poi = p.clone();
+        Callback::from(move |_| cb.emit(poi.clone()))
+    };
+    let directions = {
+        let (lat, lng) = (p.lat, p.lng);
+        Callback::from(move |_| ui::open_directions(lat, lng))
+    };
+    html! {
+        <div class="sel-wrap" key={p.id.clone()}>
+            <button class="sel-close" onclick={on_close.clone()}>
+                <span class="mi">{"close"}</span>
+            </button>
+            <button class="sel-card" onclick={open_card}>
+                { ui::badge(p.place_type, PlaceSource::Overpass) }
+                <div class="sel-main">
+                    <div class="sel-tags">
+                        <span class="near-tag">{"Unvisited"}</span>
+                        <span class="open-dot"></span>
+                        <span class="open-label">{p.place_type.label()}</span>
+                    </div>
+                    <div class="sel-name">{&p.name}</div>
+                    <div class="sel-stats">
+                        <span class="stat">
+                            <span class="mi">{"map"}</span>{"Not yet in the app"}
                         </span>
                     </div>
                 </div>
