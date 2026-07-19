@@ -52,8 +52,8 @@ struct OverpassResponseRaw {
 
 /// Builds the Overpass QL query for one bbox, covering every target
 /// category (fast food, cafés, stores, malls, parks). `out center 200;` is
-/// a generous Overpass-side cap — kept above the app's own final cap of 100
-/// so the "100 nearest to center" pass isn't starved by Overpass's
+/// a generous Overpass-side cap per tile — kept high so the "nearest to
+/// center" pass in `db::list_overpass_pois` isn't starved by Overpass's
 /// non-distance element ordering, while still bounding worst-case payload
 /// size in dense urban cores.
 pub fn build_query(bbox: &BBox) -> String {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 use shared::{
     Amenity, BBox, MapsLinkResult, OverpassPoi, PlaceSource, PlaceSummary, PlacesQuery,
@@ -37,9 +39,12 @@ pub struct MapViewProps {
     /// `show_unvisited` is on.
     pub overpass_places: Vec<OverpassPoi>,
     pub show_unvisited: bool,
-    /// Index into [`shared::MARKER_DENSITY_LEVELS`] capping how many
-    /// Overpass POI pins render at once.
+    /// Index into [`shared::MARKER_DENSITY_LEVELS`] controlling how closely
+    /// packed Overpass POI pins may get (one pin per grid cell).
     pub marker_density: u8,
+    /// The live viewport (mirrors what `on_bounds_changed` last reported);
+    /// used only to size the density grid to the current zoom.
+    pub bounds: Option<BBox>,
     pub on_select: Callback<Uuid>,
     pub on_open: Callback<Uuid>,
     /// Fired when a tapped pin or search result is an unpromoted Overpass
@@ -234,8 +239,9 @@ pub fn map_view(props: &MapViewProps) -> Html {
             props.overpass_places.clone(),
             props.show_unvisited,
             props.marker_density,
+            props.bounds,
         ),
-        |(places, selected, overpass_places, show_unvisited, marker_density)| {
+        |(places, selected, overpass_places, show_unvisited, marker_density, bounds)| {
             let mut pins: Vec<Pin> = places
                 .iter()
                 .map(|p| Pin {
@@ -249,19 +255,19 @@ pub fn map_view(props: &MapViewProps) -> Html {
                 })
                 .collect();
             if *show_unvisited {
-                let cap = shared::marker_density_cap(*marker_density) as usize;
-                pins.extend(thinned_indices(overpass_places.len(), cap).into_iter().map(|i| {
-                    let p = &overpass_places[i];
-                    Pin {
-                        id: p.id.clone(),
-                        lat: p.lat,
-                        lng: p.lng,
-                        color: p.place_type.color(PlaceSource::Overpass),
-                        icon: p.place_type.icon(),
-                        name: p.name.clone(),
-                        selected: false,
-                    }
-                }));
+                pins.extend(
+                    grid_thinned(overpass_places, *bounds, *marker_density)
+                        .into_iter()
+                        .map(|p| Pin {
+                            id: p.id.clone(),
+                            lat: p.lat,
+                            lng: p.lng,
+                            color: p.place_type.color(PlaceSource::Overpass),
+                            icon: p.place_type.icon(),
+                            name: p.name.clone(),
+                            selected: false,
+                        }),
+                );
             }
             if let Ok(json) = serde_json::to_string(&pins) {
                 glue::sb_set_pins(&json);
@@ -354,27 +360,57 @@ pub fn map_view(props: &MapViewProps) -> Html {
     }
 }
 
-/// Picks up to `cap` evenly-spaced indices out of `0..len`, so a thinned
-/// marker layer stays spread across the whole list instead of bunching at
-/// the start (which — for viewport-ordered Overpass results — would bias
-/// toward one corner of the map).
-fn thinned_indices(len: usize, cap: usize) -> Vec<usize> {
-    if cap == 0 || len <= cap {
-        return (0..len).collect();
+/// Thins the Overpass layer to one pin per grid cell, enforcing a minimum
+/// on-screen spacing set by the density level. Every choice is stable under
+/// panning: cells are anchored to the world (indexed from lat/lng 0, sized
+/// on a power-of-two ladder that only moves on zoom, since a Mercator
+/// viewport's longitude span is pan-invariant), and each cell keeps the POI
+/// with the lowest id hash rather than anything position- or order-based.
+/// The POI list itself still grows/shrinks at the viewport edge as fetches
+/// come in, but a kept POI stays kept wherever it's loaded.
+fn grid_thinned<'a>(
+    pois: &'a [OverpassPoi],
+    bounds: Option<BBox>,
+    density_level: u8,
+) -> Vec<&'a OverpassPoi> {
+    let (Some(cells_across), Some(b)) =
+        (shared::marker_density_cells(density_level), bounds)
+    else {
+        return pois.iter().collect();
+    };
+    let lng_span = b.max_lng - b.min_lng;
+    if lng_span <= 0.0 {
+        return pois.iter().collect();
     }
-    let step = len as f64 / cap as f64;
-    let mut out = Vec::with_capacity(cap);
-    let mut next = 0.0f64;
-    for i in 0..len {
-        if out.len() >= cap {
-            break;
-        }
-        if i as f64 >= next {
-            out.push(i);
-            next += step;
+    let raw_cell = lng_span / f64::from(cells_across);
+    let ladder = (360.0 / raw_cell).log2().round().clamp(0.0, 40.0);
+    let cell = 360.0 / 2f64.powi(ladder as i32);
+
+    // Per cell: (winning hash, index into `pois`), lowest hash wins.
+    let mut best: HashMap<(i64, i64), (u64, usize)> = HashMap::new();
+    for (i, p) in pois.iter().enumerate() {
+        let key = ((p.lat / cell).floor() as i64, ((p.lng / cell).floor()) as i64);
+        let hash = fnv1a(p.id.as_bytes());
+        let entry = best.entry(key).or_insert((hash, i));
+        if hash < entry.0 {
+            *entry = (hash, i);
         }
     }
-    out
+    let mut keep: Vec<usize> = best.into_values().map(|(_, i)| i).collect();
+    keep.sort_unstable();
+    keep.into_iter().map(|i| &pois[i]).collect()
+}
+
+/// FNV-1a, used as a stable per-POI priority for [`grid_thinned`] — unlike
+/// `DefaultHasher` it's guaranteed identical across builds, so which POI
+/// represents a cell never shifts between sessions.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &byte in bytes {
+        h ^= u64::from(byte);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
 }
 
 fn search_results(

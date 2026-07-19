@@ -554,7 +554,11 @@ pub async fn list_overpass_pois(
     if let Some(search) = q.map(str::trim).filter(|s| !s.is_empty()) {
         qb.push(" AND name ILIKE ").push_bind(like_pattern(search));
     }
-    qb.push(" ORDER BY distance_mi ASC LIMIT 100");
+    // Generous cap: the map thins pins client-side by density level, and a
+    // tight nearest-to-center cutoff made cell winners near the viewport
+    // edge flip as the center moved. 250 loads everything in a typical
+    // viewport while still bounding worst-case payload.
+    qb.push(" ORDER BY distance_mi ASC LIMIT 250");
 
     let rows = qb.build().fetch_all(pool).await?;
     rows.iter()
