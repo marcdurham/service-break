@@ -47,8 +47,8 @@ pub struct Filters {
     pub has_parking: bool,
     pub radius_mi: u8,
     /// Whether the Overpass POI layer (raw OSM places nobody has interacted
-    /// with in the app yet) shows on the map/list and in search. On by
-    /// default.
+    /// with in the app yet) shows on the map/list and in search — toggled by
+    /// the "Discover" button, off by default.
     pub show_unvisited: bool,
 }
 
@@ -61,7 +61,7 @@ impl Default for Filters {
             no_purchase: false,
             has_parking: false,
             radius_mi: 5,
-            show_unvisited: true,
+            show_unvisited: false,
         }
     }
 }
@@ -553,6 +553,15 @@ pub fn app() -> Html {
         Callback::from(move |()| filters.set(Filters::default()))
     };
 
+    let on_toggle_unvisited = {
+        let filters = filters.clone();
+        Callback::from(move |()| {
+            let mut f = (*filters).clone();
+            f.show_unvisited = !f.show_unvisited;
+            filters.set(f);
+        })
+    };
+
     let on_marker_density_change = {
         let marker_density = marker_density.clone();
         Callback::from(move |level: u8| {
@@ -663,6 +672,7 @@ pub fn app() -> Html {
                             on_open_filters={open_filters.clone()}
                             on_toggle_amenity={on_toggle_amenity.clone()}
                             on_reset_filters={on_reset_filters.clone()}
+                            on_toggle_unvisited={on_toggle_unvisited.clone()}
                         />
                     },
                     Route::Add => html! {
@@ -759,6 +769,7 @@ pub fn app() -> Html {
                             on_maps_link={on_maps_link}
                             on_bounds_changed={on_bounds_changed}
                             on_toast={show_toast.clone()}
+                            on_toggle_unvisited={on_toggle_unvisited.clone()}
                         />
                     },
                 }

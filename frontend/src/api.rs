@@ -63,8 +63,8 @@ pub async fn fetch_places(q: &PlacesQuery) -> ApiResult<Vec<PlaceSummary>> {
 }
 
 /// Overpass POIs (raw OpenStreetMap data, not yet in the app) within a map
-/// viewport, respecting the "Show unvisited places" toggle upstream of this
-/// call (the caller decides whether to fetch at all).
+/// viewport, respecting the "Discover" toggle upstream of this call (the
+/// caller decides whether to fetch at all).
 pub async fn fetch_overpass_pois(q: &OverpassQuery) -> ApiResult<Vec<OverpassPoi>> {
     let url = format!("/api/overpass/places?{}", q.to_query_string());
     Request::get(&url).send().await.map_err(err)?.json().await.map_err(err)

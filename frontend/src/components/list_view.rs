@@ -21,6 +21,8 @@ pub struct ListViewProps {
     pub on_open_filters: Callback<()>,
     pub on_toggle_amenity: Callback<Amenity>,
     pub on_reset_filters: Callback<()>,
+    /// Fired when the "Discover" button is tapped, flipping `show_unvisited`.
+    pub on_toggle_unvisited: Callback<()>,
 }
 
 #[function_component(ListView)]
@@ -114,6 +116,8 @@ pub fn list_view(props: &ListViewProps) -> Html {
 
     html! {
         <div class="screen sb-scroll">
+            { ui::discover_button(props.show_unvisited, false, &props.on_toggle_unvisited) }
+
             <div class="list-head">
                 <div>
                     <div class="screen-title">{"Nearby places"}</div>
