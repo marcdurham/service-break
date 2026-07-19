@@ -22,8 +22,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let overpass_url =
         std::env::var("OVERPASS_URL").unwrap_or_else(|_| DEFAULT_OVERPASS_URL.to_owned());
     let tile_url = std::env::var("TILE_URL").unwrap_or_else(|_| DEFAULT_TILE_URL.to_owned());
+    let tile_cache_dir =
+        std::env::var("TILE_CACHE_DIR").unwrap_or_else(|_| "./tile-cache".to_owned());
+    let tile_cache_max_mb: u64 = std::env::var("TILE_CACHE_MAX_MB")
+        .map(|v| v.parse().expect("TILE_CACHE_MAX_MB must be a whole number of megabytes"))
+        .unwrap_or(512);
+    let tile_cache =
+        backend::tile_cache::TileCache::open(&tile_cache_dir, tile_cache_max_mb * 1024 * 1024)?;
     let google = backend::google_auth::GoogleConfig::from_env();
-    tracing::info!(google_sign_in = google.is_some(), "startup config");
+    tracing::info!(
+        google_sign_in = google.is_some(),
+        tile_cache_dir,
+        tile_cache_max_mb,
+        "startup config"
+    );
 
     let pool = PgPoolOptions::new()
         .max_connections(8)
@@ -39,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         nominatim_url,
         overpass_url,
         tile_url,
+        tile_cache,
         google,
     });
 
