@@ -3,6 +3,9 @@
 Find a clean place: real bathroom ratings at shops, stores, malls, parks
 & more — sorted by what's closest to you.
 
+A friend who has a hard time walking long distances asked me if I could
+make an app like this.
+
 A mobile-first PWA built in Rust: [Yew](https://yew.rs) frontend with
 [Leaflet](https://leafletjs.com) + OpenStreetMap tiles, an
 [Actix Web](https://actix.rs) API, and PostgreSQL. The design follows
